@@ -78,3 +78,4 @@ vendorsRouter.post('/', authenticateToken, async (req: Request, res: Response, n
     next(err);
   }
 });
+

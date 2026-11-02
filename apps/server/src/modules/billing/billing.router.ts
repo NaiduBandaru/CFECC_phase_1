@@ -338,3 +338,4 @@ billingRouter.post('/payments', authenticateToken, async (req: Request, res: Res
     next(err);
   }
 });
+

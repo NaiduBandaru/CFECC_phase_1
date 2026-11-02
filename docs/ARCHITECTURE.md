@@ -30,3 +30,4 @@ CFECC_phase1/
 - **React, Vite & Tailwind CSS:** Sub-second HMR, high productivity, accessible design primitives.
 - **TanStack Query:** State caching, automatic background invalidation, smooth offline-resilient UI.
 - **Zod:** Unified schema validation across API endpoints and client forms.
+

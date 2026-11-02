@@ -82,3 +82,4 @@ whatsappRouter.get('/logs', authenticateToken, async (req: Request, res: Respons
     next(err);
   }
 });
+

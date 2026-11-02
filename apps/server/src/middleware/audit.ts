@@ -24,3 +24,4 @@ export async function logAudit(options: {
     console.error('[Audit Log Error]:', err);
   }
 }
+

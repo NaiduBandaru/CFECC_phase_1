@@ -337,3 +337,4 @@ export const InventoryPage: React.FC = () => {
     </div>
   );
 };
+

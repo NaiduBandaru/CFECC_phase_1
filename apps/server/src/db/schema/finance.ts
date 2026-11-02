@@ -80,3 +80,4 @@ export const recoveryRecords = pgTable('recovery_records', {
   recoveredAt: timestamp('recovered_at').defaultNow().notNull(),
   remarks: text('remarks'),
 });
+

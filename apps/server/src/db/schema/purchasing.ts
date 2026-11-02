@@ -73,3 +73,4 @@ export const purchaseInvoices = pgTable('purchase_invoices', {
   createdBy: integer('created_by'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+

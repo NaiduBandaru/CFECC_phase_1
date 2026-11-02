@@ -10,9 +10,11 @@
     "test": "pnpm --filter @cfecc/server test && pnpm --filter @cfecc/client test",
     "db:generate": "pnpm --filter @cfecc/server db:generate",
     "db:migrate": "pnpm --filter @cfecc/server db:migrate",
-    "db:seed": "pnpm --filter @cfecc/server db:seed"
+    "db:seed": "pnpm --filter @cfecc/server db:seed",
+    "db:supabase": "pnpm --filter @cfecc/server db:supabase"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
   }
 }
+

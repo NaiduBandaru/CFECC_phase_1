@@ -1,7 +1,20 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
-dotenv.config();
+// Look for .env in current directory, parent directories, and apps/server
+const candidatePaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), 'apps', 'server', '.env'),
+  path.resolve(process.cwd(), '..', '.env'),
+];
+
+for (const envPath of candidatePaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+  }
+}
+dotenv.config(); // fallback default
 
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
@@ -17,3 +30,4 @@ export const config = {
     gstin: '37AAAAA0000A1Z5',
   }
 };
+

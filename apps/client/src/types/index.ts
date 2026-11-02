@@ -149,3 +149,4 @@ export interface EmployeeStatement {
   whatsapp_status: string;
   whatsapp_sent_at?: string | null;
 }
+

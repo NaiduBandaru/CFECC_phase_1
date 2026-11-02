@@ -243,3 +243,4 @@ export const SalesRegisterPage: React.FC = () => {
     </div>
   );
 };
+

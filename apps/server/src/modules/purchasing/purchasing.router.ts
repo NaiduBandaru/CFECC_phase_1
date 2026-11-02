@@ -156,3 +156,4 @@ purchasingRouter.post('/receipts', authenticateToken, async (req: Request, res: 
     next(err);
   }
 });
+

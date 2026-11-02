@@ -630,3 +630,4 @@ export const POSTerminalPage: React.FC = () => {
     </div>
   );
 };
+

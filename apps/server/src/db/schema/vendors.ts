@@ -40,3 +40,4 @@ export const vendorPayments = pgTable('vendor_payments', {
   createdBy: integer('created_by'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+

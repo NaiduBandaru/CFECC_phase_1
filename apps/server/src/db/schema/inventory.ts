@@ -77,3 +77,4 @@ export const stockMovements = pgTable('stock_movements', {
   createdBy: integer('created_by'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+

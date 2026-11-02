@@ -8,3 +8,4 @@ describe('CFECC Client Application Test Suite', () => {
     expect(navyColor).toBe('#172B4D');
   });
 });
+

@@ -56,3 +56,4 @@ export const systemSettings = pgTable('system_settings', {
   description: text('description'),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+

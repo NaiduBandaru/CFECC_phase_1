@@ -322,3 +322,4 @@ export const PayrollPage: React.FC = () => {
     </div>
   );
 };
+

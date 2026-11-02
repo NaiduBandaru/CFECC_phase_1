@@ -24,3 +24,4 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
     ...(process.env.NODE_ENV === 'development' ? { stack: err.stack } : {}),
   });
 }
+

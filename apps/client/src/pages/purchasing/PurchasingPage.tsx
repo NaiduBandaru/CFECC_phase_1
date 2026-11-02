@@ -353,3 +353,4 @@ export const PurchasingPage: React.FC = () => {
     </div>
   );
 };
+

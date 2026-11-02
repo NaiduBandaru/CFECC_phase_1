@@ -46,3 +46,4 @@ export const saleReturns = pgTable('sale_returns', {
   createdBy: integer('created_by'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+

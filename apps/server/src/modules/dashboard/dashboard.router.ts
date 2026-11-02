@@ -168,3 +168,4 @@ dashboardRouter.get('/recent-activity', authenticateToken, async (req: Request, 
     next(err);
   }
 });
+

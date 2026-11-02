@@ -15,3 +15,4 @@ export const whatsappLogs = pgTable('whatsapp_logs', {
   sentAt: timestamp('sent_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+

@@ -135,3 +135,4 @@ inventoryRouter.post('/adjust', authenticateToken, async (req: Request, res: Res
     next(err);
   }
 });
+

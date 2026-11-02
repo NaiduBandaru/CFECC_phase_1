@@ -119,3 +119,4 @@ pnpm --filter @cfecc/client dev
 5. **Payroll & Recovery:** Automated deduction of store dues from employee monthly gross salaries with comprehensive payslip generation.
 6. **Purchasing & GRN:** Purchase orders with 3-way matching and verified goods receipt updating stock levels.
 7. **Reports Center:** Filterable registers with instant CSV/Excel export for store audit and compliance.
+

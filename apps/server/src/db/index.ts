@@ -15,9 +15,14 @@ export async function initDatabase() {
   if (dbInstance) return dbInstance;
 
   if (config.databaseUrl && config.databaseUrl.trim() !== '') {
-    console.log('[Database] Connecting to external PostgreSQL instance...');
+    const isSupabase = config.databaseUrl.includes('supabase.co') || 
+                       config.databaseUrl.includes('pooler.supabase.com') || 
+                       config.databaseUrl.includes('sslmode=require');
+
+    console.log(`[Database] Connecting to PostgreSQL instance (${isSupabase ? 'Supabase with SSL' : 'Standard'})...`);
     pgPoolInstance = new pg.Pool({
       connectionString: config.databaseUrl,
+      ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
     });
     dbInstance = drizzlePg(pgPoolInstance, { schema });
   } else {

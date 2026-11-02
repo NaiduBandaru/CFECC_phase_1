@@ -39,3 +39,4 @@ export const payrollEntries = pgTable('payroll_entries', {
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+

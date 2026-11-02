@@ -87,3 +87,4 @@ export const employeeDocuments = pgTable('employee_documents', {
   mimeType: text('mime_type'),
   uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
 });
+

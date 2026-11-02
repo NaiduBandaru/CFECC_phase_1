@@ -106,3 +106,4 @@ export const Header: React.FC<HeaderProps> = ({ collapsed }) => {
     </header>
   );
 };
+

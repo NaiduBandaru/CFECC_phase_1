@@ -176,3 +176,4 @@ payrollRouter.get('/entries', authenticateToken, async (req: Request, res: Respo
     next(err);
   }
 });
+
