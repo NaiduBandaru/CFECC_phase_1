@@ -59,7 +59,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       group: 'FINANCE',
       items: [
         { name: 'Employee Billing', path: '/billing', icon: CreditCard },
-        { name: 'Payroll & Recovery', path: '/payroll', icon: Banknote },
+        { name: 'Payroll Processing', path: '/payroll', icon: Banknote },
+        { name: 'Recovery Records', path: '/recovery-records', icon: Receipt },
       ],
     },
     {

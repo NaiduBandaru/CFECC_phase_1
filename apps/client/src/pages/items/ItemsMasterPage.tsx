@@ -536,11 +536,10 @@ export const ItemsMasterPage: React.FC = () => {
           <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
             <button
               onClick={() => setLowStockOnly(!lowStockOnly)}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
-                lowStockOnly
+              className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${lowStockOnly
                   ? 'bg-amber-50 text-amber-800 border-amber-300'
                   : 'bg-surface text-textSecondary border-borderLine hover:bg-slate-50'
-              }`}
+                }`}
             >
               <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
               <span>Low Stock Alerts</span>
@@ -548,11 +547,10 @@ export const ItemsMasterPage: React.FC = () => {
 
             <button
               onClick={() => setIncludeInactive(!includeInactive)}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
-                includeInactive
+              className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${includeInactive
                   ? 'bg-slate-200 text-navy-800 border-slate-300'
                   : 'bg-surface text-textSecondary border-borderLine hover:bg-slate-50'
-              }`}
+                }`}
             >
               <span>{includeInactive ? 'Showing Inactive' : 'Active Only'}</span>
             </button>
@@ -590,11 +588,10 @@ export const ItemsMasterPage: React.FC = () => {
         <div className="flex space-x-2 overflow-x-auto pt-2 border-t border-borderLine scrollbar-none">
           <button
             onClick={() => setCategoryId('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-              categoryId === 'ALL'
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${categoryId === 'ALL'
                 ? 'bg-navy-800 text-white'
                 : 'bg-slate-100 text-textSecondary hover:text-textPrimary'
-            }`}
+              }`}
           >
             All Categories ({items.length})
           </button>
@@ -602,11 +599,10 @@ export const ItemsMasterPage: React.FC = () => {
             <button
               key={c.id}
               onClick={() => setCategoryId(c.id.toString())}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                categoryId === c.id.toString()
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${categoryId === c.id.toString()
                   ? 'bg-navy-800 text-white'
                   : 'bg-slate-100 text-textSecondary hover:text-textPrimary'
-              }`}
+                }`}
             >
               {c.name}
             </button>
@@ -820,11 +816,10 @@ export const ItemsMasterPage: React.FC = () => {
                       {visibleColumns.stockLevel && (
                         <td className="py-3 px-4 text-right tabular-nums">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded font-bold ${
-                              isLow
+                            className={`inline-flex items-center px-2 py-0.5 rounded font-bold ${isLow
                                 ? 'bg-rose-50 text-rose-700 border border-rose-200'
                                 : 'bg-emerald-50 text-emerald-700'
-                            }`}
+                              }`}
                           >
                             {isLow && <AlertTriangle className="w-3 h-3 mr-1 text-rose-600" />}
                             {parseFloat(item.current_stock.toString()).toFixed(1)} {item.unit_code}
@@ -841,9 +836,8 @@ export const ItemsMasterPage: React.FC = () => {
                       {visibleColumns.status && (
                         <td className="py-3 px-4 text-center">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              item.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                            }`}
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${item.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                              }`}
                           >
                             {item.is_active ? 'Active' : 'Inactive'}
                           </span>
@@ -1215,21 +1209,19 @@ export const ItemsMasterPage: React.FC = () => {
           <div className="flex space-x-2 border-b border-borderLine">
             <button
               onClick={() => setCatUnitTab('CATEGORIES')}
-              className={`pb-2 px-3 font-semibold transition-colors ${
-                catUnitTab === 'CATEGORIES'
+              className={`pb-2 px-3 font-semibold transition-colors ${catUnitTab === 'CATEGORIES'
                   ? 'border-b-2 border-primary text-primary font-bold'
                   : 'text-textSecondary hover:text-textPrimary'
-              }`}
+                }`}
             >
               Item Categories ({categories.length})
             </button>
             <button
               onClick={() => setCatUnitTab('UNITS')}
-              className={`pb-2 px-3 font-semibold transition-colors ${
-                catUnitTab === 'UNITS'
+              className={`pb-2 px-3 font-semibold transition-colors ${catUnitTab === 'UNITS'
                   ? 'border-b-2 border-primary text-primary font-bold'
                   : 'text-textSecondary hover:text-textPrimary'
-              }`}
+                }`}
             >
               Units of Measurement ({units.length})
             </button>

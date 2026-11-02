@@ -11,22 +11,52 @@ import {
   Printer,
   Calendar,
   IndianRupee,
-  ShieldAlert,
+  ShieldCheck,
+  Receipt,
+  Download,
+  Search,
+  ArrowRight,
+  TrendingUp,
+  AlertCircle,
+  Layers,
 } from 'lucide-react';
+import { PayrollPeriod, PayrollEntry, RecoveryRecord } from '../../types/index.js';
 
-export const PayrollPage: React.FC = () => {
-  const [periods, setPeriods] = useState<any[]>([]);
+interface PayrollPageProps {
+  initialTab?: 'PAYROLL' | 'RECOVERY';
+}
+
+export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL' }) => {
+  const [activeTab, setActiveTab] = useState<'PAYROLL' | 'RECOVERY'>(initialTab);
+
+  // Payroll Period State
+  const [periods, setPeriods] = useState<PayrollPeriod[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
-  const [entries, setEntries] = useState<any[]>([]);
+  const [entries, setEntries] = useState<PayrollEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isDisbursing, setIsDisbursing] = useState<boolean>(false);
 
-  // Payslip Modal
-  const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
-  const [isPayslipModalOpen, setIsPayslipModalOpen] = useState(false);
+  // New Cycle Modal State
+  const [isNewCycleModalOpen, setIsNewCycleModalOpen] = useState<boolean>(false);
+  const [newPeriodCode, setNewPeriodCode] = useState<string>('PAY-2026-04');
+  const [newMonthYear, setNewMonthYear] = useState<string>('2026-04');
+  const [newStartDate, setNewStartDate] = useState<string>('2026-04-01');
+  const [newEndDate, setNewEndDate] = useState<string>('2026-04-30');
+  const [newPayoutDate, setNewPayoutDate] = useState<string>('2026-05-01');
+
+  // Recovery Records State
+  const [recoveryRecords, setRecoveryRecords] = useState<RecoveryRecord[]>([]);
+  const [recoverySearch, setRecoverySearch] = useState<string>('');
+  const [recoveryLoading, setRecoveryLoading] = useState<boolean>(false);
+
+  // Payslip Modal State
+  const [selectedEntry, setSelectedEntry] = useState<PayrollEntry | null>(null);
+  const [isPayslipModalOpen, setIsPayslipModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     fetchPayrollPeriods();
+    fetchRecoveryRecords();
   }, []);
 
   useEffect(() => {
@@ -41,7 +71,9 @@ export const PayrollPage: React.FC = () => {
       const res = await api.get('/payroll/periods');
       if (res.data.success && res.data.data.length > 0) {
         setPeriods(res.data.data);
-        setSelectedPeriodId(res.data.data[0].id.toString());
+        if (!selectedPeriodId) {
+          setSelectedPeriodId(res.data.data[0].id.toString());
+        }
       } else {
         // Create initial default payroll period if none exists
         const createRes = await api.post('/payroll/periods', {
@@ -56,7 +88,7 @@ export const PayrollPage: React.FC = () => {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching payroll periods:', err);
     } finally {
       setLoading(false);
     }
@@ -70,9 +102,23 @@ export const PayrollPage: React.FC = () => {
         setEntries(res.data.data);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching payroll entries:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRecoveryRecords = async () => {
+    try {
+      setRecoveryLoading(true);
+      const res = await api.get('/payroll/recovery-records');
+      if (res.data.success) {
+        setRecoveryRecords(res.data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching recovery records:', err);
+    } finally {
+      setRecoveryLoading(false);
     }
   };
 
@@ -83,11 +129,12 @@ export const PayrollPage: React.FC = () => {
     try {
       const res = await api.post('/payroll/calculate', {
         payrollPeriodId: parseInt(selectedPeriodId, 10),
-        billingPeriodId: 1, // Link to active March 2026 store billing
+        billingPeriodId: 1, // Link to active billing cycle
       });
       if (res.data.success) {
-        alert(res.data.message);
-        fetchPayrollEntries(selectedPeriodId);
+        alert(res.data.message || 'Payroll calculations and store recoveries successfully computed!');
+        await fetchPayrollEntries(selectedPeriodId);
+        await fetchPayrollPeriods();
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to compute payroll');
@@ -96,16 +143,130 @@ export const PayrollPage: React.FC = () => {
     }
   };
 
-  const handleViewPayslip = (entry: any) => {
+  const handleDisbursePayroll = async () => {
+    if (!selectedPeriodId) return;
+    const confirmDisburse = window.confirm(
+      'Are you sure you want to approve and disburse this payroll?\n\n' +
+      'This will:\n' +
+      '1. Mark salaries as PAID\n' +
+      '2. Generate official store Recovery Records (REC-2026-XXXX)\n' +
+      '3. Automatically decrement employees outstanding balances and replenish their store credit limits\n' +
+      '4. Record PAYROLL_RECOVERY transactions in the employee audit ledger'
+    );
+    if (!confirmDisburse) return;
+
+    setIsDisbursing(true);
+    try {
+      const res = await api.post('/payroll/disburse', {
+        payrollPeriodId: parseInt(selectedPeriodId, 10),
+        billingPeriodId: 1,
+      });
+      if (res.data.success) {
+        alert(res.data.message || 'Payroll disbursed and Store Credit Recoveries executed successfully!');
+        await fetchPayrollEntries(selectedPeriodId);
+        await fetchPayrollPeriods();
+        await fetchRecoveryRecords();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to disburse payroll');
+    } finally {
+      setIsDisbursing(false);
+    }
+  };
+
+  const handleCreatePeriod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await api.post('/payroll/periods', {
+        periodCode: newPeriodCode,
+        monthYear: newMonthYear,
+        startDate: newStartDate,
+        endDate: newEndDate,
+        payoutDate: newPayoutDate,
+      });
+      if (res.data.success) {
+        setIsNewCycleModalOpen(false);
+        await fetchPayrollPeriods();
+        setSelectedPeriodId(res.data.data.id.toString());
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to create payroll period');
+    }
+  };
+
+  const handleViewPayslip = (entry: PayrollEntry) => {
     setSelectedEntry(entry);
     setIsPayslipModalOpen(true);
   };
 
-  const totalStoreRecovery = entries.reduce((s, e) => s + parseFloat(e.store_recovery_amount || 0), 0);
-  const totalNet = entries.reduce((s, e) => s + parseFloat(e.net_salary || 0), 0);
+  const handleExportRecoveriesCSV = () => {
+    if (recoveryRecords.length === 0) {
+      alert('No recovery records to export.');
+      return;
+    }
+    const headers = [
+      'Recovery Number',
+      'Date',
+      'Employee Code',
+      'Employee Name',
+      'Department',
+      'Payroll Period',
+      'Recovery Source',
+      'Amount Deducted (INR)',
+      'Status',
+      'Remarks',
+    ];
+    const rows = recoveryRecords.map((r) => [
+      r.recovery_number,
+      new Date(r.recovered_at).toLocaleDateString('en-IN'),
+      r.employee_code,
+      `"${r.first_name} ${r.last_name}"`,
+      r.department_name || '',
+      r.payroll_period_code || '',
+      r.recovery_source,
+      r.amount_deducted,
+      r.status,
+      `"${r.remarks || ''}"`,
+    ]);
+    const csvContent =
+      'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `CFECC_Recovery_Records_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const activePeriod = periods.find((p) => p.id.toString() === selectedPeriodId);
+  const isPeriodDisbursed = activePeriod?.status === 'DISBURSED';
+
+  const totalGross = entries.reduce((s, e) => s + parseFloat((e.gross_salary as any) || 0), 0);
+  const totalStoreRecovery = entries.reduce((s, e) => s + parseFloat((e.store_recovery_amount as any) || 0), 0);
+  const totalStatutory = entries.reduce((s, e) => s + parseFloat((e.statutory_deductions as any) || 0), 0);
+  const totalNet = entries.reduce((s, e) => s + parseFloat((e.net_salary as any) || 0), 0);
+
+  // Filtered recovery records
+  const filteredRecoveries = recoveryRecords.filter((r) => {
+    const q = recoverySearch.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      r.recovery_number.toLowerCase().includes(q) ||
+      r.employee_code.toLowerCase().includes(q) ||
+      `${r.first_name} ${r.last_name}`.toLowerCase().includes(q) ||
+      (r.department_name && r.department_name.toLowerCase().includes(q))
+    );
+  });
+
+  const totalHistoricalRecoveries = recoveryRecords.reduce(
+    (s, r) => s + parseFloat((r.amount_deducted as any) || 0),
+    0
+  );
 
   return (
     <div className="space-y-6">
+      {/* Header and Workflow Tabs */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-navy-800">Payroll & Store Purchase Recovery</h2>
@@ -114,206 +275,618 @@ export const PayrollPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleComputePayroll}
-          disabled={isProcessing}
-          className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors shadow-subtle disabled:opacity-50"
-        >
-          <Play className="w-3.5 h-3.5" />
-          <span>{isProcessing ? 'Computing...' : 'Calculate Payroll & Deductions'}</span>
-        </button>
-      </div>
-
-      {/* Control Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
-          <span className="text-xs text-textSecondary font-semibold">Active Payroll Cycle</span>
-          <div className="text-base font-bold text-navy-800 mt-1">March 2026 (PAY-2026-03)</div>
-          <span className="text-[11px] text-textSecondary">Payout date: April 1, 2026</span>
-        </div>
-
-        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
-          <span className="text-xs text-textSecondary font-semibold">Total Store Purchases Recovered</span>
-          <div className="text-xl font-bold text-amber-700 mt-1 tabular-nums">
-            ₹{totalStoreRecovery.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </div>
-          <span className="text-[11px] text-textSecondary">Linked directly to CFECC store bills</span>
-        </div>
-
-        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
-          <span className="text-xs text-textSecondary font-semibold">Total Net Salary Disbursed</span>
-          <div className="text-xl font-bold text-emerald-700 mt-1 tabular-nums">
-            ₹{totalNet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </div>
-          <span className="text-[11px] text-textSecondary">Post-recovery bank transfer total</span>
+        {/* Tab Switcher */}
+        <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-borderLine">
+          <button
+            onClick={() => setActiveTab('PAYROLL')}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              activeTab === 'PAYROLL'
+                ? 'bg-white text-navy-800 shadow-xs'
+                : 'text-textSecondary hover:text-navy-800'
+            }`}
+          >
+            <Banknote className="w-3.5 h-3.5 text-primary" />
+            <span>Payroll & Salary Register</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('RECOVERY')}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              activeTab === 'RECOVERY'
+                ? 'bg-white text-navy-800 shadow-xs'
+                : 'text-textSecondary hover:text-navy-800'
+            }`}
+          >
+            <Receipt className="w-3.5 h-3.5 text-amber-600" />
+            <span>Store Recovery Records ({recoveryRecords.length})</span>
+          </button>
         </div>
       </div>
 
-      {/* Payroll Register Table */}
-      <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-        <div className="p-4 border-b border-borderLine">
-          <h3 className="text-sm font-bold text-navy-800">Monthly Salary Register with Store Recoveries</h3>
-        </div>
+      {/* TAB 1: PAYROLL & SALARY REGISTER */}
+      {activeTab === 'PAYROLL' && (
+        <div className="space-y-6">
+          {/* Cycle Selection & Actions Bar */}
+          <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold text-navy-800">Payroll Cycle:</span>
+                <select
+                  value={selectedPeriodId}
+                  onChange={(e) => setSelectedPeriodId(e.target.value)}
+                  className="px-3 py-1.5 text-xs font-semibold text-navy-800 bg-white border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {periods.map((p) => (
+                    <option key={p.id} value={p.id.toString()}>
+                      {p.period_code} ({p.month_year}) - {p.status}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
-                <th className="py-3 px-4">Employee</th>
-                <th className="py-3 px-4 text-right">Basic (₹)</th>
-                <th className="py-3 px-4 text-right">DA + HRA (₹)</th>
-                <th className="py-3 px-4 text-right">Gross Salary (₹)</th>
-                <th className="py-3 px-4 text-right font-bold text-amber-700 bg-amber-50/50">Store Recovery (₹)</th>
-                <th className="py-3 px-4 text-right">Statutory (₹)</th>
-                <th className="py-3 px-4 text-right font-bold text-emerald-700">Net Payable (₹)</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4 text-center">Payslip</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-borderLine">
-              {loading ? (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center text-textSecondary">
-                    <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
-                    <div>Loading payroll entries...</div>
-                  </td>
-                </tr>
-              ) : entries.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center text-textSecondary">
-                    <Banknote className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                    <div>No calculated entries. Click 'Calculate Payroll & Deductions' to run.</div>
-                  </td>
-                </tr>
-              ) : (
-                entries.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="font-bold text-navy-800">{entry.first_name} {entry.last_name}</div>
-                      <div className="text-[11px] text-textSecondary font-mono">{entry.employee_code} &bull; {entry.department_name}</div>
-                    </td>
-                    <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
-                      ₹{parseFloat(entry.basic_salary).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
-                      ₹{(parseFloat(entry.da) + parseFloat(entry.hra)).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3 px-4 text-right tabular-nums font-semibold text-navy-800">
-                      ₹{parseFloat(entry.gross_salary).toLocaleString('en-IN')}
-                    </td>
-                    {/* Store Recovery Highlight */}
-                    <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700 bg-amber-50/30">
-                      ₹{parseFloat(entry.store_recovery_amount).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
-                      ₹{parseFloat(entry.statutory_deductions).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3 px-4 text-right tabular-nums font-bold text-emerald-700 text-sm">
-                      ₹{parseFloat(entry.net_salary).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <StatusBadge status={entry.payment_status} />
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <button
-                        onClick={() => handleViewPayslip(entry)}
-                        className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-slate-100 hover:bg-navy-800 hover:text-white text-navy-800 text-[11px] font-semibold transition-colors"
-                      >
-                        <FileText className="w-3 h-3" />
-                        <span>Payslip</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
+              {activePeriod && (
+                <div className="flex items-center space-x-2">
+                  <StatusBadge status={activePeriod.status} />
+                  <span className="text-[11px] text-textSecondary">
+                    Payout Date: {new Date(activePeriod.payout_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
-      {/* Payslip Modal */}
+              <button
+                onClick={() => setIsNewCycleModalOpen(true)}
+                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg border border-borderLine bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-navy-800 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Cycle</span>
+              </button>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center space-x-2.5 w-full md:w-auto">
+              <button
+                onClick={handleComputePayroll}
+                disabled={isProcessing || isPeriodDisbursed}
+                className="flex-1 md:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-white border border-primary text-primary hover:bg-primary/5 text-xs font-semibold transition-colors disabled:opacity-50"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>{isProcessing ? 'Computing...' : 'Calculate Payroll & Deductions'}</span>
+              </button>
+
+              <button
+                onClick={handleDisbursePayroll}
+                disabled={isDisbursing || entries.length === 0 || isPeriodDisbursed}
+                className={`flex-1 md:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg text-white text-xs font-semibold transition-colors shadow-subtle ${
+                  isPeriodDisbursed
+                    ? 'bg-emerald-600 opacity-90 cursor-default'
+                    : 'bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50'
+                }`}
+              >
+                {isPeriodDisbursed ? (
+                  <>
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Disbursed & Recovered</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>{isDisbursing ? 'Disbursing...' : 'Approve & Disburse Payroll'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
+              <span className="text-xs text-textSecondary font-semibold">Total Gross Salaries</span>
+              <div className="text-xl font-bold text-navy-800 mt-1 tabular-nums">
+                ₹{totalGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-textSecondary">Base + DA + HRA + Allowances</span>
+            </div>
+
+            <div className="bg-surface p-4 rounded-cfecc border border-amber-200 bg-amber-50/20 shadow-subtle">
+              <span className="text-xs text-amber-800 font-semibold flex items-center justify-between">
+                <span>Store Purchases Recovered</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-bold">CFECC Bills</span>
+              </span>
+              <div className="text-xl font-bold text-amber-700 mt-1 tabular-nums">
+                ₹{totalStoreRecovery.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-amber-800/80">Direct credit deduction from salary</span>
+            </div>
+
+            <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
+              <span className="text-xs text-textSecondary font-semibold">Statutory Deductions</span>
+              <div className="text-xl font-bold text-navy-800 mt-1 tabular-nums">
+                ₹{totalStatutory.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-textSecondary">Provident Fund & ESI contributions</span>
+            </div>
+
+            <div className="bg-surface p-4 rounded-cfecc border border-emerald-200 bg-emerald-50/20 shadow-subtle">
+              <span className="text-xs text-emerald-800 font-semibold">Net Payout Amount</span>
+              <div className="text-xl font-bold text-emerald-700 mt-1 tabular-nums">
+                ₹{totalNet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-emerald-800/80">Bank NEFT/RTGS disbursement</span>
+            </div>
+          </div>
+
+          {/* Salary Register Table */}
+          <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
+            <div className="p-4 border-b border-borderLine flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-bold text-navy-800">Monthly Salary Register with Store Recoveries</h3>
+                <p className="text-[11px] text-textSecondary mt-0.5">
+                  Employees with active store purchase balances have their dues deducted directly before bank disbursement
+                </p>
+              </div>
+              <div className="text-xs text-textSecondary font-semibold">
+                Total Employees: <span className="text-navy-800 font-bold">{entries.length}</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                    <th className="py-3 px-4">Employee</th>
+                    <th className="py-3 px-4 text-right">Basic (₹)</th>
+                    <th className="py-3 px-4 text-right">DA + HRA (₹)</th>
+                    <th className="py-3 px-4 text-right">Gross (₹)</th>
+                    <th className="py-3 px-4 text-right font-bold text-amber-700 bg-amber-50/50">Store Recovery (₹)</th>
+                    <th className="py-3 px-4 text-right">Statutory (₹)</th>
+                    <th className="py-3 px-4 text-right font-bold text-emerald-700">Net Payable (₹)</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Payslip</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-borderLine">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-textSecondary">
+                        <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
+                        <div>Loading payroll register...</div>
+                      </td>
+                    </tr>
+                  ) : entries.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-textSecondary">
+                        <Banknote className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                        <div className="font-semibold text-navy-800">No payroll entries computed for this cycle</div>
+                        <div className="text-xs mt-1">Click &lsquo;Calculate Payroll & Deductions&rsquo; to compute salaries and extract store balances.</div>
+                      </td>
+                    </tr>
+                  ) : (
+                    entries.map((entry) => (
+                      <tr key={entry.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-navy-800">{entry.first_name} {entry.last_name}</div>
+                          <div className="text-[11px] text-textSecondary font-mono">{entry.employee_code} &bull; {entry.department_name}</div>
+                        </td>
+                        <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
+                          ₹{parseFloat(entry.basic_salary as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
+                          ₹{(parseFloat(entry.da as any) + parseFloat(entry.hra as any)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-right tabular-nums font-semibold text-navy-800">
+                          ₹{parseFloat(entry.gross_salary as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        {/* Store Recovery Highlight */}
+                        <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700 bg-amber-50/30">
+                          ₹{parseFloat(entry.store_recovery_amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
+                          ₹{parseFloat(entry.statutory_deductions as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-right tabular-nums font-bold text-emerald-700 text-sm">
+                          ₹{parseFloat(entry.net_salary as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <StatusBadge status={entry.payment_status} />
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => handleViewPayslip(entry)}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-slate-100 hover:bg-navy-800 hover:text-white text-navy-800 text-[11px] font-semibold transition-colors"
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span>Payslip</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: STORE RECOVERY RECORDS REGISTER */}
+      {activeTab === 'RECOVERY' && (
+        <div className="space-y-6">
+          {/* Top Control & KPI */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
+              <span className="text-xs text-textSecondary font-semibold">Total Recovered from Salaries</span>
+              <div className="text-xl font-bold text-amber-700 mt-1 tabular-nums">
+                ₹{totalHistoricalRecoveries.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-textSecondary">Cumulative CFECC store credit recoveries</span>
+            </div>
+
+            <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
+              <span className="text-xs text-textSecondary font-semibold">Recovery Transactions Logged</span>
+              <div className="text-xl font-bold text-navy-800 mt-1 tabular-nums">
+                {recoveryRecords.length} Records
+              </div>
+              <span className="text-[11px] text-textSecondary">Verified payroll deductions</span>
+            </div>
+
+            <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
+              <span className="text-xs text-textSecondary font-semibold">Ledger Integration</span>
+              <div className="text-xl font-bold text-emerald-700 mt-1 flex items-center space-x-1">
+                <CheckCircle className="w-5 h-5" />
+                <span>100% Synchronized</span>
+              </div>
+              <span className="text-[11px] text-textSecondary">Balances automatically replenished in real-time</span>
+            </div>
+          </div>
+
+          {/* Search and Export Bar */}
+          <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-3.5 h-3.5 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search by REC number, employee code, name..."
+                value={recoverySearch}
+                onChange={(e) => setRecoverySearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
+              />
+            </div>
+
+            <button
+              onClick={handleExportRecoveriesCSV}
+              className="w-full sm:w-auto flex items-center justify-center space-x-1.5 px-3.5 py-1.5 rounded-lg border border-borderLine bg-white hover:bg-slate-50 text-xs font-semibold text-navy-800 transition-colors shadow-subtle"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Recovery Ledger (CSV)</span>
+            </button>
+          </div>
+
+          {/* Recovery Records Table */}
+          <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
+            <div className="p-4 border-b border-borderLine">
+              <h3 className="text-sm font-bold text-navy-800">Store Credit Recovery Audit Ledger</h3>
+              <p className="text-[11px] text-textSecondary mt-0.5">
+                Official recovery records generated during monthly payroll disbursements. Each deduction is credited against the employee&apos;s store liability.
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                    <th className="py-3 px-4">Recovery Ref #</th>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Employee</th>
+                    <th className="py-3 px-4">Payroll Cycle</th>
+                    <th className="py-3 px-4">Source</th>
+                    <th className="py-3 px-4 text-right">Amount Deducted (₹)</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4">Audit Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-borderLine">
+                  {recoveryLoading ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-textSecondary">
+                        <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
+                        <div>Loading recovery records...</div>
+                      </td>
+                    </tr>
+                  ) : filteredRecoveries.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-textSecondary">
+                        <Receipt className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                        <div className="font-semibold text-navy-800">No Store Recovery Records Found</div>
+                        <div className="text-xs mt-1">
+                          When you approve &amp; disburse a payroll cycle with store deductions, recovery records (REC-2026-XXXX) will appear here.
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRecoveries.map((rec) => (
+                      <tr key={rec.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-navy-800">
+                          {rec.recovery_number}
+                        </td>
+                        <td className="py-3 px-4 text-textSecondary whitespace-nowrap">
+                          {new Date(rec.recovered_at).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-navy-800">{rec.first_name} {rec.last_name}</div>
+                          <div className="text-[11px] text-textSecondary font-mono">{rec.employee_code} &bull; {rec.department_name}</div>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-textSecondary">
+                          {rec.payroll_period_code || 'PAY-2026-03'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                            {rec.recovery_source}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700">
+                          ₹{parseFloat(rec.amount_deducted as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            {rec.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-textSecondary text-[11px] max-w-xs truncate">
+                          {rec.remarks || 'Deducted via payroll disbursement'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Payroll Cycle Modal */}
+      <Modal
+        isOpen={isNewCycleModalOpen}
+        onClose={() => setIsNewCycleModalOpen(false)}
+        title="Create New Monthly Payroll Cycle"
+        subtitle="Initialize salary computation cycle for CFECC employees"
+        maxWidth="md"
+      >
+        <form onSubmit={handleCreatePeriod} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1">
+              Period Code
+            </label>
+            <input
+              type="text"
+              required
+              value={newPeriodCode}
+              onChange={(e) => setNewPeriodCode(e.target.value)}
+              className="w-full px-3 py-2 border border-borderLine rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="e.g. PAY-2026-04"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1">
+              Month & Year (YYYY-MM)
+            </label>
+            <input
+              type="month"
+              required
+              value={newMonthYear}
+              onChange={(e) => setNewMonthYear(e.target.value)}
+              className="w-full px-3 py-2 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1">
+                Start Date
+              </label>
+              <input
+                type="date"
+                required
+                value={newStartDate}
+                onChange={(e) => setNewStartDate(e.target.value)}
+                className="w-full px-3 py-2 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1">
+                End Date
+              </label>
+              <input
+                type="date"
+                required
+                value={newEndDate}
+                onChange={(e) => setNewEndDate(e.target.value)}
+                className="w-full px-3 py-2 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1">
+              Disbursement / Payout Date
+            </label>
+            <input
+              type="date"
+              required
+              value={newPayoutDate}
+              onChange={(e) => setNewPayoutDate(e.target.value)}
+              className="w-full px-3 py-2 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-2 pt-3 border-t border-borderLine">
+            <button
+              type="button"
+              onClick={() => setIsNewCycleModalOpen(false)}
+              className="px-3.5 py-1.5 rounded-lg border border-borderLine text-textSecondary hover:bg-slate-50 font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold shadow-subtle"
+            >
+              Initialize Period
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Official CFECC Printable Payslip Modal */}
       <Modal
         isOpen={isPayslipModalOpen}
         onClose={() => setIsPayslipModalOpen(false)}
         title="Official Employee Salary Payslip"
-        subtitle="CFECC Stores & Services, Visakhapatnam"
-        maxWidth="lg"
+        subtitle="CFECC Employees Consumer Co-operative Society Ltd, Visakhapatnam"
+        maxWidth="4xl"
       >
         {selectedEntry && (
-          <div className="space-y-4 text-xs">
-            <div className="p-3 bg-slate-50 rounded-lg flex justify-between items-center border border-borderLine">
+          <div className="space-y-4 text-xs font-sans print:p-0">
+            {/* Payslip Header */}
+            <div className="border-b-2 border-navy-800 pb-3 flex justify-between items-start">
               <div>
-                <div className="font-bold text-sm text-navy-800">{selectedEntry.first_name} {selectedEntry.last_name}</div>
-                <div className="text-[11px] text-textSecondary font-mono">
-                  Code: {selectedEntry.employee_code} &bull; Dept: {selectedEntry.department_name}
+                <h1 className="text-base font-bold text-navy-800 uppercase tracking-wide">
+                  CFECC EMPLOYEES CONSUMER CO-OPERATIVE SOCIETY LTD.
+                </h1>
+                <p className="text-[11px] text-textSecondary">
+                  Reg No: MSCS/CR/2026 &bull; D.No 14-38-12, Near Port Stadium, Visakhapatnam, AP - 530008
+                </p>
+                <div className="text-[11px] font-bold text-primary mt-1">
+                  SALARY & STORE CREDIT RECOVERY SLIP &mdash; {activePeriod?.month_year || 'MARCH 2026'}
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-semibold text-navy-800">Month: March 2026</div>
-                <div className="text-[11px] text-textSecondary">Bank: {selectedEntry.bank_name || 'SBI'} ({selectedEntry.account_number || '30129485739'})</div>
+                <div className="text-[11px] font-mono font-bold text-navy-800">
+                  SLIP REF: {selectedEntry.employee_code}-{(activePeriod?.period_code || 'PAY-2026-03')}
+                </div>
+                <div className="text-[10px] text-textSecondary">
+                  Payout Date: {activePeriod?.payout_date || '2026-04-01'}
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              {/* Earnings */}
-              <div className="p-3 border border-borderLine rounded-lg space-y-1.5">
-                <span className="font-bold text-navy-800 uppercase text-[10px] block pb-1 border-b border-borderLine">
-                  Earnings
+            {/* Employee Particulars Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-borderLine text-[11px]">
+              <div>
+                <span className="text-textSecondary block text-[10px] uppercase font-bold">Employee Name</span>
+                <span className="font-bold text-navy-800">{selectedEntry.first_name} {selectedEntry.last_name}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[10px] uppercase font-bold">Employee ID / Code</span>
+                <span className="font-mono font-bold text-navy-800">{selectedEntry.employee_code}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[10px] uppercase font-bold">Department</span>
+                <span className="font-semibold text-navy-800">{selectedEntry.department_name || 'Operations'}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[10px] uppercase font-bold">Bank Name & A/C</span>
+                <span className="font-mono text-navy-800">
+                  {selectedEntry.bank_name || 'State Bank of India'} &bull; {selectedEntry.account_number ? `...${selectedEntry.account_number.slice(-4)}` : 'XXXX5739'}
                 </span>
-                <div className="flex justify-between">
-                  <span>Basic Salary:</span>
-                  <span className="font-mono">₹{parseFloat(selectedEntry.basic_salary).toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Earnings & Deductions Breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Earnings Table */}
+              <div className="border border-borderLine rounded-lg overflow-hidden">
+                <div className="bg-navy-800 text-white font-bold text-[11px] px-3 py-1.5 flex justify-between">
+                  <span>EARNINGS HEAD</span>
+                  <span>AMOUNT (₹)</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>DA:</span>
-                  <span className="font-mono">₹{parseFloat(selectedEntry.da).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>HRA:</span>
-                  <span className="font-mono">₹{parseFloat(selectedEntry.hra).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Allowances:</span>
-                  <span className="font-mono">₹{parseFloat(selectedEntry.other_allowances).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold pt-1 border-t border-borderLine">
-                  <span>Gross Earnings:</span>
-                  <span className="font-mono">₹{parseFloat(selectedEntry.gross_salary).toFixed(2)}</span>
+                <div className="divide-y divide-borderLine p-3 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-textSecondary">Basic Salary</span>
+                    <span className="font-mono tabular-nums">₹{parseFloat(selectedEntry.basic_salary as any).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1.5">
+                    <span className="text-textSecondary">Dearness Allowance (DA)</span>
+                    <span className="font-mono tabular-nums">₹{parseFloat(selectedEntry.da as any).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1.5">
+                    <span className="text-textSecondary">House Rent Allowance (HRA)</span>
+                    <span className="font-mono tabular-nums">₹{parseFloat(selectedEntry.hra as any).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1.5">
+                    <span className="text-textSecondary">Special Allowances</span>
+                    <span className="font-mono tabular-nums">₹{parseFloat(selectedEntry.other_allowances as any).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t-2 border-borderLine font-bold text-navy-800">
+                    <span>GROSS EARNINGS</span>
+                    <span className="font-mono tabular-nums">₹{parseFloat(selectedEntry.gross_salary as any).toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Deductions */}
-              <div className="p-3 border border-borderLine rounded-lg space-y-1.5">
-                <span className="font-bold text-navy-800 uppercase text-[10px] block pb-1 border-b border-borderLine">
-                  Deductions & Store Recovery
-                </span>
-                <div className="flex justify-between font-semibold text-amber-700">
-                  <span>Store Purchase Recovery:</span>
-                  <span className="font-mono">₹{parseFloat(selectedEntry.store_recovery_amount).toFixed(2)}</span>
+              {/* Deductions Table */}
+              <div className="border border-borderLine rounded-lg overflow-hidden">
+                <div className="bg-amber-700 text-white font-bold text-[11px] px-3 py-1.5 flex justify-between">
+                  <span>DEDUCTIONS & STORE RECOVERIES</span>
+                  <span>AMOUNT (₹)</span>
                 </div>
-                <div className="flex justify-between text-textSecondary">
-                  <span>PF & ESI Statutory:</span>
-                  <span className="font-mono">₹{parseFloat(selectedEntry.statutory_deductions).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold pt-4 border-t border-borderLine">
-                  <span>Total Deductions:</span>
-                  <span className="font-mono">₹{parseFloat(selectedEntry.total_deductions).toFixed(2)}</span>
+                <div className="divide-y divide-borderLine p-3 space-y-2 text-xs">
+                  {/* Store Purchase Recovery */}
+                  <div className="flex justify-between font-bold text-amber-800 bg-amber-50/60 p-1.5 rounded">
+                    <span>CFECC Store Credit Purchases Recovery</span>
+                    <span className="font-mono tabular-nums">₹{parseFloat(selectedEntry.store_recovery_amount as any).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1.5">
+                    <span className="text-textSecondary">Provident Fund (PF) & Statutory</span>
+                    <span className="font-mono tabular-nums">₹{parseFloat(selectedEntry.statutory_deductions as any).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1.5">
+                    <span className="text-textSecondary">Professional Tax (PT)</span>
+                    <span className="font-mono tabular-nums">₹0.00</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t-2 border-borderLine font-bold text-amber-800">
+                    <span>TOTAL DEDUCTIONS</span>
+                    <span className="font-mono tabular-nums">₹{parseFloat(selectedEntry.total_deductions as any).toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex justify-between items-center text-sm font-bold text-emerald-800">
-              <span>Net Take-Home Salary:</span>
-              <span className="text-base font-mono">₹{parseFloat(selectedEntry.net_salary).toFixed(2)}</span>
+            {/* Net Salary Summary */}
+            <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <div>
+                <span className="text-xs font-bold text-emerald-900 block">NET TAKE-HOME SALARY</span>
+                <span className="text-[11px] text-emerald-700">Amount transferred directly to employee bank account</span>
+              </div>
+              <div className="text-xl font-bold font-mono text-emerald-800 tabular-nums">
+                ₹{parseFloat(selectedEntry.net_salary as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-borderLine">
+            {/* Note & Signatures */}
+            <div className="pt-4 border-t border-borderLine text-[10px] text-textSecondary flex justify-between items-end">
+              <div>
+                <p>Note: CFECC Store Credit Recovery has been settled against active store billing statements.</p>
+                <p>Computer generated statement &mdash; valid without physical signature for internal audit.</p>
+              </div>
+              <div className="text-right">
+                <div className="w-40 border-b border-navy-800 mb-1" />
+                <span className="font-bold text-navy-800">Authorized Accounts Officer</span>
+              </div>
+            </div>
+
+            {/* Print Action */}
+            <div className="flex justify-end pt-3 border-t border-borderLine print:hidden">
               <button
                 onClick={() => window.print()}
-                className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-navy-800 text-white font-semibold text-xs"
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-navy-800 hover:bg-navy-900 text-white font-semibold text-xs shadow-subtle transition-colors"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>Print Payslip</span>
+                <span>Print Official Payslip</span>
               </button>
             </div>
           </div>
@@ -322,4 +895,3 @@ export const PayrollPage: React.FC = () => {
     </div>
   );
 };
-

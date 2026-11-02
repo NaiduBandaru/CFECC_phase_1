@@ -67,7 +67,8 @@ export function App() {
             <Route path="purchase-invoices" element={<PurchaseInvoicesPage />} />
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="billing" element={<BillingPage />} />
-            <Route path="payroll" element={<PayrollPage />} />
+            <Route path="payroll" element={<PayrollPage initialTab="PAYROLL" />} />
+            <Route path="recovery-records" element={<PayrollPage initialTab="RECOVERY" />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

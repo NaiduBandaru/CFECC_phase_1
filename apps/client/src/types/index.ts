@@ -259,3 +259,61 @@ export interface VendorPayment {
   created_at: string;
 }
 
+export interface PayrollPeriod {
+  id: number;
+  period_code: string;
+  month_year: string;
+  start_date: string;
+  end_date: string;
+  payout_date: string;
+  status: 'DRAFT' | 'CALCULATED' | 'APPROVED' | 'DISBURSED';
+  total_gross_pay: string | number;
+  total_deductions: string | number;
+  total_net_pay: string | number;
+  created_at: string;
+}
+
+export interface PayrollEntry {
+  id: number;
+  payroll_period_id: number;
+  employee_id: number;
+  employee_code: string;
+  first_name: string;
+  last_name: string;
+  department_name?: string | null;
+  bank_name?: string | null;
+  account_number?: string | null;
+  ifsc_code?: string | null;
+  pan_number?: string | null;
+  basic_salary: string | number;
+  da: string | number;
+  hra: string | number;
+  other_allowances: string | number;
+  gross_salary: string | number;
+  store_recovery_amount: string | number;
+  statutory_deductions: string | number;
+  total_deductions: string | number;
+  net_salary: string | number;
+  payment_status: 'PENDING' | 'PAID' | 'FAILED';
+  paid_at?: string | null;
+}
+
+export interface RecoveryRecord {
+  id: number;
+  recovery_number: string;
+  employee_id: number;
+  employee_code: string;
+  first_name: string;
+  last_name: string;
+  department_name?: string | null;
+  billing_period_id: number;
+  billing_period_name?: string | null;
+  recovery_source: string;
+  amount_deducted: string | number;
+  payroll_period_id?: number | null;
+  payroll_period_code?: string | null;
+  status: string;
+  recovered_at: string;
+  remarks?: string | null;
+}
+
