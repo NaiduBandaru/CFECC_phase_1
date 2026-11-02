@@ -1,25 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
 import { Item, Category, ItemPriceHistory } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
 import {
   Tag,
   Search,
-  SlidersHorizontal,
   History,
   TrendingUp,
   Percent,
   Download,
   Edit2,
-  DollarSign,
-  AlertCircle,
-  CheckCircle,
-  Layers,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  RefreshCw,
-  Clock,
   Sparkles,
 } from 'lucide-react';
 

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken, requirePermission } from '../../middleware/auth.js';
+import { authenticateToken } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
 
 export const employeesRouter = Router();
@@ -662,7 +662,7 @@ employeesRouter.post('/import', authenticateToken, async (req: Request, res: Res
         const creditLimit = parseFloat(r.creditLimit || 10000);
         const joiningDate = r.joiningDate || new Date().toISOString().split('T')[0];
 
-        const insertRes = await executeRawSql(`
+        await executeRawSql(`
           INSERT INTO employees (
             employee_code, first_name, last_name, mobile, email, department_id, designation_id,
             joining_date, employment_status, credit_enabled, credit_limit, current_outstanding, available_credit

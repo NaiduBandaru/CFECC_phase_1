@@ -1,26 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
-import { PurchaseInvoice, Vendor, GoodsReceipt } from '../../types/index.js';
+import { Vendor, GoodsReceipt } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
-import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import {
   Receipt,
   Search,
   Plus,
   CreditCard,
   Download,
-  AlertTriangle,
   Clock,
   Eye,
   CheckCircle,
-  Truck,
-  Landmark,
-  Building2,
-  Calendar,
-  Layers,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
 } from 'lucide-react';
 
 export const PurchaseInvoicesPage: React.FC = () => {
@@ -36,12 +26,10 @@ export const PurchaseInvoicesPage: React.FC = () => {
   });
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Filters & Sorting
+  // Filters
   const [search, setSearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [vendorFilter, setVendorFilter] = useState<string>('ALL');
-  const [sortBy, setSortBy] = useState<string>('invoice_date');
-  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
 
   // Register Invoice Modal
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -78,7 +66,7 @@ export const PurchaseInvoicesPage: React.FC = () => {
 
   useEffect(() => {
     fetchInvoices();
-  }, [search, statusFilter, vendorFilter, sortBy, sortOrder]);
+  }, [search, statusFilter, vendorFilter]);
 
   const fetchInitialData = async () => {
     try {

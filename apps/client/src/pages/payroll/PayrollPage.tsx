@@ -9,16 +9,10 @@ import {
   CheckCircle,
   FileText,
   Printer,
-  Calendar,
-  IndianRupee,
   ShieldCheck,
   Receipt,
   Download,
   Search,
-  ArrowRight,
-  TrendingUp,
-  AlertCircle,
-  Layers,
 } from 'lucide-react';
 import { PayrollPeriod, PayrollEntry, RecoveryRecord } from '../../types/index.js';
 

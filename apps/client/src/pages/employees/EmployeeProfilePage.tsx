@@ -19,7 +19,6 @@ import {
   AlertCircle,
   Save,
   Edit,
-  Upload,
   Trash2,
   Plus,
 } from 'lucide-react';

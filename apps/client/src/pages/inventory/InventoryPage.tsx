@@ -3,11 +3,9 @@ import { api } from '../../lib/api.js';
 import { Modal } from '../../components/ui/Modal.js';
 import {
   Boxes,
-  Search,
   AlertTriangle,
   History,
   Sliders,
-  CheckCircle,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
@@ -142,7 +140,19 @@ export const InventoryPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-borderLine">
-                {stock.map((item) => {
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-textSecondary">
+                      Loading inventory records...
+                    </td>
+                  </tr>
+                ) : stock.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-textSecondary">
+                      No inventory records found.
+                    </td>
+                  </tr>
+                ) : stock.map((item) => {
                   const isLow = parseFloat(item.current_stock) <= parseFloat(item.min_stock);
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">

@@ -7,21 +7,16 @@ import { Modal } from '../../components/ui/Modal.js';
 import {
   Users,
   Search,
-  Filter,
   Plus,
   Download,
   Upload,
-  CreditCard,
   ChevronRight,
   Phone,
-  Building,
   CheckCircle,
   XCircle,
   ArrowUpDown,
   SlidersHorizontal,
   CheckSquare,
-  Square,
-  ShieldAlert,
 } from 'lucide-react';
 
 export const EmployeeDirectoryPage: React.FC = () => {

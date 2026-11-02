@@ -1,6 +1,5 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
-import { config } from './config/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './modules/auth/auth.router.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.router.js';
@@ -33,7 +32,7 @@ export function createApp(): Express {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // Health check
-  app.get('/api/health', (req: Request, res: Response) => {
+  app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       status: 'UP',
       system: 'CFECC Stores Management System',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
-import { Settings, ShieldCheck, MessageSquare, Building2, CheckCircle, Database } from 'lucide-react';
+import { ShieldCheck, MessageSquare, Building2, CheckCircle } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const [waLogs, setWaLogs] = useState<any[]>([]);

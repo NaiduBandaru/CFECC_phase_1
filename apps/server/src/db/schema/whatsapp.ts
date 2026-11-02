@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, timestamp, jsonb } from 'drizzle-orm/pg-core';
 
 export const whatsappLogs = pgTable('whatsapp_logs', {
   id: serial('id').primaryKey(),

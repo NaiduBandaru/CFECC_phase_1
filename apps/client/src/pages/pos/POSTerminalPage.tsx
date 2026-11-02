@@ -5,7 +5,6 @@ import {
   Search,
   Barcode,
   ShoppingCart,
-  Trash2,
   Plus,
   Minus,
   CreditCard,

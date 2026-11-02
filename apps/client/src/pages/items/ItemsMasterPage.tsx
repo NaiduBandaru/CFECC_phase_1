@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
 import { Item, Category, Unit, ItemPriceHistory } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
@@ -18,11 +18,8 @@ import {
   SlidersHorizontal,
   CheckSquare,
   Square,
-  RefreshCw,
   FolderPlus,
-  Tag,
   CheckCircle,
-  XCircle,
 } from 'lucide-react';
 
 export const ItemsMasterPage: React.FC = () => {

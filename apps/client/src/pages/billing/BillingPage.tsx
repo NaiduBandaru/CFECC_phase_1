@@ -12,8 +12,6 @@ import {
   IndianRupee,
   Calendar,
   AlertCircle,
-  FileSpreadsheet,
-  Download,
 } from 'lucide-react';
 
 export const BillingPage: React.FC = () => {
@@ -156,6 +154,19 @@ export const BillingPage: React.FC = () => {
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to record payment');
+    }
+  };
+
+  // Create New Billing Period
+  const handleCreatePeriod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post('/billing/periods', periodForm);
+      setMessage({ type: 'success', text: `Billing period ${periodForm.periodCode} created successfully!` });
+      setIsNewPeriodModalOpen(false);
+      fetchPeriods();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.response?.data?.message || 'Failed to create billing period.' });
     }
   };
 
@@ -423,6 +434,83 @@ export const BillingPage: React.FC = () => {
               className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold transition-all shadow-subtle"
             >
               Record Payment
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Create New Billing Period Modal */}
+      <Modal
+        isOpen={isNewPeriodModalOpen}
+        onClose={() => setIsNewPeriodModalOpen(false)}
+        title="Create New Billing Period"
+      >
+        <form onSubmit={handleCreatePeriod} className="space-y-4 text-xs">
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Period Code *</label>
+            <input
+              type="text"
+              required
+              value={periodForm.periodCode}
+              onChange={(e) => setPeriodForm({ ...periodForm, periodCode: e.target.value })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none font-mono"
+            />
+          </div>
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Period Name *</label>
+            <input
+              type="text"
+              required
+              value={periodForm.periodName}
+              onChange={(e) => setPeriodForm({ ...periodForm, periodName: e.target.value })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Start Date *</label>
+              <input
+                type="date"
+                required
+                value={periodForm.startDate}
+                onChange={(e) => setPeriodForm({ ...periodForm, startDate: e.target.value })}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">End Date *</label>
+              <input
+                type="date"
+                required
+                value={periodForm.endDate}
+                onChange={(e) => setPeriodForm({ ...periodForm, endDate: e.target.value })}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Billing Date *</label>
+            <input
+              type="date"
+              required
+              value={periodForm.billingDate}
+              onChange={(e) => setPeriodForm({ ...periodForm, billingDate: e.target.value })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+            />
+          </div>
+          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-borderLine">
+            <button
+              type="button"
+              onClick={() => setIsNewPeriodModalOpen(false)}
+              className="px-4 py-2 font-semibold text-textSecondary hover:text-textPrimary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold transition-all shadow-subtle"
+            >
+              Create Period
             </button>
           </div>
         </form>

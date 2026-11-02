@@ -8,7 +8,6 @@ import {
   TrendingUp,
   Package,
   AlertTriangle,
-  ArrowUpRight,
   IndianRupee,
   Layers,
   FileText,

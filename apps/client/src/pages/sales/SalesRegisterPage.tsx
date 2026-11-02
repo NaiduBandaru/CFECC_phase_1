@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { Sale } from '../../types/index.js';
@@ -7,22 +7,18 @@ import { Modal } from '../../components/ui/Modal.js';
 import {
   Receipt,
   Search,
-  Filter,
   Eye,
   Printer,
   CreditCard,
   Download,
-  Calendar,
   RotateCcw,
   Send,
   CheckCircle,
   AlertTriangle,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown,
   ShoppingBag,
   TrendingUp,
-  XCircle,
 } from 'lucide-react';
 
 export const SalesRegisterPage: React.FC = () => {

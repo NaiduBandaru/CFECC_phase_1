@@ -8,13 +8,9 @@ import {
   Search,
   Plus,
   Phone,
-  Mail,
   Building,
-  MapPin,
-  CreditCard,
   FileSpreadsheet,
   Receipt,
-  History,
   Eye,
   Edit2,
   Download,
@@ -23,12 +19,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  CheckCircle,
-  AlertCircle,
-  SlidersHorizontal,
   Package,
-  TrendingUp,
-  Tag,
 } from 'lucide-react';
 
 export const VendorsPage: React.FC = () => {

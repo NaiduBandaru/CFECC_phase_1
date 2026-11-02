@@ -3,21 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import {
-  BarChart3,
   Download,
   CreditCard,
   Package,
   TrendingUp,
   FileSpreadsheet,
-  Users,
   Truck,
   Receipt,
-  Calendar,
   Search,
-  Filter,
-  CheckCircle,
-  AlertCircle,
-  IndianRupee,
   RefreshCw,
 } from 'lucide-react';
 import {
