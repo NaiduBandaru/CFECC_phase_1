@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { initDatabase, executeRawSql } from './index.js';
+import { initDatabase, executeRawSql, syncDatabaseSequences } from './index.js';
 
 export async function seedDatabase() {
   console.log('[Seed] Starting comprehensive CFECC enterprise database seed for all modules...');
@@ -489,6 +489,9 @@ export async function seedDatabase() {
       ('REC-2026-0004', 4, 2, NULL, 'PAYROLL_DEDUCTION', 3200.00, 2, 'COMPLETED', '2026-03-01 10:00:00', 'Full February credit statement settled')
     ON CONFLICT (recovery_number) DO NOTHING;
   `);
+
+  // Ensure all sequences are updated past the seeded IDs
+  await syncDatabaseSequences();
 
   console.log('[Seed] Comprehensive CFECC enterprise database seed completed successfully!');
 }

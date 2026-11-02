@@ -57,7 +57,56 @@ export async function initDatabase() {
   // Ensure tables exist on boot
   await ensureTablesCreated();
 
+  // Synchronize PostgreSQL serial sequences to prevent duplicate primary key violations
+  await syncDatabaseSequences();
+
   return dbInstance;
+}
+
+export async function syncDatabaseSequences() {
+  const tables = [
+    'roles',
+    'departments',
+    'designations',
+    'employees',
+    'users',
+    'item_categories',
+    'units',
+    'items',
+    'item_price_history',
+    'stock_movements',
+    'vendors',
+    'purchase_orders',
+    'purchase_order_items',
+    'goods_receipts',
+    'goods_receipt_items',
+    'purchase_invoices',
+    'vendor_payments',
+    'sales',
+    'sale_items',
+    'sale_returns',
+    'employee_ledger',
+    'billing_periods',
+    'employee_invoices',
+    'payments',
+    'recovery_records',
+    'payroll_periods',
+    'payroll_entries',
+    'audit_logs',
+  ];
+
+  for (const table of tables) {
+    try {
+      await executeRawSql(`
+        SELECT setval(
+          pg_get_serial_sequence('${table}', 'id'),
+          (SELECT GREATEST(COALESCE(MAX(id), 1), 1) FROM "${table}")
+        );
+      `);
+    } catch {
+      // Ignore if table has no serial sequence
+    }
+  }
 }
 
 export function getDb() {
