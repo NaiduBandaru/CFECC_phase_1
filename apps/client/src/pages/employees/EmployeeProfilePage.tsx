@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
+import { Modal } from '../../components/ui/Modal.js';
 import {
   ArrowLeft,
   CreditCard,
@@ -14,10 +15,13 @@ import {
   ShoppingBag,
   Receipt,
   History,
-  ShieldCheck,
   CheckCircle,
   AlertCircle,
   Save,
+  Edit,
+  Upload,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 
 export const EmployeeProfilePage: React.FC = () => {
@@ -35,6 +39,47 @@ export const EmployeeProfilePage: React.FC = () => {
   const [isUpdatingCredit, setIsUpdatingCredit] = useState<boolean>(false);
   const [creditUpdateSuccess, setCreditUpdateSuccess] = useState<string | null>(null);
 
+  // Edit Personal & Contact Modal
+  const [isEditPersonalModalOpen, setIsEditPersonalModalOpen] = useState(false);
+  const [personalForm, setPersonalForm] = useState({
+    firstName: '',
+    lastName: '',
+    mobile: '',
+    alternateMobile: '',
+    email: '',
+    currentAddress: '',
+    permanentAddress: '',
+    employmentStatus: 'ACTIVE',
+  });
+
+  // Edit Salary Modal
+  const [isEditSalaryModalOpen, setIsEditSalaryModalOpen] = useState(false);
+  const [salaryForm, setSalaryForm] = useState({
+    basicSalary: 25000,
+    da: 5000,
+    hra: 6000,
+    otherAllowances: 2000,
+    statutoryDeductions: 2400,
+  });
+
+  // Edit Bank Modal
+  const [isEditBankModalOpen, setIsEditBankModalOpen] = useState(false);
+  const [bankForm, setBankForm] = useState({
+    accountHolderName: '',
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    branch: '',
+  });
+
+  // Upload Document Modal
+  const [isUploadDocModalOpen, setIsUploadDocModalOpen] = useState(false);
+  const [docForm, setDocForm] = useState({
+    documentType: 'AADHAAR',
+    documentName: '',
+    documentUrl: '#',
+  });
+
   useEffect(() => {
     if (id) {
       fetchEmployeeProfile(id);
@@ -47,9 +92,49 @@ export const EmployeeProfilePage: React.FC = () => {
       setError(null);
       const res = await api.get(`/employees/${empId}`);
       if (res.data.success) {
-        setData(res.data.data);
-        setCreditLimitInput(res.data.data.storeCredit.creditLimit);
-        setCreditEnabledInput(res.data.data.storeCredit.creditEnabled);
+        const emp = res.data.data;
+        setData(emp);
+        setCreditLimitInput(emp.storeCredit.creditLimit);
+        setCreditEnabledInput(emp.storeCredit.creditEnabled);
+
+        setPersonalForm({
+          firstName: emp.personal.firstName,
+          lastName: emp.personal.lastName,
+          mobile: emp.contact.mobile,
+          alternateMobile: emp.contact.alternateMobile || '',
+          email: emp.contact.email || '',
+          currentAddress: emp.contact.currentAddress || '',
+          permanentAddress: emp.contact.permanentAddress || '',
+          employmentStatus: emp.employment.employmentStatus,
+        });
+
+        if (emp.salary) {
+          setSalaryForm({
+            basicSalary: parseFloat(emp.salary.basic_salary),
+            da: parseFloat(emp.salary.da),
+            hra: parseFloat(emp.salary.hra),
+            otherAllowances: parseFloat(emp.salary.other_allowances),
+            statutoryDeductions: parseFloat(emp.salary.statutory_deductions),
+          });
+        }
+
+        if (emp.bank) {
+          setBankForm({
+            accountHolderName: emp.bank.account_holder_name,
+            bankName: emp.bank.bank_name,
+            accountNumber: emp.bank.account_number,
+            ifscCode: emp.bank.ifsc_code,
+            branch: emp.bank.branch || '',
+          });
+        } else {
+          setBankForm({
+            accountHolderName: `${emp.personal.firstName} ${emp.personal.lastName}`,
+            bankName: 'State Bank of India',
+            accountNumber: '',
+            ifscCode: 'SBIN0001234',
+            branch: 'Visakhapatnam',
+          });
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load employee profile');
@@ -58,6 +143,7 @@ export const EmployeeProfilePage: React.FC = () => {
     }
   };
 
+  // Update Store Credit (Tab 7)
   const handleUpdateCredit = async () => {
     try {
       setIsUpdatingCredit(true);
@@ -74,6 +160,77 @@ export const EmployeeProfilePage: React.FC = () => {
       alert(err.response?.data?.message || 'Failed to update credit');
     } finally {
       setIsUpdatingCredit(false);
+    }
+  };
+
+  // Save Personal & Contact Details (Tabs 2 & 3)
+  const handleSavePersonal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await api.put(`/employees/${id}`, personalForm);
+      if (res.data.success) {
+        setIsEditPersonalModalOpen(false);
+        fetchEmployeeProfile(id!);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update details');
+    }
+  };
+
+  // Save Salary Structure (Tab 5)
+  const handleSaveSalary = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await api.put(`/employees/${id}/salary`, salaryForm);
+      if (res.data.success) {
+        setIsEditSalaryModalOpen(false);
+        fetchEmployeeProfile(id!);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update salary');
+    }
+  };
+
+  // Save Bank Details (Tab 6)
+  const handleSaveBank = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await api.put(`/employees/${id}/bank`, bankForm);
+      if (res.data.success) {
+        setIsEditBankModalOpen(false);
+        fetchEmployeeProfile(id!);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update bank details');
+    }
+  };
+
+  // Upload Document (Tab 8)
+  const handleUploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docForm.documentName) return;
+    try {
+      const res = await api.post(`/employees/${id}/documents`, docForm);
+      if (res.data.success) {
+        setIsUploadDocModalOpen(false);
+        setDocForm({ documentType: 'AADHAAR', documentName: '', documentUrl: '#' });
+        fetchEmployeeProfile(id!);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to upload document');
+    }
+  };
+
+  // Delete Document (Tab 8)
+  const handleDeleteDoc = async (docId: number) => {
+    if (!confirm('Are you sure you want to remove this document?')) return;
+    try {
+      const res = await api.delete(`/employees/${id}/documents/${docId}`);
+      if (res.data.success) {
+        fetchEmployeeProfile(id!);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete document');
     }
   };
 
@@ -254,9 +411,18 @@ export const EmployeeProfilePage: React.FC = () => {
         {/* Tab 2: Personal Information */}
         {activeTab === 2 && (
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider pb-2 border-b border-borderLine">
-              Personal KYC Details
-            </h3>
+            <div className="flex items-center justify-between pb-2 border-b border-borderLine">
+              <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider">
+                Personal KYC Details
+              </h3>
+              <button
+                onClick={() => setIsEditPersonalModalOpen(true)}
+                className="flex items-center space-x-1 text-xs font-semibold text-primary hover:underline"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Edit Personal Details</span>
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
               <div>
                 <span className="text-textSecondary font-medium block">Full Legal Name</span>
@@ -285,12 +451,21 @@ export const EmployeeProfilePage: React.FC = () => {
         {/* Tab 3: Contact Details */}
         {activeTab === 3 && (
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider pb-2 border-b border-borderLine">
-              Contact & Address Information
-            </h3>
+            <div className="flex items-center justify-between pb-2 border-b border-borderLine">
+              <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider">
+                Contact & Address Information
+              </h3>
+              <button
+                onClick={() => setIsEditPersonalModalOpen(true)}
+                className="flex items-center space-x-1 text-xs font-semibold text-primary hover:underline"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Edit Contact Details</span>
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
-                <span className="text-textSecondary font-medium block">Primary Mobile (WhatsApp Enabled)</span>
+                <span className="text-textSecondary font-medium block">Primary Mobile (WhatsApp Statements)</span>
                 <span className="font-semibold text-navy-800">{data.contact.mobile}</span>
               </div>
               <div>
@@ -304,6 +479,10 @@ export const EmployeeProfilePage: React.FC = () => {
               <div>
                 <span className="text-textSecondary font-medium block">Current Residential Address</span>
                 <span className="font-semibold text-navy-800">{data.contact.currentAddress || 'Visakhapatnam, Andhra Pradesh'}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary font-medium block">Permanent Address</span>
+                <span className="font-semibold text-navy-800">{data.contact.permanentAddress || 'Visakhapatnam, Andhra Pradesh'}</span>
               </div>
             </div>
           </div>
@@ -336,6 +515,10 @@ export const EmployeeProfilePage: React.FC = () => {
                 <span className="text-textSecondary font-medium block">Reporting Manager</span>
                 <span className="font-semibold text-navy-800">{data.employment.managerName || 'General Manager'}</span>
               </div>
+              <div>
+                <span className="text-textSecondary font-medium block">Employment Status</span>
+                <StatusBadge status={data.employment.employmentStatus} />
+              </div>
             </div>
           </div>
         )}
@@ -343,9 +526,18 @@ export const EmployeeProfilePage: React.FC = () => {
         {/* Tab 5: Salary Information */}
         {activeTab === 5 && (
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider pb-2 border-b border-borderLine">
-              Salary Structure
-            </h3>
+            <div className="flex items-center justify-between pb-2 border-b border-borderLine">
+              <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider">
+                Salary Structure & Allowances
+              </h3>
+              <button
+                onClick={() => setIsEditSalaryModalOpen(true)}
+                className="flex items-center space-x-1 text-xs font-semibold text-primary hover:underline"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Update Salary Structure</span>
+              </button>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
               <div className="p-3 bg-slate-50 rounded-lg">
                 <span className="text-textSecondary block">Basic Salary</span>
@@ -378,9 +570,18 @@ export const EmployeeProfilePage: React.FC = () => {
         {/* Tab 6: Bank Details */}
         {activeTab === 6 && (
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider pb-2 border-b border-borderLine">
-              Authorized Bank Account
-            </h3>
+            <div className="flex items-center justify-between pb-2 border-b border-borderLine">
+              <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider">
+                Authorized Bank Account
+              </h3>
+              <button
+                onClick={() => setIsEditBankModalOpen(true)}
+                className="flex items-center space-x-1 text-xs font-semibold text-primary hover:underline"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Update Bank Details</span>
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
               <div>
                 <span className="text-textSecondary font-medium block">Bank Name</span>
@@ -458,20 +659,39 @@ export const EmployeeProfilePage: React.FC = () => {
         {/* Tab 8: Documents */}
         {activeTab === 8 && (
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider pb-2 border-b border-borderLine">
-              KYC & Employment Documents
-            </h3>
+            <div className="flex items-center justify-between pb-2 border-b border-borderLine">
+              <h3 className="text-sm font-bold text-navy-800 uppercase tracking-wider">
+                KYC & Employment Documents
+              </h3>
+              <button
+                onClick={() => setIsUploadDocModalOpen(true)}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold shadow-subtle"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Attach Document</span>
+              </button>
+            </div>
+
             {data.documents?.length === 0 ? (
-              <div className="text-xs text-textSecondary py-4">No uploaded documents on record.</div>
+              <div className="text-xs text-textSecondary py-4">No uploaded documents on record. Click 'Attach Document' to add.</div>
             ) : (
               <div className="divide-y divide-borderLine">
                 {data.documents?.map((doc: any) => (
                   <div key={doc.id} className="py-2.5 flex items-center justify-between text-xs">
                     <div>
                       <span className="font-semibold text-navy-800">{doc.document_name}</span>
-                      <span className="text-textSecondary ml-2">({doc.document_type})</span>
+                      <span className="text-textSecondary ml-2 font-mono">({doc.document_type})</span>
                     </div>
-                    <span className="text-primary font-semibold hover:underline cursor-pointer">Download</span>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-primary font-semibold hover:underline cursor-pointer">View / Download</span>
+                      <button
+                        onClick={() => handleDeleteDoc(doc.id)}
+                        className="text-slate-400 hover:text-status-danger transition-colors p-1"
+                        title="Remove Document"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -581,7 +801,291 @@ export const EmployeeProfilePage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Personal & Contact Details Modal */}
+      <Modal
+        isOpen={isEditPersonalModalOpen}
+        onClose={() => setIsEditPersonalModalOpen(false)}
+        title="Edit Personal & Contact Details"
+        subtitle={`Update employee record for ${emp.first_name} ${emp.last_name}`}
+        maxWidth="lg"
+      >
+        <form onSubmit={handleSavePersonal} className="space-y-4 text-xs">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">First Name *</label>
+              <input
+                type="text"
+                required
+                value={personalForm.firstName}
+                onChange={(e) => setPersonalForm({ ...personalForm, firstName: e.target.value })}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Last Name *</label>
+              <input
+                type="text"
+                required
+                value={personalForm.lastName}
+                onChange={(e) => setPersonalForm({ ...personalForm, lastName: e.target.value })}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Mobile Number *</label>
+              <input
+                type="tel"
+                required
+                value={personalForm.mobile}
+                onChange={(e) => setPersonalForm({ ...personalForm, mobile: e.target.value })}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Alternate Mobile</label>
+              <input
+                type="tel"
+                value={personalForm.alternateMobile}
+                onChange={(e) => setPersonalForm({ ...personalForm, alternateMobile: e.target.value })}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Email</label>
+              <input
+                type="email"
+                value={personalForm.email}
+                onChange={(e) => setPersonalForm({ ...personalForm, email: e.target.value })}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Residential Address</label>
+              <textarea
+                rows={2}
+                value={personalForm.currentAddress}
+                onChange={(e) => setPersonalForm({ ...personalForm, currentAddress: e.target.value })}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-3 border-t border-borderLine">
+            <button
+              type="button"
+              onClick={() => setIsEditPersonalModalOpen(false)}
+              className="px-4 py-2 font-semibold text-textSecondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold shadow-subtle"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Salary Modal */}
+      <Modal
+        isOpen={isEditSalaryModalOpen}
+        onClose={() => setIsEditSalaryModalOpen(false)}
+        title="Update Salary Structure"
+        subtitle={`Set approved compensation components for ${emp.first_name}`}
+        maxWidth="md"
+      >
+        <form onSubmit={handleSaveSalary} className="space-y-3 text-xs">
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Basic Salary (₹) *</label>
+            <input
+              type="number"
+              required
+              value={salaryForm.basicSalary}
+              onChange={(e) => setSalaryForm({ ...salaryForm, basicSalary: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white font-bold tabular-nums"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Dearness Allowance (DA) (₹)</label>
+            <input
+              type="number"
+              value={salaryForm.da}
+              onChange={(e) => setSalaryForm({ ...salaryForm, da: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white tabular-nums"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">HRA (₹)</label>
+            <input
+              type="number"
+              value={salaryForm.hra}
+              onChange={(e) => setSalaryForm({ ...salaryForm, hra: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white tabular-nums"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Other Allowances (₹)</label>
+            <input
+              type="number"
+              value={salaryForm.otherAllowances}
+              onChange={(e) => setSalaryForm({ ...salaryForm, otherAllowances: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white tabular-nums"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-3 border-t border-borderLine">
+            <button
+              type="button"
+              onClick={() => setIsEditSalaryModalOpen(false)}
+              className="px-4 py-2 font-semibold text-textSecondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold shadow-subtle"
+            >
+              Update Salary
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Bank Modal */}
+      <Modal
+        isOpen={isEditBankModalOpen}
+        onClose={() => setIsEditBankModalOpen(false)}
+        title="Update Bank Details"
+        subtitle={`Authorized disbursement account for ${emp.first_name}`}
+        maxWidth="md"
+      >
+        <form onSubmit={handleSaveBank} className="space-y-3 text-xs">
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Account Holder Name *</label>
+            <input
+              type="text"
+              required
+              value={bankForm.accountHolderName}
+              onChange={(e) => setBankForm({ ...bankForm, accountHolderName: e.target.value })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Bank Name *</label>
+            <input
+              type="text"
+              required
+              value={bankForm.bankName}
+              onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Account Number *</label>
+            <input
+              type="text"
+              required
+              value={bankForm.accountNumber}
+              onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">IFSC Code *</label>
+            <input
+              type="text"
+              required
+              value={bankForm.ifscCode}
+              onChange={(e) => setBankForm({ ...bankForm, ifscCode: e.target.value })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white font-mono uppercase"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-3 border-t border-borderLine">
+            <button
+              type="button"
+              onClick={() => setIsEditBankModalOpen(false)}
+              className="px-4 py-2 font-semibold text-textSecondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold shadow-subtle"
+            >
+              Save Bank Account
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Upload Document Modal */}
+      <Modal
+        isOpen={isUploadDocModalOpen}
+        onClose={() => setIsUploadDocModalOpen(false)}
+        title="Attach KYC / Employment Document"
+        subtitle={`Upload verified records for ${emp.first_name}`}
+        maxWidth="md"
+      >
+        <form onSubmit={handleUploadDocument} className="space-y-3 text-xs">
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Document Type *</label>
+            <select
+              value={docForm.documentType}
+              onChange={(e) => setDocForm({ ...docForm, documentType: e.target.value })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white"
+            >
+              <option value="AADHAAR">Aadhaar Card</option>
+              <option value="PAN">PAN Card</option>
+              <option value="APPOINTMENT_LETTER">Appointment Letter</option>
+              <option value="PHOTO">Passport Photograph</option>
+              <option value="OTHER">Other Supporting Document</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Document Title / File Name *</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Aadhaar_Rajesh_Varma.pdf"
+              value={docForm.documentName}
+              onChange={(e) => setDocForm({ ...docForm, documentName: e.target.value })}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-3 border-t border-borderLine">
+            <button
+              type="button"
+              onClick={() => setIsUploadDocModalOpen(false)}
+              className="px-4 py-2 font-semibold text-textSecondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold shadow-subtle"
+            >
+              Attach Document
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
-

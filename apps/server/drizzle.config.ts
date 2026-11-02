@@ -10,3 +10,4 @@ export default defineConfig({
     ssl: config.databaseUrl.includes('supabase') ? { rejectUnauthorized: false } : undefined,
   },
 });
+

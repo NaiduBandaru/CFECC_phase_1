@@ -49,3 +49,4 @@ async function setupSupabase() {
 }
 
 setupSupabase();
+

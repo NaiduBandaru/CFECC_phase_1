@@ -10,12 +10,18 @@ import {
   Filter,
   Plus,
   Download,
+  Upload,
   CreditCard,
   ChevronRight,
   Phone,
   Building,
   CheckCircle,
   XCircle,
+  ArrowUpDown,
+  SlidersHorizontal,
+  CheckSquare,
+  Square,
+  ShieldAlert,
 } from 'lucide-react';
 
 export const EmployeeDirectoryPage: React.FC = () => {
@@ -24,12 +30,31 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const [designations, setDesignations] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Filters & Search
+  // Filters, Search & Sorting
   const [search, setSearch] = useState<string>('');
   const [departmentId, setDepartmentId] = useState<string>('ALL');
   const [status, setStatus] = useState<string>('ALL');
   const [creditEligibility, setCreditEligibility] = useState<string>('ALL');
+  const [sortBy, setSortBy] = useState<string>('e.id');
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+
+  // Column Visibility State
+  const [columnVisibility, setColumnVisibility] = useState({
+    department: true,
+    contact: true,
+    joiningDate: true,
+    creditStatus: true,
+    creditLimit: true,
+    outstanding: true,
+    available: true,
+    status: true,
+  });
+  const [showColMenu, setShowColMenu] = useState(false);
+
+  // Bulk Selection
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   // Add Employee Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -61,6 +86,11 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Import Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importResult, setImportResult] = useState<any | null>(null);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -69,7 +99,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
 
   useEffect(() => {
     fetchEmployees();
-  }, [search, departmentId, status, creditEligibility, pagination.page]);
+  }, [search, departmentId, status, creditEligibility, sortBy, sortOrder, pagination.page]);
 
   const fetchDepartments = async () => {
     try {
@@ -91,6 +121,8 @@ export const EmployeeDirectoryPage: React.FC = () => {
         departmentId,
         status,
         creditEligibility,
+        sortBy,
+        sortOrder,
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
       });
@@ -103,6 +135,53 @@ export const EmployeeDirectoryPage: React.FC = () => {
       console.error('Failed to fetch employees', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC');
+    } else {
+      setSortBy(column);
+      setSortOrder('ASC');
+    }
+  };
+
+  // Bulk Actions
+  const handleSelectAll = () => {
+    if (selectedIds.length === employees.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(employees.map(e => e.id));
+    }
+  };
+
+  const handleToggleSelect = (id: number) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  const handleBulkAction = async (action: 'SET_CREDIT' | 'SET_STATUS', value: any) => {
+    if (selectedIds.length === 0) return;
+    setIsBulkProcessing(true);
+    try {
+      const res = await api.post('/employees/bulk-action', {
+        employeeIds: selectedIds,
+        action,
+        value,
+      });
+      if (res.data.success) {
+        alert(res.data.message);
+        setSelectedIds([]);
+        fetchEmployees();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Bulk action failed');
+    } finally {
+      setIsBulkProcessing(false);
     }
   };
 
@@ -135,9 +214,46 @@ export const EmployeeDirectoryPage: React.FC = () => {
     }
   };
 
+  const handleImportCSV = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setImportResult(null);
+    try {
+      // Parse CSV rows
+      const lines = importText.trim().split('\n');
+      const rows = lines.map(line => {
+        const parts = line.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
+        return {
+          employeeCode: parts[0],
+          firstName: parts[1],
+          lastName: parts[2] || 'Staff',
+          mobile: parts[3],
+          email: parts[4] || null,
+          creditLimit: parseFloat(parts[5] || '10000'),
+        };
+      }).filter(r => r.employeeCode && r.firstName && r.mobile);
+
+      if (rows.length === 0) {
+        alert('No valid rows found. Format: employeeCode,firstName,lastName,mobile,email,creditLimit');
+        return;
+      }
+
+      const res = await api.post('/employees/import', { rows });
+      setImportResult(res.data);
+      if (res.data.success) {
+        fetchEmployees();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Import failed');
+    }
+  };
+
   const exportToCSV = () => {
+    const listToExport = selectedIds.length > 0 
+      ? employees.filter(e => selectedIds.includes(e.id))
+      : employees;
+
     const headers = ['Employee Code', 'Full Name', 'Department', 'Designation', 'Mobile', 'Status', 'Credit Limit', 'Outstanding', 'Available'];
-    const rows = employees.map(e => [
+    const rows = listToExport.map(e => [
       e.employee_code,
       `"${e.first_name} ${e.last_name}"`,
       `"${e.department_name || ''}"`,
@@ -166,25 +282,63 @@ export const EmployeeDirectoryPage: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-navy-800">Employee Master Directory</h2>
           <p className="text-xs text-textSecondary mt-0.5">
-            Manage employee profiles, store credit limits, KYC records and outstanding ledger accounts
+            Complete employee master data, credit limits, department assignments, and KYC records
           </p>
         </div>
 
         <div className="flex items-center space-x-2.5">
+          {/* Column Visibility Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowColMenu(!showColMenu)}
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-surface border border-borderLine text-xs font-semibold text-textPrimary hover:bg-slate-50 transition-colors shadow-subtle"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-textSecondary" />
+              <span>Columns</span>
+            </button>
+
+            {showColMenu && (
+              <div className="absolute right-0 mt-1 w-48 bg-surface rounded-lg shadow-elevated border border-borderLine p-2 z-30 space-y-1.5 text-xs">
+                {Object.keys(columnVisibility).map((colKey) => (
+                  <label key={colKey} className="flex items-center space-x-2 px-2 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(columnVisibility as any)[colKey]}
+                      onChange={(e) => setColumnVisibility({ ...columnVisibility, [colKey]: e.target.checked })}
+                      className="w-3.5 h-3.5 text-primary rounded"
+                    />
+                    <span className="capitalize">{colKey.replace(/([A-Z])/g, ' $1')}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Import CSV */}
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-surface border border-borderLine text-xs font-semibold text-textPrimary hover:bg-slate-50 transition-colors shadow-subtle"
+          >
+            <Upload className="w-3.5 h-3.5 text-textSecondary" />
+            <span>Import</span>
+          </button>
+
+          {/* Export CSV */}
           <button
             onClick={exportToCSV}
             className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-surface border border-borderLine text-xs font-semibold text-textPrimary hover:bg-slate-50 transition-colors shadow-subtle"
           >
             <Download className="w-3.5 h-3.5 text-textSecondary" />
-            <span>Export CSV</span>
+            <span>Export ({selectedIds.length > 0 ? selectedIds.length : 'All'})</span>
           </button>
 
+          {/* Add Employee */}
           <button
             onClick={() => setIsAddModalOpen(true)}
             className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors shadow-subtle"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add New Employee</span>
+            <span>Add Employee</span>
           </button>
         </div>
       </div>
@@ -199,7 +353,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by code, name, mobile..."
+              placeholder="Search code, name, mobile..."
               className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
             />
           </div>
@@ -213,9 +367,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
             >
               <option value="ALL">All Departments</option>
               {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
+                <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
           </div>
@@ -250,131 +402,257 @@ export const EmployeeDirectoryPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Floating Bulk Actions Bar when items selected */}
+      {selectedIds.length > 0 && (
+        <div className="bg-navy-800 text-white p-3 rounded-lg flex items-center justify-between text-xs animate-in fade-in shadow-elevated">
+          <div className="flex items-center space-x-2 font-medium">
+            <CheckSquare className="w-4 h-4 text-primary" />
+            <span>{selectedIds.length} employees selected</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleBulkAction('SET_CREDIT', true)}
+              disabled={isBulkProcessing}
+              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 rounded font-semibold transition-colors"
+            >
+              Enable Credit
+            </button>
+            <button
+              onClick={() => handleBulkAction('SET_CREDIT', false)}
+              disabled={isBulkProcessing}
+              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 rounded font-semibold transition-colors"
+            >
+              Block Credit
+            </button>
+            <button
+              onClick={() => handleBulkAction('SET_STATUS', 'ACTIVE')}
+              disabled={isBulkProcessing}
+              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 rounded font-semibold transition-colors"
+            >
+              Mark Active
+            </button>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="px-2 py-1 text-slate-300 hover:text-white"
+            >
+              Deselect
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Employee Data Table */}
       <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
-                <th className="py-3 px-4">Employee</th>
-                <th className="py-3 px-4">Department & Designation</th>
-                <th className="py-3 px-4">Contact</th>
-                <th className="py-3 px-4">Joining Date</th>
-                <th className="py-3 px-4 text-center">Credit Status</th>
-                <th className="py-3 px-4 text-right">Credit Limit</th>
-                <th className="py-3 px-4 text-right">Outstanding</th>
-                <th className="py-3 px-4 text-right">Available</th>
-                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-3 text-center w-8">
+                  <input
+                    type="checkbox"
+                    checked={employees.length > 0 && selectedIds.length === employees.length}
+                    onChange={handleSelectAll}
+                    className="w-3.5 h-3.5 text-primary rounded cursor-pointer"
+                  />
+                </th>
+                <th
+                  onClick={() => handleSort('e.employee_code')}
+                  className="py-3 px-4 cursor-pointer hover:text-navy-800"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Employee</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
+                </th>
+                {columnVisibility.department && (
+                  <th
+                    onClick={() => handleSort('d.name')}
+                    className="py-3 px-4 cursor-pointer hover:text-navy-800"
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Department & Designation</span>
+                      <ArrowUpDown className="w-3 h-3" />
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.contact && <th className="py-3 px-4">Contact</th>}
+                {columnVisibility.joiningDate && (
+                  <th
+                    onClick={() => handleSort('e.joining_date')}
+                    className="py-3 px-4 cursor-pointer hover:text-navy-800"
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Joining Date</span>
+                      <ArrowUpDown className="w-3 h-3" />
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.creditStatus && <th className="py-3 px-4 text-center">Credit Status</th>}
+                {columnVisibility.creditLimit && (
+                  <th
+                    onClick={() => handleSort('e.credit_limit')}
+                    className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                  >
+                    <div className="flex items-center justify-end space-x-1">
+                      <span>Credit Limit</span>
+                      <ArrowUpDown className="w-3 h-3" />
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.outstanding && (
+                  <th
+                    onClick={() => handleSort('e.current_outstanding')}
+                    className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                  >
+                    <div className="flex items-center justify-end space-x-1">
+                      <span>Outstanding</span>
+                      <ArrowUpDown className="w-3 h-3" />
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.available && <th className="py-3 px-4 text-right">Available</th>}
+                {columnVisibility.status && <th className="py-3 px-4">Status</th>}
                 <th className="py-3 px-4 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLine">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-textSecondary">
+                  <td colSpan={11} className="py-8 text-center text-textSecondary">
                     <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
                     <div>Loading employee records...</div>
                   </td>
                 </tr>
               ) : employees.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-textSecondary">
+                  <td colSpan={11} className="py-8 text-center text-textSecondary">
                     <Users className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                     <div>No employee records matching criteria.</div>
                   </td>
                 </tr>
               ) : (
-                employees.map((emp) => (
-                  <tr
-                    key={emp.id}
-                    onClick={() => navigate(`/employees/${emp.id}`)}
-                    className="hover:bg-slate-50/70 cursor-pointer transition-colors"
-                  >
-                    {/* Employee Profile & Code */}
-                    <td className="py-3 px-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-full bg-navy-800 text-white flex items-center justify-center font-bold text-xs uppercase flex-shrink-0">
-                          {emp.first_name.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="font-bold text-navy-800 hover:text-primary transition-colors">
-                            {emp.first_name} {emp.last_name}
+                employees.map((emp) => {
+                  const isSelected = selectedIds.includes(emp.id);
+                  return (
+                    <tr
+                      key={emp.id}
+                      onClick={() => navigate(`/employees/${emp.id}`)}
+                      className={`hover:bg-slate-50/70 cursor-pointer transition-colors ${
+                        isSelected ? 'bg-blue-50/40' : ''
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(emp.id)}
+                          className="w-3.5 h-3.5 text-primary rounded cursor-pointer"
+                        />
+                      </td>
+
+                      {/* Employee Profile & Code */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 rounded-full bg-navy-800 text-white flex items-center justify-center font-bold text-xs uppercase flex-shrink-0">
+                            {emp.first_name.charAt(0)}
                           </div>
-                          <div className="text-[11px] text-textSecondary font-mono">{emp.employee_code}</div>
+                          <div>
+                            <div className="font-bold text-navy-800 hover:text-primary transition-colors">
+                              {emp.first_name} {emp.last_name}
+                            </div>
+                            <div className="text-[11px] text-textSecondary font-mono">{emp.employee_code}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Department & Designation */}
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-textPrimary">{emp.department_name || 'Unassigned'}</div>
-                      <div className="text-[11px] text-textSecondary">{emp.designation_title || 'General'}</div>
-                    </td>
-
-                    {/* Contact */}
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-textPrimary flex items-center">
-                        <Phone className="w-3 h-3 text-textSecondary mr-1" />
-                        <span>{emp.mobile}</span>
-                      </div>
-                      <div className="text-[11px] text-textSecondary truncate max-w-[140px]">{emp.email || '-'}</div>
-                    </td>
-
-                    {/* Joining Date */}
-                    <td className="py-3 px-4 font-medium text-textSecondary">
-                      {new Date(emp.joining_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </td>
-
-                    {/* Credit Enabled */}
-                    <td className="py-3 px-4 text-center">
-                      {emp.credit_enabled ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle className="w-3 h-3 mr-1 text-emerald-600" />
-                          Eligible
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                          <XCircle className="w-3 h-3 mr-1 text-rose-600" />
-                          Blocked
-                        </span>
+                      {/* Department & Designation */}
+                      {columnVisibility.department && (
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-textPrimary">{emp.department_name || 'Unassigned'}</div>
+                          <div className="text-[11px] text-textSecondary">{emp.designation_title || 'General'}</div>
+                        </td>
                       )}
-                    </td>
 
-                    {/* Credit Limit */}
-                    <td className="py-3 px-4 text-right font-medium text-textSecondary tabular-nums">
-                      ₹{parseFloat(emp.credit_limit.toString()).toLocaleString('en-IN')}
-                    </td>
+                      {/* Contact */}
+                      {columnVisibility.contact && (
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-textPrimary flex items-center">
+                            <Phone className="w-3 h-3 text-textSecondary mr-1" />
+                            <span>{emp.mobile}</span>
+                          </div>
+                          <div className="text-[11px] text-textSecondary truncate max-w-[140px]">{emp.email || '-'}</div>
+                        </td>
+                      )}
 
-                    {/* Outstanding */}
-                    <td className="py-3 px-4 text-right font-bold text-amber-700 tabular-nums">
-                      ₹{parseFloat(emp.current_outstanding.toString()).toLocaleString('en-IN')}
-                    </td>
+                      {/* Joining Date */}
+                      {columnVisibility.joiningDate && (
+                        <td className="py-3 px-4 font-medium text-textSecondary">
+                          {new Date(emp.joining_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                      )}
 
-                    {/* Available */}
-                    <td className="py-3 px-4 text-right font-bold text-emerald-700 tabular-nums">
-                      ₹{parseFloat(emp.available_credit.toString()).toLocaleString('en-IN')}
-                    </td>
+                      {/* Credit Enabled */}
+                      {columnVisibility.creditStatus && (
+                        <td className="py-3 px-4 text-center">
+                          {emp.credit_enabled ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle className="w-3 h-3 mr-1 text-emerald-600" />
+                              Eligible
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                              <XCircle className="w-3 h-3 mr-1 text-rose-600" />
+                              Blocked
+                            </span>
+                          )}
+                        </td>
+                      )}
 
-                    {/* Status */}
-                    <td className="py-3 px-4">
-                      <StatusBadge status={emp.employment_status} />
-                    </td>
+                      {/* Credit Limit */}
+                      {columnVisibility.creditLimit && (
+                        <td className="py-3 px-4 text-right font-medium text-textSecondary tabular-nums">
+                          ₹{parseFloat(emp.credit_limit.toString()).toLocaleString('en-IN')}
+                        </td>
+                      )}
 
-                    {/* Action Arrow */}
-                    <td className="py-3 px-4 text-center">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/employees/${emp.id}`);
-                        }}
-                        className="p-1 rounded text-textSecondary hover:text-primary hover:bg-blue-50 transition-colors"
-                        title="View Full Profile"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      {/* Outstanding */}
+                      {columnVisibility.outstanding && (
+                        <td className="py-3 px-4 text-right font-bold text-amber-700 tabular-nums">
+                          ₹{parseFloat(emp.current_outstanding.toString()).toLocaleString('en-IN')}
+                        </td>
+                      )}
+
+                      {/* Available */}
+                      {columnVisibility.available && (
+                        <td className="py-3 px-4 text-right font-bold text-emerald-700 tabular-nums">
+                          ₹{parseFloat(emp.available_credit.toString()).toLocaleString('en-IN')}
+                        </td>
+                      )}
+
+                      {/* Status */}
+                      {columnVisibility.status && (
+                        <td className="py-3 px-4">
+                          <StatusBadge status={emp.employment_status} />
+                        </td>
+                      )}
+
+                      {/* Action Arrow */}
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/employees/${emp.id}`);
+                          }}
+                          className="p-1 rounded text-textSecondary hover:text-primary hover:bg-blue-50 transition-colors"
+                          title="View Full Profile"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -404,6 +682,58 @@ export const EmployeeDirectoryPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Bulk CSV Import Modal */}
+      <Modal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        title="Import Employees in Bulk (CSV / Tabular Data)"
+        subtitle="Paste CSV rows to quickly import staff accounts into the system"
+        maxWidth="2xl"
+      >
+        <form onSubmit={handleImportCSV} className="space-y-4 text-xs">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="font-semibold text-textSecondary uppercase">CSV Rows Format</label>
+              <span className="text-[11px] text-primary font-mono">code,firstName,lastName,mobile,email,creditLimit</span>
+            </div>
+            <textarea
+              rows={6}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder={`CFE-1010, Ramesh, Kumar, 9848011223, ramesh@cfecc.org, 15000\nCFE-1011, Sunitha, Devi, 9848022334, sunitha@cfecc.org, 12000`}
+              className="w-full p-3 font-mono text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+            />
+          </div>
+
+          {importResult && (
+            <div className={`p-3 rounded-lg text-xs ${importResult.success ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-status-danger'}`}>
+              <div>{importResult.message}</div>
+              {importResult.errors?.length > 0 && (
+                <ul className="mt-1 list-disc list-inside text-[11px]">
+                  {importResult.errors.map((err: string, i: number) => <li key={i}>{err}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end space-x-3 pt-3 border-t border-borderLine">
+            <button
+              type="button"
+              onClick={() => setIsImportModalOpen(false)}
+              className="px-4 py-2 font-semibold text-textSecondary"
+            >
+              Close
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold shadow-subtle"
+            >
+              Import Employees
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Add Employee Modal */}
       <Modal
@@ -638,4 +968,3 @@ export const EmployeeDirectoryPage: React.FC = () => {
     </div>
   );
 };
-

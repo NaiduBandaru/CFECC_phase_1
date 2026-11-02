@@ -14,7 +14,8 @@ let pgPoolInstance: pg.Pool | null = null;
 export async function initDatabase() {
   if (dbInstance) return dbInstance;
 
-  if (config.databaseUrl && config.databaseUrl.trim() !== '') {
+  const isTest = process.env.NODE_ENV === 'test';
+  if (!isTest && config.databaseUrl && config.databaseUrl.trim() !== '') {
     const isSupabase = config.databaseUrl.includes('supabase.co') || 
                        config.databaseUrl.includes('pooler.supabase.com') || 
                        config.databaseUrl.includes('sslmode=require');

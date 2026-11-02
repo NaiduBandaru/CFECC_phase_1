@@ -450,3 +450,251 @@ employeesRouter.put('/:id/credit', authenticateToken, async (req: Request, res: 
     next(err);
   }
 });
+
+// 7. Update Employee Salary Structure
+employeesRouter.put('/:id/salary', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const employeeId = parseInt(req.params.id as string, 10);
+    const { basicSalary, da, hra, otherAllowances, statutoryDeductions, effectiveDate } = req.body;
+
+    const basic = parseFloat(basicSalary || 0);
+    const daVal = parseFloat(da || 0);
+    const hraVal = parseFloat(hra || 0);
+    const allowVal = parseFloat(otherAllowances || 0);
+    const statVal = parseFloat(statutoryDeductions || 0);
+    const gross = basic + daVal + hraVal + allowVal;
+
+    await executeRawSql(`
+      INSERT INTO employee_salaries (
+        employee_id, basic_salary, da, hra, other_allowances, statutory_deductions, net_base_salary, effective_date
+      ) VALUES (
+        ${employeeId}, ${basic.toFixed(2)}, ${daVal.toFixed(2)}, ${hraVal.toFixed(2)},
+        ${allowVal.toFixed(2)}, ${statVal.toFixed(2)}, ${gross.toFixed(2)},
+        '${effectiveDate || new Date().toISOString().split('T')[0]}'
+      );
+    `);
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'UPDATE_SALARY',
+      entity: 'EMPLOYEE',
+      entityId: employeeId,
+      newValues: req.body,
+      ipAddress: req.ip,
+    });
+
+    return res.json({ success: true, message: 'Salary structure updated successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 8. Update Employee Bank Details
+employeesRouter.put('/:id/bank', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const employeeId = parseInt(req.params.id as string, 10);
+    const { accountHolderName, bankName, accountNumber, ifscCode, branch } = req.body;
+
+    const existing = await executeRawSql(`SELECT id FROM employee_bank_details WHERE employee_id = ${employeeId}`);
+
+    if (existing.rows && existing.rows.length > 0) {
+      await executeRawSql(`
+        UPDATE employee_bank_details SET
+          account_holder_name = '${accountHolderName.replace(/'/g, "''")}',
+          bank_name = '${bankName.replace(/'/g, "''")}',
+          account_number = '${accountNumber.replace(/'/g, "''")}',
+          ifsc_code = '${ifscCode.replace(/'/g, "''")}',
+          branch = ${branch ? `'${branch.replace(/'/g, "''")}'` : 'NULL'}
+        WHERE employee_id = ${employeeId};
+      `);
+    } else {
+      await executeRawSql(`
+        INSERT INTO employee_bank_details (
+          employee_id, account_holder_name, bank_name, account_number, ifsc_code, branch
+        ) VALUES (
+          ${employeeId}, '${accountHolderName.replace(/'/g, "''")}', '${bankName.replace(/'/g, "''")}',
+          '${accountNumber.replace(/'/g, "''")}', '${ifscCode.replace(/'/g, "''")}',
+          ${branch ? `'${branch.replace(/'/g, "''")}'` : 'NULL'}
+        );
+      `);
+    }
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'UPDATE_BANK',
+      entity: 'EMPLOYEE',
+      entityId: employeeId,
+      newValues: req.body,
+      ipAddress: req.ip,
+    });
+
+    return res.json({ success: true, message: 'Bank details saved successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 9. Attach / Upload Document
+employeesRouter.post('/:id/documents', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const employeeId = parseInt(req.params.id as string, 10);
+    const { documentType, documentName, documentUrl, fileSize, mimeType } = req.body;
+
+    const insertResult = await executeRawSql(`
+      INSERT INTO employee_documents (
+        employee_id, document_type, document_name, document_url, file_size, mime_type
+      ) VALUES (
+        ${employeeId}, '${documentType.replace(/'/g, "''")}', '${documentName.replace(/'/g, "''")}',
+        '${(documentUrl || '#').replace(/'/g, "''")}', ${fileSize || 1024}, '${mimeType || 'application/pdf'}'
+      ) RETURNING id;
+    `);
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'UPLOAD_DOCUMENT',
+      entity: 'EMPLOYEE',
+      entityId: employeeId,
+      newValues: { documentType, documentName },
+      ipAddress: req.ip,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Document uploaded successfully',
+      documentId: insertResult.rows[0].id,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 10. Delete Document
+employeesRouter.delete('/:id/documents/:docId', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const employeeId = parseInt(req.params.id as string, 10);
+    const docId = parseInt(req.params.docId as string, 10);
+
+    await executeRawSql(`DELETE FROM employee_documents WHERE id = ${docId} AND employee_id = ${employeeId}`);
+
+    return res.json({ success: true, message: 'Document removed successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 11. Bulk Actions (Enable credit, Disable credit, Update employment status)
+employeesRouter.post('/bulk-action', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { employeeIds, action, value } = req.body;
+    // action: 'SET_CREDIT' (value: boolean) | 'SET_STATUS' (value: 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED')
+
+    if (!employeeIds || employeeIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'No employees selected' });
+    }
+
+    const idsList = employeeIds.map((id: number) => parseInt(id.toString(), 10)).join(',');
+
+    if (action === 'SET_CREDIT') {
+      const enableCredit = !!value;
+      await executeRawSql(`
+        UPDATE employees SET
+          credit_enabled = ${enableCredit ? 'TRUE' : 'FALSE'},
+          updated_at = NOW()
+        WHERE id IN (${idsList});
+      `);
+    } else if (action === 'SET_STATUS') {
+      const newStatus = (value as string).replace(/'/g, "''");
+      await executeRawSql(`
+        UPDATE employees SET
+          employment_status = '${newStatus}',
+          updated_at = NOW()
+        WHERE id IN (${idsList});
+      `);
+    }
+
+    await logAudit({
+      userId: req.user?.id,
+      action: `BULK_${action}`,
+      entity: 'EMPLOYEE',
+      newValues: { employeeIds, action, value },
+      ipAddress: req.ip,
+    });
+
+    return res.json({
+      success: true,
+      message: `Bulk action applied to ${employeeIds.length} employee accounts.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 12. Bulk Excel/CSV Import
+employeesRouter.post('/import', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { rows } = req.body; // array of { employeeCode, firstName, lastName, mobile, departmentId, designationId, creditLimit, basicSalary }
+
+    if (!rows || rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'No rows provided for import' });
+    }
+
+    let importedCount = 0;
+    const errors: string[] = [];
+
+    for (const r of rows) {
+      try {
+        const code = (r.employeeCode || '').trim();
+        const first = (r.firstName || '').trim();
+        const last = (r.lastName || '').trim();
+        const mobile = (r.mobile || '').trim();
+
+        if (!code || !first || !mobile) {
+          errors.push(`Row missing required fields: ${JSON.stringify(r)}`);
+          continue;
+        }
+
+        const existing = await executeRawSql(`SELECT id FROM employees WHERE employee_code = '${code.replace(/'/g, "''")}'`);
+        if (existing.rows && existing.rows.length > 0) {
+          errors.push(`Employee code '${code}' already exists`);
+          continue;
+        }
+
+        const creditLimit = parseFloat(r.creditLimit || 10000);
+        const joiningDate = r.joiningDate || new Date().toISOString().split('T')[0];
+
+        const insertRes = await executeRawSql(`
+          INSERT INTO employees (
+            employee_code, first_name, last_name, mobile, email, department_id, designation_id,
+            joining_date, employment_status, credit_enabled, credit_limit, current_outstanding, available_credit
+          ) VALUES (
+            '${code.replace(/'/g, "''")}', '${first.replace(/'/g, "''")}', '${last.replace(/'/g, "''")}',
+            '${mobile.replace(/'/g, "''")}', ${r.email ? `'${r.email.replace(/'/g, "''")}'` : 'NULL'},
+            ${r.departmentId || 'NULL'}, ${r.designationId || 'NULL'},
+            '${joiningDate}', 'ACTIVE', TRUE, ${creditLimit.toFixed(2)}, 0.00, ${creditLimit.toFixed(2)}
+          ) RETURNING id;
+        `);
+
+        importedCount++;
+      } catch (err: any) {
+        errors.push(err.message || 'Error processing row');
+      }
+    }
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'BULK_IMPORT',
+      entity: 'EMPLOYEE',
+      newValues: { importedCount, errorCount: errors.length },
+      ipAddress: req.ip,
+    });
+
+    return res.json({
+      success: true,
+      message: `Successfully imported ${importedCount} employees.`,
+      importedCount,
+      errors: errors.slice(0, 5),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
