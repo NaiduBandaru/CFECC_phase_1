@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../lib/api.js';
-import { Vendor } from '../../types/index.js';
+import { Vendor, VendorSuppliedItem } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import {
@@ -26,6 +26,9 @@ import {
   CheckCircle,
   AlertCircle,
   SlidersHorizontal,
+  Package,
+  TrendingUp,
+  Tag,
 } from 'lucide-react';
 
 export const VendorsPage: React.FC = () => {
@@ -59,9 +62,11 @@ export const VendorsPage: React.FC = () => {
 
   // 360° Profile Modal
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [profileTab, setProfileTab] = useState<'OVERVIEW' | 'POS' | 'INVOICES' | 'PAYMENTS' | 'ACTIVITY'>('OVERVIEW');
+  const [profileTab, setProfileTab] = useState<'PRODUCTS' | 'OVERVIEW' | 'POS' | 'INVOICES' | 'PAYMENTS' | 'ACTIVITY'>('PRODUCTS');
+  const [productSearch, setProductSearch] = useState<string>('');
   const [profileData, setProfileData] = useState<{
     vendor: Vendor;
+    suppliedItems?: VendorSuppliedItem[];
     purchaseOrders: any[];
     invoices: any[];
     payments: any[];
@@ -180,7 +185,8 @@ export const VendorsPage: React.FC = () => {
   const openVendorProfile = async (vendorId: number) => {
     setIsProfileModalOpen(true);
     setLoadingProfile(true);
-    setProfileTab('OVERVIEW');
+    setProfileTab('PRODUCTS');
+    setProductSearch('');
     try {
       const res = await api.get(`/vendors/${vendorId}/profile`);
       if (res.data.success) {
@@ -410,7 +416,16 @@ export const VendorsPage: React.FC = () => {
                 vendors.map((v) => (
                   <tr key={v.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3 px-4">
-                      <div className="font-bold text-navy-800">{v.name}</div>
+                      <div
+                        onClick={() => openVendorProfile(v.id)}
+                        className="font-bold text-navy-800 hover:text-primary cursor-pointer transition-colors flex items-center space-x-1.5 group"
+                        title="Click to view full products and data sold by this vendor"
+                      >
+                        <span className="group-hover:underline">{v.name}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-primary font-semibold border border-blue-200">
+                          View Products
+                        </span>
+                      </div>
                       <div className="text-[11px] text-textSecondary font-mono">{v.vendor_code}</div>
                     </td>
 
@@ -708,8 +723,8 @@ export const VendorsPage: React.FC = () => {
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         title={`Vendor Profile: ${profileData?.vendor?.name || ''}`}
-        subtitle={`Supplier 360° view: Purchase history, invoices, disbursements and financial balances (${profileData?.vendor?.vendor_code || ''})`}
-        maxWidth="4xl"
+        subtitle={`Supplier 360° view: Products sold, purchase history, invoices, disbursements and financial balances (${profileData?.vendor?.vendor_code || ''})`}
+        maxWidth="6xl"
       >
         <div className="space-y-4 text-xs">
           {loadingProfile ? (
@@ -743,6 +758,15 @@ export const VendorsPage: React.FC = () => {
 
               {/* Profile Tabs */}
               <div className="flex space-x-2 border-b border-borderLine">
+                <button
+                  onClick={() => setProfileTab('PRODUCTS')}
+                  className={`pb-2 px-3 font-semibold transition-colors flex items-center space-x-1.5 ${
+                    profileTab === 'PRODUCTS' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
+                  }`}
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  <span>Products Sold / Supplied ({profileData.suppliedItems?.length || 0})</span>
+                </button>
                 <button
                   onClick={() => setProfileTab('OVERVIEW')}
                   className={`pb-2 px-3 font-semibold transition-colors ${
@@ -784,6 +808,238 @@ export const VendorsPage: React.FC = () => {
                   Activity Trail ({profileData.activityHistory.length})
                 </button>
               </div>
+
+              {/* Tab 0: Products Sold / Supplied by Vendor */}
+              {profileTab === 'PRODUCTS' && (
+                <div className="space-y-3">
+                  {(() => {
+                    const items = profileData.suppliedItems || [];
+                    const filteredItems = items.filter((itm) => {
+                      const q = productSearch.toLowerCase().trim();
+                      if (!q) return true;
+                      return (
+                        itm.item_name.toLowerCase().includes(q) ||
+                        itm.item_code.toLowerCase().includes(q) ||
+                        (itm.brand && itm.brand.toLowerCase().includes(q)) ||
+                        (itm.category_name && itm.category_name.toLowerCase().includes(q))
+                      );
+                    });
+
+                    const totalSpend = items.reduce((s, itm) => s + parseFloat((itm.total_spend as any) || 0), 0);
+                    const totalUnits = items.reduce((s, itm) => s + parseFloat((itm.total_received_qty as any) || 0), 0);
+                    const avgMargin =
+                      items.length > 0
+                        ? items.reduce((s, itm) => {
+                            const cost = parseFloat((itm.purchase_price as any) || 0);
+                            const sell = parseFloat((itm.selling_price as any) || 0);
+                            const margin = cost > 0 ? ((sell - cost) / cost) * 100 : 0;
+                            return s + margin;
+                          }, 0) / items.length
+                        : 0;
+
+                    const handleExportVendorProductsCSV = () => {
+                      if (items.length === 0) {
+                        alert('No products to export for this vendor.');
+                        return;
+                      }
+                      const headers = [
+                        'Item Code',
+                        'Item Name',
+                        'Category',
+                        'Brand',
+                        'Current Stock',
+                        'Units Ordered',
+                        'Units Received',
+                        'Unit Purchase Cost (INR)',
+                        'Total Spend (INR)',
+                        'Retail Price (INR)',
+                        'Employee Price (INR)',
+                        'Margin %',
+                        'Last Order Date',
+                      ];
+                      const rows = items.map((itm) => {
+                        const cost = parseFloat((itm.purchase_price as any) || 0);
+                        const sell = parseFloat((itm.selling_price as any) || 0);
+                        const margin = cost > 0 ? (((sell - cost) / cost) * 100).toFixed(1) : '0.0';
+                        return [
+                          itm.item_code,
+                          `"${itm.item_name}"`,
+                          `"${itm.category_name || ''}"`,
+                          `"${itm.brand || ''}"`,
+                          itm.current_stock,
+                          itm.total_ordered_qty,
+                          itm.total_received_qty,
+                          cost.toFixed(2),
+                          parseFloat((itm.total_spend as any) || 0).toFixed(2),
+                          sell.toFixed(2),
+                          parseFloat((itm.employee_price as any) || 0).toFixed(2),
+                          `${margin}%`,
+                          itm.last_order_date || '',
+                        ];
+                      });
+                      const csvContent =
+                        'data:text/csv;charset=utf-8,' +
+                        [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+                      const encodedUri = encodeURI(csvContent);
+                      const link = document.createElement('a');
+                      link.setAttribute('href', encodedUri);
+                      link.setAttribute(
+                        'download',
+                        `${profileData.vendor.vendor_code}_Supplied_Products_${new Date().toISOString().slice(0, 10)}.csv`
+                      );
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    };
+
+                    return (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                          <div className="bg-white p-3 rounded-lg border border-borderLine">
+                            <span className="text-[10px] text-textSecondary uppercase font-bold block">Commodities Supplied</span>
+                            <span className="text-base font-bold text-navy-800">{items.length} Products</span>
+                            <span className="text-[10px] text-textSecondary block">Distinct catalog items</span>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-borderLine">
+                            <span className="text-[10px] text-textSecondary uppercase font-bold block">Total Received Qty</span>
+                            <span className="text-base font-bold text-navy-800 tabular-nums">
+                              {totalUnits.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Units
+                            </span>
+                            <span className="text-[10px] text-textSecondary block">Delivered into store</span>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-borderLine">
+                            <span className="text-[10px] text-textSecondary uppercase font-bold block">Total Procurement Spend</span>
+                            <span className="text-base font-bold text-navy-800 tabular-nums">
+                              ₹{totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[10px] text-textSecondary block">Cumulative order volume</span>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-emerald-200 bg-emerald-50/20">
+                            <span className="text-[10px] text-emerald-800 uppercase font-bold block">Average Store Margin</span>
+                            <span className="text-base font-bold text-emerald-700 font-mono">
+                              +{avgMargin.toFixed(1)}%
+                            </span>
+                            <span className="text-[10px] text-emerald-800/80 block">Retail markup</span>
+                          </div>
+                        </div>
+
+                        {/* Search & Actions Bar */}
+                        <div className="flex items-center justify-between gap-3 pt-1">
+                          <div className="relative w-72">
+                            <Search className="w-3.5 h-3.5 text-textSecondary absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              placeholder="Search item name, code, brand, category..."
+                              value={productSearch}
+                              onChange={(e) => setProductSearch(e.target.value)}
+                              className="w-full pl-8 pr-3 py-1 bg-slate-50 border border-borderLine rounded-md text-xs focus:bg-white focus:outline-none"
+                            />
+                          </div>
+
+                          <button
+                            onClick={handleExportVendorProductsCSV}
+                            className="flex items-center space-x-1.5 px-3 py-1 rounded-md border border-borderLine bg-white hover:bg-slate-50 text-xs font-semibold text-navy-800 transition-colors shadow-xs"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Export Products (CSV)</span>
+                          </button>
+                        </div>
+
+                        {/* Products Table */}
+                        <div className="border border-borderLine rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-slate-100 text-[10px] font-bold text-textSecondary uppercase sticky top-0 z-10 border-b border-borderLine">
+                                <th className="py-2.5 px-3">Commodity Item</th>
+                                <th className="py-2.5 px-3">Category</th>
+                                <th className="py-2.5 px-3 text-right">In-Stock</th>
+                                <th className="py-2.5 px-3 text-right">Units Supplied</th>
+                                <th className="py-2.5 px-3 text-right">Purchase Rate (₹)</th>
+                                <th className="py-2.5 px-3 text-right font-bold text-navy-800">Total Spend (₹)</th>
+                                <th className="py-2.5 px-3 text-right">Retail (₹)</th>
+                                <th className="py-2.5 px-3 text-right">Employee (₹)</th>
+                                <th className="py-2.5 px-3 text-center">Margin %</th>
+                                <th className="py-2.5 px-3 text-center">Last Order</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-borderLine">
+                              {filteredItems.length === 0 ? (
+                                <tr>
+                                  <td colSpan={10} className="py-8 text-center text-textSecondary">
+                                    <Package className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                                    <div className="font-semibold text-navy-800">No products recorded for this supplier</div>
+                                    <div className="text-[11px] mt-0.5">When purchase orders are issued to this vendor, items will appear here automatically.</div>
+                                  </td>
+                                </tr>
+                              ) : (
+                                filteredItems.map((itm) => {
+                                  const cost = parseFloat((itm.purchase_price as any) || 0);
+                                  const sell = parseFloat((itm.selling_price as any) || 0);
+                                  const margin = cost > 0 ? (((sell - cost) / cost) * 100).toFixed(1) : '0.0';
+                                  const isLowStock =
+                                    parseFloat((itm.current_stock as any) || 0) <=
+                                    parseFloat((itm.min_stock as any) || 5);
+
+                                  return (
+                                    <tr key={itm.item_id} className="hover:bg-slate-50 transition-colors">
+                                      <td className="py-2 px-3">
+                                        <div className="font-bold text-navy-800">{itm.item_name}</div>
+                                        <div className="text-[10px] text-textSecondary font-mono">
+                                          {itm.item_code} &bull; {itm.brand || 'CFECC'}
+                                        </div>
+                                      </td>
+                                      <td className="py-2 px-3 text-textPrimary">
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 font-medium">
+                                          {itm.category_name}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums font-bold">
+                                        <span className={isLowStock ? 'text-amber-600' : 'text-navy-800'}>
+                                          {parseFloat((itm.current_stock as any) || 0).toFixed(0)} {itm.unit_code}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums text-textSecondary">
+                                        <div className="font-medium text-navy-800">
+                                          {parseFloat((itm.total_received_qty as any) || 0).toFixed(0)} rec&apos;d
+                                        </div>
+                                        <div className="text-[10px] text-textSecondary">
+                                          ({parseFloat((itm.total_ordered_qty as any) || 0).toFixed(0)} ord)
+                                        </div>
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums text-textSecondary">
+                                        ₹{cost.toFixed(2)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums font-bold text-navy-800">
+                                        ₹{parseFloat((itm.total_spend as any) || 0).toLocaleString('en-IN', {
+                                          minimumFractionDigits: 2,
+                                        })}
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums text-textPrimary">
+                                        ₹{sell.toFixed(2)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums font-medium text-primary">
+                                        ₹{parseFloat((itm.employee_price as any) || 0).toFixed(2)}
+                                      </td>
+                                      <td className="py-2 px-3 text-center">
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">
+                                          +{margin}%
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-3 text-center text-textSecondary whitespace-nowrap text-[10px]">
+                                        {itm.last_order_date || '-'}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Tab 1: Overview */}
               {profileTab === 'OVERVIEW' && (

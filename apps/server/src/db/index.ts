@@ -14,19 +14,36 @@ let pgPoolInstance: pg.Pool | null = null;
 export async function initDatabase() {
   if (dbInstance) return dbInstance;
 
-  const isTest = process.env.NODE_ENV === 'test';
-  if (!isTest && config.databaseUrl && config.databaseUrl.trim() !== '') {
+  const isExplicitPglite = process.env.USE_PGLITE === 'true' || process.env.NODE_ENV === 'test';
+  let connectedRemote = false;
+
+  if (!isExplicitPglite && config.databaseUrl && config.databaseUrl.trim() !== '') {
     const isSupabase = config.databaseUrl.includes('supabase.co') ||
       config.databaseUrl.includes('pooler.supabase.com') ||
       config.databaseUrl.includes('sslmode=require');
 
-    console.log(`[Database] Connecting to PostgreSQL instance (${isSupabase ? 'Supabase with SSL' : 'Standard'})...`);
-    pgPoolInstance = new pg.Pool({
-      connectionString: config.databaseUrl,
-      ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
-    });
-    dbInstance = drizzlePg(pgPoolInstance, { schema });
-  } else {
+    try {
+      console.log(`[Database] Connecting to PostgreSQL instance (${isSupabase ? 'Supabase with SSL' : 'Standard'})...`);
+      const pool = new pg.Pool({
+        connectionString: config.databaseUrl,
+        ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
+        connectionTimeoutMillis: 3000,
+      });
+      // Test connectivity
+      const client = await pool.connect();
+      client.release();
+      pgPoolInstance = pool;
+      dbInstance = drizzlePg(pgPoolInstance, { schema });
+      connectedRemote = true;
+      console.log('[Database] Successfully connected to remote PostgreSQL instance.');
+    } catch (err: any) {
+      console.warn(`[Database] Remote PostgreSQL connection failed (${err.message}). Falling back to local embedded PGlite storage.`);
+      pgPoolInstance = null;
+      dbInstance = null;
+    }
+  }
+
+  if (!connectedRemote) {
     // Zero-config embedded PostgreSQL via PGlite
     const dataDir = path.resolve(process.cwd(), '.data', 'pglite');
     if (!fs.existsSync(dataDir)) {

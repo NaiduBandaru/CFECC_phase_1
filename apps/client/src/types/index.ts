@@ -116,6 +116,26 @@ export interface Vendor {
   updated_at?: string;
 }
 
+export interface VendorSuppliedItem {
+  item_id: number;
+  item_code: string;
+  item_name: string;
+  brand?: string | null;
+  category_name?: string | null;
+  unit_code?: string | null;
+  current_stock: string | number;
+  min_stock: string | number;
+  purchase_price: string | number;
+  selling_price: string | number;
+  employee_price: string | number;
+  total_ordered_qty: string | number;
+  total_received_qty: string | number;
+  total_spend: string | number;
+  avg_unit_cost: string | number;
+  po_count: number;
+  last_order_date?: string | null;
+}
+
 export interface Sale {
   id: number;
   invoice_number: string;

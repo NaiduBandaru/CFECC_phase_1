@@ -168,7 +168,19 @@ export async function seedDatabase() {
       (7, 'ITM-007', 'Red Label Tea (500g)', 3, 'Brooke Bond', 3, '89010007', 230.00, 270.00, 245.00, 52.000, 10.000, 15.000, 5.00),
       (8, 'ITM-008', 'Bru Instant Coffee (100g Jar)', 3, 'Bru', 1, '89010008', 190.00, 225.00, 205.00, 40.000, 8.000, 15.000, 18.00),
       (9, 'ITM-009', 'Mysore Sandal Soap (Pack of 3)', 4, 'Mysore Sandal', 3, '89010009', 150.00, 180.00, 160.00, 45.000, 10.000, 20.000, 18.00),
-      (10, 'ITM-010', 'Surf Excel Quick Wash Detergent (1kg)', 4, 'HUL', 3, '89010010', 135.00, 160.00, 142.00, 50.000, 12.000, 25.000, 18.00)
+      (10, 'ITM-010', 'Surf Excel Quick Wash Detergent (1kg)', 4, 'HUL', 3, '89010010', 135.00, 160.00, 142.00, 50.000, 12.000, 25.000, 18.00),
+      (11, 'ITM-011', 'Visakha Dairy Fresh Curd (500g Pouch)', 2, 'Visakha Dairy', 3, '89010011', 32.00, 38.00, 35.00, 90.000, 15.000, 25.000, 0.00),
+      (12, 'ITM-012', 'Visakha Dairy Butter Unsalted (500g)', 2, 'Visakha Dairy', 1, '89010012', 260.00, 295.00, 280.00, 40.000, 8.000, 15.000, 12.00),
+      (13, 'ITM-013', 'Visakha Dairy Malai Paneer (200g)', 2, 'Visakha Dairy', 3, '89010013', 95.00, 115.00, 105.00, 55.000, 10.000, 20.000, 0.00),
+      (14, 'ITM-014', 'Visakha Dairy Flavoured Badam Milk (200ml)', 2, 'Visakha Dairy', 1, '89010014', 30.00, 38.00, 34.00, 75.000, 15.000, 30.000, 12.00),
+      (15, 'ITM-015', 'Moong Dal Yellow Split (1kg)', 1, 'Tata Sampann', 2, '89010015', 130.00, 155.00, 142.00, 60.000, 12.000, 25.000, 0.00),
+      (16, 'ITM-016', 'Sugar Premium Crystal (1kg)', 1, 'Madhur Sugar', 2, '89010016', 42.00, 48.00, 45.00, 150.000, 30.000, 50.000, 5.00),
+      (17, 'ITM-017', 'Tata Iodized Salt (1kg)', 1, 'Tata Salt', 3, '89010017', 22.00, 28.00, 25.00, 100.000, 20.000, 40.000, 0.00),
+      (18, 'ITM-018', 'Gold Drop Groundnut Oil (1 Ltr)', 1, 'Gold Drop', 4, '89010018', 165.00, 190.00, 175.00, 80.000, 15.000, 30.000, 5.00),
+      (19, 'ITM-019', 'Lifebuoy Total Germ Protection Soap (125g)', 4, 'HUL', 1, '89010019', 32.00, 38.00, 35.00, 110.000, 20.000, 40.000, 18.00),
+      (20, 'ITM-020', 'Clinic Plus Strong & Long Shampoo (175ml)', 4, 'HUL', 1, '89010020', 110.00, 135.00, 122.00, 45.000, 10.000, 20.000, 18.00),
+      (21, 'ITM-021', 'Vim Dishwash Gel Lemon (500ml)', 4, 'HUL', 1, '89010021', 90.00, 110.00, 98.00, 65.000, 12.000, 25.000, 18.00),
+      (22, 'ITM-022', 'Close Up Everfresh Red Hot Toothpaste (150g)', 4, 'HUL', 1, '89010022', 85.00, 105.00, 94.00, 70.000, 15.000, 30.000, 18.00)
     ON CONFLICT (item_code) DO NOTHING;
   `);
 
@@ -211,7 +223,10 @@ export async function seedDatabase() {
     ) VALUES
       (1, 'PO-2026-0001', 1, '2026-03-01', '2026-03-05', 25000.00, 1250.00, 26250.00, 'COMPLETED', 'Regular weekly dairy & ghee replenishment'),
       (2, 'PO-2026-0002', 2, '2026-03-05', '2026-03-10', 45000.00, 2250.00, 47250.00, 'COMPLETED', 'Monthly rice & grocery bulk procurement'),
-      (3, 'PO-2026-0003', 3, '2026-03-10', '2026-03-15', 30000.00, 5400.00, 35400.00, 'APPROVED', 'Soaps & detergents FMCG stock order')
+      (3, 'PO-2026-0003', 3, '2026-03-10', '2026-03-15', 30000.00, 5400.00, 35400.00, 'COMPLETED', 'Soaps & detergents FMCG stock order'),
+      (4, 'PO-2026-0004', 1, '2026-03-15', '2026-03-18', 21330.00, 1422.00, 22752.00, 'COMPLETED', 'Dairy fresh paneer, curd, butter & badam milk procurement'),
+      (5, 'PO-2026-0005', 2, '2026-03-18', '2026-03-22', 32400.00, 1160.00, 33560.00, 'COMPLETED', 'Edible oil, refined sugar, salt & dals consignment'),
+      (6, 'PO-2026-0006', 3, '2026-03-20', '2026-03-25', 24800.00, 4464.00, 29264.00, 'COMPLETED', 'HUL personal care: shampoo, toothpastes, bar soaps & dishwash')
     ON CONFLICT (po_number) DO NOTHING;
   `);
 
@@ -220,12 +235,34 @@ export async function seedDatabase() {
     INSERT INTO purchase_order_items (
       id, po_id, item_id, ordered_qty, received_qty, unit_price, tax_rate, tax_amount, total_price
     ) VALUES
+      -- PO 1 (Vendor 1: Visakha Dairy)
       (1, 1, 5, 200.000, 200.000, 28.00, 0.00, 0.00, 5600.00),
       (2, 1, 6, 60.000, 60.000, 320.00, 12.00, 2304.00, 21504.00),
+      -- PO 2 (Vendor 2: Vizag Wholesale Provisions)
       (3, 2, 1, 30.000, 30.000, 1250.00, 0.00, 0.00, 37500.00),
       (4, 2, 4, 50.000, 50.000, 145.00, 0.00, 0.00, 7250.00),
-      (5, 3, 9, 100.000, 0.000, 150.00, 18.00, 2700.00, 17700.00),
-      (6, 3, 10, 100.000, 0.000, 135.00, 18.00, 2430.00, 15930.00)
+      -- PO 3 (Vendor 3: HUL)
+      (5, 3, 9, 100.000, 100.000, 150.00, 18.00, 2700.00, 17700.00),
+      (6, 3, 10, 100.000, 100.000, 135.00, 18.00, 2430.00, 15930.00),
+      -- PO 4 (Vendor 1: Visakha Dairy)
+      (7, 4, 11, 100.000, 100.000, 32.00, 0.00, 0.00, 3200.00),
+      (8, 4, 12, 40.000, 40.000, 260.00, 12.00, 1248.00, 11648.00),
+      (9, 4, 13, 60.000, 60.000, 95.00, 0.00, 0.00, 5700.00),
+      (10, 4, 14, 80.000, 80.000, 30.00, 12.00, 288.00, 2688.00),
+      -- PO 5 (Vendor 2: Vizag Wholesale Provisions)
+      (11, 5, 2, 100.000, 100.000, 115.00, 5.00, 575.00, 12075.00),
+      (12, 5, 3, 30.000, 30.000, 420.00, 0.00, 0.00, 12600.00),
+      (13, 5, 15, 40.000, 40.000, 130.00, 0.00, 0.00, 5200.00),
+      (14, 5, 16, 120.000, 120.000, 42.00, 5.00, 252.00, 5292.00),
+      (15, 5, 17, 100.000, 100.000, 22.00, 0.00, 0.00, 2200.00),
+      (16, 5, 18, 50.000, 50.000, 165.00, 5.00, 412.50, 8662.50),
+      -- PO 6 (Vendor 3: HUL)
+      (17, 6, 7, 50.000, 50.000, 230.00, 5.00, 575.00, 12075.00),
+      (18, 6, 8, 40.000, 40.000, 190.00, 18.00, 1368.00, 8968.00),
+      (19, 6, 19, 120.000, 120.000, 32.00, 18.00, 691.20, 4531.20),
+      (20, 6, 20, 50.000, 50.000, 110.00, 18.00, 990.00, 6490.00),
+      (21, 6, 21, 70.000, 70.000, 90.00, 18.00, 1134.00, 7434.00),
+      (22, 6, 22, 80.000, 80.000, 85.00, 18.00, 1224.00, 8024.00)
     ON CONFLICT (id) DO NOTHING;
   `);
 
@@ -235,7 +272,11 @@ export async function seedDatabase() {
       id, grn_number, po_id, vendor_id, receipt_date, delivery_challan_number, vehicle_number, status, notes
     ) VALUES
       (1, 'GRN-2026-0001', 1, 1, '2026-03-04', 'DC-VD-8812', 'AP 31 TT 4421', 'VERIFIED', 'Received all dairy cartons in refrigerated condition'),
-      (2, 'GRN-2026-0002', 2, 2, '2026-03-09', 'DC-ZW-4019', 'AP 31 TY 1109', 'VERIFIED', 'Received rice bags and toor dal in good condition')
+      (2, 'GRN-2026-0002', 2, 2, '2026-03-09', 'DC-ZW-4019', 'AP 31 TY 1109', 'VERIFIED', 'Received rice bags and toor dal in good condition'),
+      (3, 'GRN-2026-0003', 3, 3, '2026-03-14', 'DC-HUL-1029', 'AP 31 U 8802', 'VERIFIED', 'FMCG personal care soaps and detergents stock received'),
+      (4, 'GRN-2026-0004', 4, 1, '2026-03-17', 'DC-VD-8945', 'AP 31 TT 4421', 'VERIFIED', 'Fresh paneer and curd consignments delivered safely'),
+      (5, 'GRN-2026-0005', 5, 2, '2026-03-21', 'DC-ZW-4190', 'AP 31 TY 1109', 'VERIFIED', 'Edible oils and sugar sacks unloaded in store storage'),
+      (6, 'GRN-2026-0006', 6, 3, '2026-03-24', 'DC-HUL-1188', 'AP 31 U 8802', 'VERIFIED', 'Shampoos, teas and toothpastes checked and verified')
     ON CONFLICT (grn_number) DO NOTHING;
   `);
 
@@ -247,7 +288,21 @@ export async function seedDatabase() {
       (1, 1, 5, 200.000, 200.000, 0.000, 28.00),
       (2, 1, 6, 60.000, 60.000, 0.000, 320.00),
       (3, 2, 1, 30.000, 30.000, 0.000, 1250.00),
-      (4, 2, 4, 50.000, 50.000, 0.000, 145.00)
+      (4, 2, 4, 50.000, 50.000, 0.000, 145.00),
+      (5, 3, 9, 100.000, 100.000, 0.000, 150.00),
+      (6, 3, 10, 100.000, 100.000, 0.000, 135.00),
+      (7, 4, 11, 100.000, 100.000, 0.000, 32.00),
+      (8, 4, 12, 40.000, 40.000, 0.000, 260.00),
+      (9, 4, 13, 60.000, 60.000, 0.000, 95.00),
+      (10, 4, 14, 80.000, 80.000, 0.000, 30.00),
+      (11, 5, 2, 100.000, 100.000, 0.000, 115.00),
+      (12, 5, 3, 30.000, 30.000, 0.000, 420.00),
+      (13, 5, 15, 40.000, 40.000, 0.000, 130.00),
+      (14, 5, 16, 120.000, 120.000, 0.000, 42.00),
+      (15, 6, 19, 120.000, 120.000, 0.000, 32.00),
+      (16, 6, 20, 50.000, 50.000, 0.000, 110.00),
+      (17, 6, 21, 70.000, 70.000, 0.000, 90.00),
+      (18, 6, 22, 80.000, 80.000, 0.000, 85.00)
     ON CONFLICT (id) DO NOTHING;
   `);
 
@@ -258,7 +313,11 @@ export async function seedDatabase() {
       subtotal, tax_amount, total_amount, paid_amount, status, notes
     ) VALUES
       (1, 'INV-VD-2026-091', 'PINV-2026-0001', 1, 1, '2026-03-04', '2026-03-19', 24800.00, 2304.00, 27104.00, 15000.00, 'PARTIALLY_PAID', 'Partially cleared via RTGS, balance payable'),
-      (2, 'INV-VWP-5510', 'PINV-2026-0002', 2, 2, '2026-03-09', '2026-04-08', 44750.00, 0.00, 44750.00, 44750.00, 'PAID', 'Full payment settled via NEFT')
+      (2, 'INV-VWP-5510', 'PINV-2026-0002', 2, 2, '2026-03-09', '2026-04-08', 44750.00, 0.00, 44750.00, 44750.00, 'PAID', 'Full payment settled via NEFT'),
+      (3, 'INV-HUL-8821', 'PINV-2026-0003', 3, 3, '2026-03-14', '2026-04-13', 28500.00, 5130.00, 33630.00, 15000.00, 'PARTIALLY_PAID', 'Advance partial payment made'),
+      (4, 'INV-VD-2026-118', 'PINV-2026-0004', 1, 4, '2026-03-17', '2026-04-01', 21330.00, 1422.00, 22752.00, 20352.00, 'PARTIALLY_PAID', 'Paneer and curd delivery invoice'),
+      (5, 'INV-VWP-5640', 'PINV-2026-0005', 2, 5, '2026-03-21', '2026-04-20', 32400.00, 1160.00, 33560.00, 0.00, 'UNPAID', 'Sugar and oils consignment pending payment'),
+      (6, 'INV-HUL-8994', 'PINV-2026-0006', 3, 6, '2026-03-24', '2026-04-23', 24800.00, 4464.00, 29264.00, 25794.00, 'PARTIALLY_PAID', 'HUL personal care replenishment')
     ON CONFLICT (system_bill_number) DO NOTHING;
   `);
 

@@ -127,6 +127,39 @@ vendorsRouter.get('/:id/profile', authenticateToken, async (req: Request, res: R
       LIMIT 50;
     `);
 
+    // Products / Commodities Supplied or Sold by this Vendor
+    const itemsRes = await executeRawSql(`
+      SELECT 
+        i.id as item_id,
+        i.item_code,
+        i.name as item_name,
+        i.brand,
+        c.name as category_name,
+        u.code as unit_code,
+        i.current_stock,
+        i.min_stock,
+        i.purchase_price,
+        i.selling_price,
+        i.employee_price,
+        COALESCE(SUM(poi.ordered_qty), 0.000) as total_ordered_qty,
+        COALESCE(SUM(poi.received_qty), 0.000) as total_received_qty,
+        COALESCE(SUM(poi.total_price), 0.00) as total_spend,
+        CASE 
+          WHEN SUM(poi.ordered_qty) > 0 THEN (SUM(poi.total_price) / SUM(poi.ordered_qty))
+          ELSE i.purchase_price
+        END as avg_unit_cost,
+        COUNT(DISTINCT po.id) as po_count,
+        MAX(po.order_date) as last_order_date
+      FROM items i
+      JOIN purchase_order_items poi ON i.id = poi.item_id
+      JOIN purchase_orders po ON poi.po_id = po.id
+      LEFT JOIN item_categories c ON i.category_id = c.id
+      LEFT JOIN units u ON i.unit_id = u.id
+      WHERE po.vendor_id = ${vendorId}
+      GROUP BY i.id, i.item_code, i.name, i.brand, c.name, u.code, i.current_stock, i.min_stock, i.purchase_price, i.selling_price, i.employee_price
+      ORDER BY total_spend DESC, i.name ASC;
+    `);
+
     // Activity / Audit Trail
     const auditRes = await executeRawSql(`
       SELECT a.*, u.full_name as user_name
@@ -141,6 +174,7 @@ vendorsRouter.get('/:id/profile', authenticateToken, async (req: Request, res: R
       success: true,
       data: {
         vendor,
+        suppliedItems: itemsRes.rows,
         purchaseOrders: poRes.rows,
         invoices: invRes.rows,
         payments: payRes.rows,
