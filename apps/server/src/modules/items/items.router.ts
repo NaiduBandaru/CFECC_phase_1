@@ -573,13 +573,13 @@ itemsRouter.post('/import', authenticateToken, async (req: Request, res: Respons
     const unitRows = await executeRawSql(`SELECT id, code, name FROM units`);
 
     const catMap = new Map<string, number>();
-    catRows.rows.forEach(c => {
+    catRows.rows.forEach((c: any) => {
       catMap.set(c.code.toUpperCase(), c.id);
       catMap.set(c.name.toUpperCase(), c.id);
     });
 
     const unitMap = new Map<string, number>();
-    unitRows.rows.forEach(u => {
+    unitRows.rows.forEach((u: any) => {
       unitMap.set(u.code.toUpperCase(), u.id);
       unitMap.set(u.name.toUpperCase(), u.id);
     });
