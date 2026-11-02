@@ -317,3 +317,92 @@ export interface RecoveryRecord {
   remarks?: string | null;
 }
 
+export interface PurchaseReportItem {
+  id: number;
+  invoice_number: string;
+  system_bill_number: string;
+  vendor_id: number;
+  vendor_name: string;
+  vendor_code: string;
+  vendor_gstin?: string | null;
+  vendor_phone?: string | null;
+  grn_id?: number | null;
+  grn_number?: string | null;
+  invoice_date: string;
+  due_date?: string | null;
+  subtotal: string | number;
+  tax_amount: string | number;
+  total_amount: string | number;
+  paid_amount: string | number;
+  balance_due: string | number;
+  status: string;
+  notes?: string | null;
+}
+
+export interface VendorPurchaseSummary {
+  vendor_id: number;
+  vendor_code: string;
+  vendor_name: string;
+  contact_person?: string | null;
+  phone: string;
+  gstin?: string | null;
+  payment_terms_days: number;
+  current_outstanding: string | number;
+  total_invoices: number;
+  total_purchased: string | number;
+  total_paid: string | number;
+  calculated_outstanding: string | number;
+  last_invoice_date?: string | null;
+}
+
+export interface ItemPurchaseSummary {
+  item_id: number;
+  item_code: string;
+  item_name: string;
+  brand?: string | null;
+  category_name?: string | null;
+  unit_code?: string | null;
+  current_stock: string | number;
+  current_purchase_price: string | number;
+  current_selling_price: string | number;
+  total_ordered_qty: string | number;
+  total_received_qty: string | number;
+  total_purchase_spend: string | number;
+  weighted_avg_cost: string | number;
+  po_count: number;
+}
+
+export interface GrnReportItem {
+  id: number;
+  grn_number: string;
+  receipt_date: string;
+  vendor_name: string;
+  vendor_code: string;
+  po_number?: string | null;
+  delivery_challan_number?: string | null;
+  vehicle_number?: string | null;
+  status: string;
+  notes?: string | null;
+  item_count: number;
+  total_received_qty: string | number;
+  total_accepted_qty: string | number;
+  total_rejected_qty: string | number;
+}
+
+export interface GstItcReportItem {
+  id: number;
+  system_bill_number: string;
+  invoice_number: string;
+  invoice_date: string;
+  vendor_name: string;
+  vendor_code: string;
+  vendor_gstin?: string | null;
+  taxable_amount: string | number;
+  total_gst: string | number;
+  cgst_amount: string | number;
+  sgst_amount: string | number;
+  invoice_total: string | number;
+  payment_status: string;
+}
+
+

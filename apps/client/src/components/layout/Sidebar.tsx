@@ -67,6 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       group: 'INSIGHTS',
       items: [
         { name: 'Reports Center', path: '/reports', icon: BarChart3 },
+        { name: 'Purchase Reports', path: '/reports?tab=purchases', icon: FileSpreadsheet },
       ],
     },
     {

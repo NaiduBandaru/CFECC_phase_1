@@ -204,6 +204,74 @@ export async function seedDatabase() {
     ON CONFLICT (period_code) DO NOTHING;
   `);
 
+  // 12. Sample Purchase Orders
+  await executeRawSql(`
+    INSERT INTO purchase_orders (
+      id, po_number, vendor_id, order_date, expected_delivery_date, subtotal, tax_amount, total_amount, status, notes
+    ) VALUES
+      (1, 'PO-2026-0001', 1, '2026-03-01', '2026-03-05', 25000.00, 1250.00, 26250.00, 'COMPLETED', 'Regular weekly dairy & ghee replenishment'),
+      (2, 'PO-2026-0002', 2, '2026-03-05', '2026-03-10', 45000.00, 2250.00, 47250.00, 'COMPLETED', 'Monthly rice & grocery bulk procurement'),
+      (3, 'PO-2026-0003', 3, '2026-03-10', '2026-03-15', 30000.00, 5400.00, 35400.00, 'APPROVED', 'Soaps & detergents FMCG stock order')
+    ON CONFLICT (po_number) DO NOTHING;
+  `);
+
+  // 13. Sample Purchase Order Items
+  await executeRawSql(`
+    INSERT INTO purchase_order_items (
+      id, po_id, item_id, ordered_qty, received_qty, unit_price, tax_rate, tax_amount, total_price
+    ) VALUES
+      (1, 1, 5, 200.000, 200.000, 28.00, 0.00, 0.00, 5600.00),
+      (2, 1, 6, 60.000, 60.000, 320.00, 12.00, 2304.00, 21504.00),
+      (3, 2, 1, 30.000, 30.000, 1250.00, 0.00, 0.00, 37500.00),
+      (4, 2, 4, 50.000, 50.000, 145.00, 0.00, 0.00, 7250.00),
+      (5, 3, 9, 100.000, 0.000, 150.00, 18.00, 2700.00, 17700.00),
+      (6, 3, 10, 100.000, 0.000, 135.00, 18.00, 2430.00, 15930.00)
+    ON CONFLICT (id) DO NOTHING;
+  `);
+
+  // 14. Sample Goods Receipts (GRN)
+  await executeRawSql(`
+    INSERT INTO goods_receipts (
+      id, grn_number, po_id, vendor_id, receipt_date, delivery_challan_number, vehicle_number, status, notes
+    ) VALUES
+      (1, 'GRN-2026-0001', 1, 1, '2026-03-04', 'DC-VD-8812', 'AP 31 TT 4421', 'VERIFIED', 'Received all dairy cartons in refrigerated condition'),
+      (2, 'GRN-2026-0002', 2, 2, '2026-03-09', 'DC-ZW-4019', 'AP 31 TY 1109', 'VERIFIED', 'Received rice bags and toor dal in good condition')
+    ON CONFLICT (grn_number) DO NOTHING;
+  `);
+
+  // 15. Sample Goods Receipt Items
+  await executeRawSql(`
+    INSERT INTO goods_receipt_items (
+      id, grn_id, item_id, received_qty, accepted_qty, rejected_qty, unit_cost
+    ) VALUES
+      (1, 1, 5, 200.000, 200.000, 0.000, 28.00),
+      (2, 1, 6, 60.000, 60.000, 0.000, 320.00),
+      (3, 2, 1, 30.000, 30.000, 0.000, 1250.00),
+      (4, 2, 4, 50.000, 50.000, 0.000, 145.00)
+    ON CONFLICT (id) DO NOTHING;
+  `);
+
+  // 16. Sample Purchase Invoices
+  await executeRawSql(`
+    INSERT INTO purchase_invoices (
+      id, invoice_number, system_bill_number, vendor_id, grn_id, invoice_date, due_date,
+      subtotal, tax_amount, total_amount, paid_amount, status, notes
+    ) VALUES
+      (1, 'INV-VD-2026-091', 'PINV-2026-0001', 1, 1, '2026-03-04', '2026-03-19', 24800.00, 2304.00, 27104.00, 15000.00, 'PARTIALLY_PAID', 'Partially cleared via RTGS, balance payable'),
+      (2, 'INV-VWP-5510', 'PINV-2026-0002', 2, 2, '2026-03-09', '2026-04-08', 44750.00, 0.00, 44750.00, 44750.00, 'PAID', 'Full payment settled via NEFT')
+    ON CONFLICT (system_bill_number) DO NOTHING;
+  `);
+
+  // 17. Sample Vendor Payments
+  await executeRawSql(`
+    INSERT INTO vendor_payments (
+      id, payment_number, vendor_id, payment_date, payment_mode, amount, reference_number, purchase_invoice_id, notes
+    ) VALUES
+      (1, 'VPAY-2026-0001', 1, '2026-03-06', 'NEFT_RTGS', 15000.00, 'UTR-SBI-9912048', 1, 'Advance part payment against milk delivery'),
+      (2, 'VPAY-2026-0002', 2, '2026-03-12', 'NEFT_RTGS', 44750.00, 'UTR-SBI-4481023', 2, 'Full settlement for rice and dal procurement')
+    ON CONFLICT (payment_number) DO NOTHING;
+  `);
+
   console.log('[Seed] Database seeding completed successfully.');
 }
 
