@@ -16,9 +16,9 @@ export async function initDatabase() {
 
   const isTest = process.env.NODE_ENV === 'test';
   if (!isTest && config.databaseUrl && config.databaseUrl.trim() !== '') {
-    const isSupabase = config.databaseUrl.includes('supabase.co') || 
-                       config.databaseUrl.includes('pooler.supabase.com') || 
-                       config.databaseUrl.includes('sslmode=require');
+    const isSupabase = config.databaseUrl.includes('supabase.co') ||
+      config.databaseUrl.includes('pooler.supabase.com') ||
+      config.databaseUrl.includes('sslmode=require');
 
     console.log(`[Database] Connecting to PostgreSQL instance (${isSupabase ? 'Supabase with SSL' : 'Standard'})...`);
     pgPoolInstance = new pg.Pool({

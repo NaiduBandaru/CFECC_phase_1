@@ -43,11 +43,13 @@ export interface Item {
   name: string;
   category_id?: number | null;
   category_name?: string | null;
+  subcategory?: string | null;
   brand?: string | null;
   description?: string | null;
   unit_id?: number | null;
   unit_code?: string | null;
   unit_name?: string | null;
+  sku?: string | null;
   barcode?: string | null;
   hsn_code?: string | null;
   purchase_price: string | number;
@@ -57,7 +59,23 @@ export interface Item {
   min_stock: string | number;
   reorder_level: string | number;
   tax_rate: string | number;
+  image_url?: string | null;
   is_active: boolean;
+}
+
+export interface ItemPriceHistory {
+  id: number;
+  item_id: number;
+  old_purchase_price: string | number;
+  new_purchase_price: string | number;
+  old_selling_price: string | number;
+  new_selling_price: string | number;
+  old_employee_price: string | number;
+  new_employee_price: string | number;
+  reason?: string | null;
+  changed_by?: number | null;
+  changed_by_name?: string | null;
+  created_at: string;
 }
 
 export interface Category {
