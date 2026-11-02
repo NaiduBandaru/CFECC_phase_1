@@ -14,4 +14,10 @@ coverage
 .turbo
 *.sqlite
 *.db
+.data
+.data/**
+**/.data
+**/.data/**
+*.tsbuildinfo
+.eslintcache
 
