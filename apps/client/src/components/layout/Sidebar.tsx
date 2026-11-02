@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Store,
   FileText,
+  Tag,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -40,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       items: [
         { name: 'Employees', path: '/employees', icon: Users },
         { name: 'Store Items', path: '/items', icon: Package },
+        { name: 'Item Pricing', path: '/pricing', icon: Tag },
         { name: 'Vendors', path: '/vendors', icon: Truck },
       ],
     },

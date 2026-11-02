@@ -1,0 +1,908 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { api } from '../../lib/api.js';
+import { Item, Category, ItemPriceHistory } from '../../types/index.js';
+import { Modal } from '../../components/ui/Modal.js';
+import {
+  Tag,
+  Search,
+  SlidersHorizontal,
+  History,
+  TrendingUp,
+  Percent,
+  Download,
+  Edit2,
+  DollarSign,
+  AlertCircle,
+  CheckCircle,
+  Layers,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  RefreshCw,
+  Clock,
+  Sparkles,
+} from 'lucide-react';
+
+export const ItemPricingPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'PRICING' | 'AUDIT_LOG'>('PRICING');
+  const [items, setItems] = useState<Item[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Filters & Sorting
+  const [search, setSearch] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<string>('ALL');
+  const [sortBy, setSortBy] = useState<string>('name');
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
+
+  // Overview Metrics
+  const [overview, setOverview] = useState({
+    total_items: 0,
+    avg_retail_markup_pct: '0.00',
+    avg_subsidy_discount_pct: '0.00',
+    total_revisions_count: 0,
+  });
+
+  // Global Price History
+  const [globalHistory, setGlobalHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+
+  // Single Item Price Revision Modal
+  const [isReviseModalOpen, setIsReviseModalOpen] = useState<boolean>(false);
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [newPurchasePrice, setNewPurchasePrice] = useState<number>(0);
+  const [newSellingPrice, setNewSellingPrice] = useState<number>(0);
+  const [newEmployeePrice, setNewEmployeePrice] = useState<number>(0);
+  const [revisionReason, setRevisionReason] = useState<string>('Supplier cost update');
+
+  // Single Item History Modal
+  const [isItemHistoryModalOpen, setIsItemHistoryModalOpen] = useState<boolean>(false);
+  const [itemHistoryList, setItemHistoryList] = useState<ItemPriceHistory[]>([]);
+  const [loadingItemHistory, setLoadingItemHistory] = useState<boolean>(false);
+
+  // Bulk Price Update Wizard Modal
+  const [isBulkWizardOpen, setIsBulkWizardOpen] = useState<boolean>(false);
+  const [bulkCategory, setBulkCategory] = useState<string>('ALL');
+  const [bulkTargetField, setBulkTargetField] = useState<'selling_price' | 'employee_price'>('selling_price');
+  const [bulkPercentage, setBulkPercentage] = useState<number>(5);
+  const [bulkReason, setBulkReason] = useState<string>('Annual price revision');
+
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
+
+  useEffect(() => {
+    fetchItems();
+  }, [search, categoryId, sortBy, sortOrder]);
+
+  useEffect(() => {
+    if (activeTab === 'AUDIT_LOG') {
+      fetchGlobalHistory();
+    }
+  }, [activeTab]);
+
+  const fetchInitialData = async () => {
+    try {
+      const [catRes, overRes] = await Promise.all([
+        api.get('/items/categories'),
+        api.get('/items/pricing/overview'),
+      ]);
+      if (catRes.data.success) setCategories(catRes.data.categories);
+      if (overRes.data.success) setOverview(overRes.data.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchItems = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        search,
+        categoryId,
+        sortBy,
+        sortOrder,
+        limit: '100',
+      });
+      const res = await api.get(`/items?${params.toString()}`);
+      if (res.data.success) {
+        setItems(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchGlobalHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      const res = await api.get('/items/pricing/history?limit=100');
+      if (res.data.success) {
+        setGlobalHistory(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC');
+    } else {
+      setSortBy(column);
+      setSortOrder('ASC');
+    }
+  };
+
+  const openReviseModal = (item: Item) => {
+    setSelectedItem(item);
+    setNewPurchasePrice(parseFloat(item.purchase_price.toString()));
+    setNewSellingPrice(parseFloat(item.selling_price.toString()));
+    setNewEmployeePrice(parseFloat(item.employee_price.toString()));
+    setRevisionReason('Vendor cost hike & monthly adjustment');
+    setFormError(null);
+    setIsReviseModalOpen(true);
+  };
+
+  const handleSavePriceRevision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItem) return;
+
+    setIsSubmitting(true);
+    setFormError(null);
+
+    try {
+      const res = await api.put(`/items/${selectedItem.id}`, {
+        purchasePrice: newPurchasePrice,
+        sellingPrice: newSellingPrice,
+        employeePrice: newEmployeePrice,
+        priceChangeReason: revisionReason,
+      });
+
+      if (res.data.success) {
+        setIsReviseModalOpen(false);
+        fetchItems();
+        fetchInitialData();
+      }
+    } catch (err: any) {
+      setFormError(err.response?.data?.message || 'Failed to update item pricing');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openItemHistory = async (item: Item) => {
+    setSelectedItem(item);
+    setIsItemHistoryModalOpen(true);
+    setLoadingItemHistory(true);
+    try {
+      const res = await api.get(`/items/${item.id}/price-history`);
+      if (res.data.success) {
+        setItemHistoryList(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingItemHistory(false);
+    }
+  };
+
+  const handleBulkUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkPercentage) return;
+
+    if (!window.confirm(`Are you sure you want to apply a ${bulkPercentage > 0 ? '+' : ''}${bulkPercentage}% adjustment to ${bulkTargetField.replace('_', ' ')}?`)) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await api.post('/items/pricing/bulk-update', {
+        categoryId: bulkCategory,
+        percentageChange: bulkPercentage,
+        targetField: bulkTargetField,
+        reason: bulkReason,
+      });
+
+      if (res.data.success) {
+        setIsBulkWizardOpen(false);
+        alert(res.data.message);
+        fetchItems();
+        fetchInitialData();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Bulk price update failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (items.length === 0) {
+      alert('No items to export.');
+      return;
+    }
+
+    const headers = [
+      'Item Code',
+      'Commodity Name',
+      'Category',
+      'Unit',
+      'Purchase Cost (₹)',
+      'Retail Standard Price (₹)',
+      'Retail Margin (%)',
+      'Subsidized Employee Price (₹)',
+      'Employee Subsidy Discount (%)',
+      'Subsidy Absorbed (₹/unit)',
+      'GST Tax (%)',
+    ];
+
+    const rows = items.map((i) => {
+      const purchase = parseFloat(i.purchase_price.toString());
+      const selling = parseFloat(i.selling_price.toString());
+      const emp = parseFloat(i.employee_price.toString());
+      const retailMargin = purchase > 0 ? (((selling - purchase) / purchase) * 100).toFixed(1) : '0.0';
+      const empDiscount = selling > 0 ? (((selling - emp) / selling) * 100).toFixed(1) : '0.0';
+      const absorbed = Math.max(0, selling - emp).toFixed(2);
+
+      return [
+        `"${i.item_code}"`,
+        `"${i.name.replace(/"/g, '""')}"`,
+        `"${i.category_name || 'General'}"`,
+        `"${i.unit_code}"`,
+        purchase.toFixed(2),
+        selling.toFixed(2),
+        `"${retailMargin}%"`,
+        emp.toFixed(2),
+        `"${empDiscount}%"`,
+        absorbed,
+        parseFloat(i.tax_rate.toString()).toFixed(2),
+      ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `cfecc_pricing_catalog_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-navy-800">Item Pricing & Margin Control</h2>
+          <p className="text-xs text-textSecondary mt-0.5">
+            Dual-tier price governance: Standard retail vs Subsidized staff pricing, gross profit margins and audit logs
+          </p>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-surface border border-borderLine text-textSecondary text-xs font-semibold hover:bg-slate-50 transition-colors shadow-subtle"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Export Price List CSV</span>
+          </button>
+
+          <button
+            onClick={() => setIsBulkWizardOpen(true)}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors shadow-subtle"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Bulk Price Adjustment</span>
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Overview Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-textSecondary uppercase">Priced Commodities</span>
+            <Tag className="w-4 h-4 text-primary" />
+          </div>
+          <div className="text-xl font-bold text-navy-800 mt-2 tabular-nums">{overview.total_items}</div>
+          <div className="text-[11px] text-textSecondary mt-1">Active inventory catalog</div>
+        </div>
+
+        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-700 uppercase">Avg Retail Markup</span>
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="text-xl font-bold text-emerald-700 mt-2 tabular-nums">
+            +{parseFloat(overview.avg_retail_markup_pct).toFixed(1)}%
+          </div>
+          <div className="text-[11px] text-textSecondary mt-1">Average margin over purchase cost</div>
+        </div>
+
+        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-primary uppercase">Avg Staff Subsidy</span>
+            <Percent className="w-4 h-4 text-primary" />
+          </div>
+          <div className="text-xl font-bold text-primary mt-2 tabular-nums">
+            {parseFloat(overview.avg_subsidy_discount_pct).toFixed(1)}% OFF
+          </div>
+          <div className="text-[11px] text-textSecondary mt-1">Subsidized employee discount</div>
+        </div>
+
+        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-navy-800 uppercase">Historical Revisions</span>
+            <History className="w-4 h-4 text-slate-500" />
+          </div>
+          <div className="text-xl font-bold text-navy-800 mt-2 tabular-nums">
+            {overview.total_revisions_count}
+          </div>
+          <div className="text-[11px] text-textSecondary mt-1">Audited price changes on record</div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex space-x-2 border-b border-borderLine">
+        <button
+          onClick={() => setActiveTab('PRICING')}
+          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${
+            activeTab === 'PRICING' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
+          }`}
+        >
+          <Tag className="w-3.5 h-3.5" />
+          <span>Commodity Pricing & Margins</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('AUDIT_LOG')}
+          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${
+            activeTab === 'AUDIT_LOG' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
+          }`}
+        >
+          <History className="w-3.5 h-3.5" />
+          <span>Global Price Revision Audit Log</span>
+        </button>
+      </div>
+
+      {/* Tab 1: Pricing Table */}
+      {activeTab === 'PRICING' && (
+        <div className="space-y-4">
+          {/* Search & Category Filter */}
+          <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle space-y-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative w-full sm:w-96">
+                <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search commodity name, item code, barcode..."
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-textSecondary font-semibold">Category:</span>
+                <select
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none"
+                >
+                  <option value="ALL">All Categories</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Pricing Table */}
+          <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                    <th
+                      onClick={() => handleSort('name')}
+                      className="py-3 px-4 cursor-pointer hover:text-navy-800"
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Commodity Details</span>
+                        {sortBy === 'name' && (
+                          sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="py-3 px-4">Category & Unit</th>
+                    <th
+                      onClick={() => handleSort('purchase_price')}
+                      className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                    >
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Purchase Cost</span>
+                        {sortBy === 'purchase_price' && (
+                          sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort('selling_price')}
+                      className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                    >
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Standard Retail</span>
+                        {sortBy === 'selling_price' && (
+                          sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="py-3 px-4 text-center">Retail Margin</th>
+                    <th
+                      onClick={() => handleSort('employee_price')}
+                      className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                    >
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Subsidized Staff Price</span>
+                        {sortBy === 'employee_price' && (
+                          sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="py-3 px-4 text-center">Staff Subsidy</th>
+                    <th className="py-3 px-4 text-right">Store Subsidy (₹)</th>
+                    <th className="py-3 px-4 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-borderLine">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-textSecondary">
+                        <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
+                        <div>Loading pricing catalog...</div>
+                      </td>
+                    </tr>
+                  ) : items.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-textSecondary">
+                        <Tag className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                        <div>No commodities found matching filter criteria.</div>
+                      </td>
+                    </tr>
+                  ) : (
+                    items.map((item) => {
+                      const cost = parseFloat(item.purchase_price.toString());
+                      const selling = parseFloat(item.selling_price.toString());
+                      const emp = parseFloat(item.employee_price.toString());
+                      const marginPct = cost > 0 ? (((selling - cost) / cost) * 100) : 0;
+                      const subsidyPct = selling > 0 ? (((selling - emp) / selling) * 100) : 0;
+                      const absorbedPerUnit = Math.max(0, selling - emp);
+
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-navy-800">{item.name}</div>
+                            <div className="text-[11px] text-textSecondary font-mono">{item.item_code} &bull; {item.brand || 'CFECC'}</div>
+                          </td>
+
+                          <td className="py-3 px-4">
+                            <span className="font-medium text-textPrimary">{item.category_name || 'General'}</span>
+                            <div className="text-[11px] text-textSecondary font-mono">{item.unit_code}</div>
+                          </td>
+
+                          <td className="py-3 px-4 text-right font-medium text-textSecondary tabular-nums">
+                            ₹{cost.toFixed(2)}
+                          </td>
+
+                          <td className="py-3 px-4 text-right font-bold text-navy-800 tabular-nums">
+                            ₹{selling.toFixed(2)}
+                          </td>
+
+                          <td className="py-3 px-4 text-center">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                marginPct >= 15
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : marginPct > 0
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-rose-50 text-rose-700'
+                              }`}
+                            >
+                              +{marginPct.toFixed(1)}%
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4 text-right tabular-nums">
+                            <span className="inline-block px-2 py-0.5 rounded font-bold bg-blue-50 text-primary border border-blue-200">
+                              ₹{emp.toFixed(2)}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {subsidyPct.toFixed(1)}% OFF
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4 text-right font-mono font-semibold text-textSecondary tabular-nums">
+                            ₹{absorbedPerUnit.toFixed(2)}
+                          </td>
+
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center space-x-1.5">
+                              <button
+                                title="Revise Price Rates"
+                                onClick={() => openReviseModal(item)}
+                                className="p-1 hover:bg-slate-100 rounded text-textSecondary hover:text-primary transition-colors"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                title="Price History Log"
+                                onClick={() => openItemHistory(item)}
+                                className="p-1 hover:bg-slate-100 rounded text-textSecondary hover:text-navy-800 transition-colors"
+                              >
+                                <History className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Global Audit Log */}
+      {activeTab === 'AUDIT_LOG' && (
+        <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden p-4 space-y-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                  <th className="py-3 px-4">Date & Time</th>
+                  <th className="py-3 px-4">Commodity</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4 text-right">Purchase Cost Delta</th>
+                  <th className="py-3 px-4 text-right">Standard Selling Delta</th>
+                  <th className="py-3 px-4 text-right">Employee Price Delta</th>
+                  <th className="py-3 px-4">Reason for Change</th>
+                  <th className="py-3 px-4 text-right">Authorized By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-borderLine">
+                {loadingHistory ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-textSecondary">
+                      <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
+                      <div>Loading price revision audit log...</div>
+                    </td>
+                  </tr>
+                ) : globalHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-textSecondary">
+                      <History className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                      <div>No price revisions recorded in audit log yet.</div>
+                    </td>
+                  </tr>
+                ) : (
+                  globalHistory.map((h: any) => (
+                    <tr key={h.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3 px-4 text-textSecondary font-mono">
+                        {new Date(h.created_at).toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-navy-800">{h.item_name}</div>
+                        <div className="text-[10px] text-textSecondary font-mono">{h.item_code}</div>
+                      </td>
+                      <td className="py-3 px-4 text-textSecondary">{h.category_name || 'General'}</td>
+                      <td className="py-3 px-4 text-right font-mono text-[11px]">
+                        <span className="text-slate-400 line-through">₹{parseFloat(h.old_purchase_price).toFixed(2)}</span>
+                        <span className="mx-1 text-slate-400">&rarr;</span>
+                        <span className="font-bold text-navy-800">₹{parseFloat(h.new_purchase_price).toFixed(2)}</span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-[11px]">
+                        <span className="text-slate-400 line-through">₹{parseFloat(h.old_selling_price).toFixed(2)}</span>
+                        <span className="mx-1 text-slate-400">&rarr;</span>
+                        <span className="font-bold text-navy-800">₹{parseFloat(h.new_selling_price).toFixed(2)}</span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-[11px]">
+                        <span className="text-blue-300 line-through">₹{parseFloat(h.old_employee_price).toFixed(2)}</span>
+                        <span className="mx-1 text-slate-400">&rarr;</span>
+                        <span className="font-bold text-primary">₹{parseFloat(h.new_employee_price).toFixed(2)}</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="font-medium text-navy-800">{h.reason || 'Price adjustment'}</span>
+                      </td>
+                      <td className="py-3 px-4 text-right text-textSecondary">
+                        {h.changed_by_name || 'Admin'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Revise Price Rates Modal */}
+      <Modal
+        isOpen={isReviseModalOpen}
+        onClose={() => setIsReviseModalOpen(false)}
+        title={`Revise Prices: ${selectedItem?.name || ''}`}
+        subtitle={`Adjust cost, retail and staff subsidized pricing for ${selectedItem?.item_code || ''}`}
+        maxWidth="lg"
+      >
+        <form onSubmit={handleSavePriceRevision} className="space-y-4 text-xs">
+          {formError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-status-danger rounded-lg">
+              {formError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Purchase Cost (₹)</label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={newPurchasePrice}
+                onChange={(e) => setNewPurchasePrice(parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none tabular-nums font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Standard Retail (₹)</label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={newSellingPrice}
+                onChange={(e) => setNewSellingPrice(parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none tabular-nums font-mono font-bold text-navy-800"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-primary uppercase mb-1">Subsidized Staff (₹)</label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={newEmployeePrice}
+                onChange={(e) => setNewEmployeePrice(parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-1.5 border border-blue-300 rounded-lg bg-blue-50/50 focus:bg-white focus:outline-none tabular-nums font-mono font-bold text-primary"
+              />
+            </div>
+          </div>
+
+          {/* Live Margin Preview Box */}
+          <div className="bg-slate-50 p-3 rounded-lg border border-borderLine grid grid-cols-2 gap-3 text-center">
+            <div>
+              <span className="text-[10px] text-textSecondary uppercase font-bold block">Gross Retail Margin</span>
+              <span className="text-sm font-bold text-emerald-700 font-mono">
+                {newPurchasePrice > 0 ? `+${(((newSellingPrice - newPurchasePrice) / newPurchasePrice) * 100).toFixed(1)}%` : '0%'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-primary uppercase font-bold block">Employee Subsidy Discount</span>
+              <span className="text-sm font-bold text-primary font-mono">
+                {newSellingPrice > 0 ? `${(((newSellingPrice - newEmployeePrice) / newSellingPrice) * 100).toFixed(1)}% OFF` : '0%'}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Revision Reason (for Audit Log) *</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Supplier invoice revision, Wholesale price cut"
+              value={revisionReason}
+              onChange={(e) => setRevisionReason(e.target.value)}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-3 border-t border-borderLine">
+            <button
+              type="button"
+              onClick={() => setIsReviseModalOpen(false)}
+              className="px-4 py-2 font-semibold text-textSecondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold transition-all shadow-subtle disabled:opacity-50"
+            >
+              {isSubmitting ? 'Saving...' : 'Authorize Price Revision'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Bulk Price Update Wizard Modal */}
+      <Modal
+        isOpen={isBulkWizardOpen}
+        onClose={() => setIsBulkWizardOpen(false)}
+        title="Bulk Price Adjustment Wizard"
+        subtitle="Apply percentage markups or discounts across categories with audit tracking"
+        maxWidth="md"
+      >
+        <form onSubmit={handleBulkUpdate} className="space-y-4 text-xs">
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Target Category *</label>
+            <select
+              value={bulkCategory}
+              onChange={(e) => setBulkCategory(e.target.value)}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+            >
+              <option value="ALL">Entire Store Inventory (All Items)</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Pricing Tier to Adjust *</label>
+            <select
+              value={bulkTargetField}
+              onChange={(e) => setBulkTargetField(e.target.value as any)}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+            >
+              <option value="selling_price">Standard Retail Selling Price</option>
+              <option value="employee_price">Subsidized Employee Store Price</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Percentage Change (%) *</label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                step="0.5"
+                required
+                value={bulkPercentage}
+                onChange={(e) => setBulkPercentage(parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none font-bold tabular-nums"
+              />
+              <span className="font-bold text-navy-800 text-sm">%</span>
+            </div>
+            <p className="text-[10px] text-textSecondary mt-1">
+              Enter positive value to increase prices (e.g. 5 for +5%) or negative value to reduce prices (e.g. -10 for -10%).
+            </p>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">Reason for Revision *</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. General inflation rate revision, Annual subsidy festival discount"
+              value={bulkReason}
+              onChange={(e) => setBulkReason(e.target.value)}
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-3 border-t border-borderLine">
+            <button
+              type="button"
+              onClick={() => setIsBulkWizardOpen(false)}
+              className="px-4 py-2 font-semibold text-textSecondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold transition-all shadow-subtle disabled:opacity-50"
+            >
+              {isSubmitting ? 'Applying...' : 'Apply Bulk Adjustment'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Single Item History Modal */}
+      <Modal
+        isOpen={isItemHistoryModalOpen}
+        onClose={() => setIsItemHistoryModalOpen(false)}
+        title={`Price History: ${selectedItem?.name || ''}`}
+        subtitle={`Audit log of all price revisions for ${selectedItem?.item_code || ''}`}
+        maxWidth="lg"
+      >
+        <div className="space-y-4 text-xs">
+          {loadingItemHistory ? (
+            <div className="py-8 text-center text-textSecondary">
+              <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
+              <div>Loading revision history...</div>
+            </div>
+          ) : itemHistoryList.length === 0 ? (
+            <div className="py-8 text-center text-textSecondary bg-slate-50 rounded-lg">
+              <History className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+              <div>No price revisions recorded yet for this item.</div>
+            </div>
+          ) : (
+            <div className="divide-y divide-borderLine border border-borderLine rounded-lg overflow-hidden">
+              {itemHistoryList.map((h) => (
+                <div key={h.id} className="p-3 bg-white hover:bg-slate-50 transition-colors space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-navy-800">{h.reason || 'Price Revision'}</span>
+                    <span className="text-[11px] text-textSecondary font-mono">{new Date(h.created_at).toLocaleString()}</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-lg border border-borderLine/50 text-[11px]">
+                    <div>
+                      <div className="text-textSecondary uppercase text-[9px] font-bold">Purchase Cost</div>
+                      <div className="font-mono mt-0.5">
+                        <span className="text-slate-400 line-through">₹{parseFloat(h.old_purchase_price.toString()).toFixed(2)}</span>
+                        <span className="mx-1 text-slate-400">&rarr;</span>
+                        <span className="font-bold text-navy-800">₹{parseFloat(h.new_purchase_price.toString()).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-textSecondary uppercase text-[9px] font-bold">Selling Price</div>
+                      <div className="font-mono mt-0.5">
+                        <span className="text-slate-400 line-through">₹{parseFloat(h.old_selling_price.toString()).toFixed(2)}</span>
+                        <span className="mx-1 text-slate-400">&rarr;</span>
+                        <span className="font-bold text-navy-800">₹{parseFloat(h.new_selling_price.toString()).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-primary uppercase text-[9px] font-bold">Employee Price</div>
+                      <div className="font-mono mt-0.5">
+                        <span className="text-blue-300 line-through">₹{parseFloat(h.old_employee_price.toString()).toFixed(2)}</span>
+                        <span className="mx-1 text-slate-400">&rarr;</span>
+                        <span className="font-bold text-primary">₹{parseFloat(h.new_employee_price.toString()).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {h.changed_by_name && (
+                    <div className="text-[10px] text-textSecondary text-right">
+                      Authorized by: <strong className="text-navy-800">{h.changed_by_name}</strong>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-3 border-t border-borderLine">
+            <button
+              onClick={() => setIsItemHistoryModalOpen(false)}
+              className="px-4 py-2 font-semibold text-textSecondary hover:text-textPrimary"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+};

@@ -214,6 +214,131 @@ itemsRouter.post('/units', authenticateToken, async (req: Request, res: Response
   }
 });
 
+// 4b. Global Pricing Overview & Margin Metrics
+itemsRouter.get('/pricing/overview', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const statsResult = await executeRawSql(`
+      SELECT 
+        COUNT(*) as total_items,
+        COALESCE(AVG(CASE WHEN purchase_price > 0 THEN ((selling_price - purchase_price) / purchase_price) * 100 ELSE 0 END), 0.00) as avg_retail_markup_pct,
+        COALESCE(AVG(CASE WHEN selling_price > 0 THEN ((selling_price - employee_price) / selling_price) * 100 ELSE 0 END), 0.00) as avg_subsidy_discount_pct,
+        COALESCE((SELECT COUNT(*) FROM item_price_history), 0) as total_revisions_count
+      FROM items
+      WHERE is_active = TRUE;
+    `);
+
+    return res.json({
+      success: true,
+      data: statsResult.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4c. Global Price Revision History Across All Items
+itemsRouter.get('/pricing/history', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { limit = '50' } = req.query;
+    const historyResult = await executeRawSql(`
+      SELECT 
+        iph.*,
+        i.name as item_name,
+        i.item_code,
+        c.name as category_name,
+        u.full_name as changed_by_name
+      FROM item_price_history iph
+      JOIN items i ON iph.item_id = i.id
+      LEFT JOIN item_categories c ON i.category_id = c.id
+      LEFT JOIN users u ON iph.changed_by = u.id
+      ORDER BY iph.created_at DESC
+      LIMIT ${parseInt(limit as string, 10)};
+    `);
+
+    return res.json({
+      success: true,
+      data: historyResult.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4d. Bulk Category / Store Price Revision
+itemsRouter.post('/pricing/bulk-update', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { categoryId, percentageChange, targetField, reason } = req.body;
+    const pct = parseFloat(percentageChange);
+    if (isNaN(pct) || pct === 0) {
+      return res.status(400).json({ success: false, message: 'Valid percentage change is required.' });
+    }
+
+    if (!['selling_price', 'employee_price'].includes(targetField)) {
+      return res.status(400).json({ success: false, message: 'Invalid target pricing field.' });
+    }
+
+    let whereClause = 'is_active = TRUE';
+    if (categoryId && categoryId !== 'ALL') {
+      whereClause += ` AND category_id = ${parseInt(categoryId, 10)}`;
+    }
+
+    const itemsRes = await executeRawSql(`SELECT * FROM items WHERE ${whereClause}`);
+    const itemsToUpdate = itemsRes.rows;
+
+    let updatedCount = 0;
+    for (const itm of itemsToUpdate) {
+      const oldVal = parseFloat(itm[targetField]);
+      const newVal = Math.round((oldVal * (1 + pct / 100)) * 100) / 100;
+      if (oldVal === newVal) continue;
+
+      const oldPurchase = parseFloat(itm.purchase_price);
+      const oldSelling = parseFloat(itm.selling_price);
+      const oldEmp = parseFloat(itm.employee_price);
+
+      const newSelling = targetField === 'selling_price' ? newVal : oldSelling;
+      const newEmp = targetField === 'employee_price' ? newVal : oldEmp;
+
+      await executeRawSql(`
+        INSERT INTO item_price_history (
+          item_id, old_purchase_price, new_purchase_price, old_selling_price, new_selling_price,
+          old_employee_price, new_employee_price, reason, changed_by
+        ) VALUES (
+          ${itm.id}, ${oldPurchase.toFixed(2)}, ${oldPurchase.toFixed(2)},
+          ${oldSelling.toFixed(2)}, ${newSelling.toFixed(2)},
+          ${oldEmp.toFixed(2)}, ${newEmp.toFixed(2)},
+          '${(reason || `Bulk ${pct > 0 ? '+' : ''}${pct}% ${targetField} adjustment`).replace(/'/g, "''")}',
+          ${req.user?.id || 'NULL'}
+        );
+      `);
+
+      await executeRawSql(`
+        UPDATE items SET
+          ${targetField} = ${newVal.toFixed(2)},
+          updated_at = NOW()
+        WHERE id = ${itm.id};
+      `);
+      updatedCount++;
+    }
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'BULK_PRICE_UPDATE',
+      entity: 'ITEM_PRICING',
+      entityId: 0,
+      newValues: { categoryId, percentageChange: pct, targetField, updatedCount },
+      ipAddress: req.ip,
+    });
+
+    return res.json({
+      success: true,
+      message: `Bulk pricing update completed for ${updatedCount} commodity items.`,
+      updatedCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 5. Get Single Item Details
 itemsRouter.get('/:id', authenticateToken, async (req: Request, res: Response, next) => {
   try {

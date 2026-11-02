@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/dashboard/DashboardPage.js';
 import { EmployeeDirectoryPage } from './pages/employees/EmployeeDirectoryPage.js';
 import { EmployeeProfilePage } from './pages/employees/EmployeeProfilePage.js';
 import { ItemsMasterPage } from './pages/items/ItemsMasterPage.js';
+import { ItemPricingPage } from './pages/items/ItemPricingPage.js';
 import { VendorsPage } from './pages/vendors/VendorsPage.js';
 import { POSTerminalPage } from './pages/pos/POSTerminalPage.js';
 import { SalesRegisterPage } from './pages/sales/SalesRegisterPage.js';
@@ -58,6 +59,7 @@ export function App() {
             <Route path="employees" element={<EmployeeDirectoryPage />} />
             <Route path="employees/:id" element={<EmployeeProfilePage />} />
             <Route path="items" element={<ItemsMasterPage />} />
+            <Route path="pricing" element={<ItemPricingPage />} />
             <Route path="vendors" element={<VendorsPage />} />
             <Route path="pos" element={<POSTerminalPage />} />
             <Route path="sales" element={<SalesRegisterPage />} />
