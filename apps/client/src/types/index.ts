@@ -104,10 +104,16 @@ export interface Vendor {
   state?: string | null;
   gstin?: string | null;
   payment_terms_days: number;
+  bank_name?: string | null;
+  account_number?: string | null;
+  ifsc_code?: string | null;
   opening_balance: string | number;
   current_outstanding: string | number;
+  is_active: boolean;
   po_count?: number;
   invoice_count?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Sale {
