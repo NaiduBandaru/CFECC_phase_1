@@ -168,3 +168,88 @@ export interface EmployeeStatement {
   whatsapp_sent_at?: string | null;
 }
 
+export interface PurchaseOrderItem {
+  id: number;
+  po_id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  unit_code?: string;
+  ordered_qty: string | number;
+  received_qty: string | number;
+  unit_price: string | number;
+  tax_rate: string | number;
+  tax_amount: string | number;
+  total_price: string | number;
+}
+
+export interface PurchaseOrder {
+  id: number;
+  po_number: string;
+  vendor_id: number;
+  vendor_name: string;
+  vendor_code: string;
+  order_date: string;
+  expected_delivery_date?: string | null;
+  subtotal: string | number;
+  tax_amount: string | number;
+  total_amount: string | number;
+  status: 'PENDING' | 'APPROVED' | 'PARTIALLY_RECEIVED' | 'COMPLETED' | 'CANCELLED';
+  notes?: string | null;
+  item_count?: number;
+  created_at: string;
+  items?: PurchaseOrderItem[];
+}
+
+export interface GoodsReceipt {
+  id: number;
+  grn_number: string;
+  po_id?: number | null;
+  po_number?: string | null;
+  vendor_id: number;
+  vendor_name: string;
+  receipt_date: string;
+  delivery_challan_number?: string | null;
+  vehicle_number?: string | null;
+  status: string;
+  notes?: string | null;
+  item_count?: number;
+  created_at: string;
+}
+
+export interface PurchaseInvoice {
+  id: number;
+  invoice_number: string;
+  system_bill_number: string;
+  vendor_id: number;
+  vendor_name: string;
+  vendor_code: string;
+  grn_id?: number | null;
+  grn_number?: string | null;
+  invoice_date: string;
+  due_date?: string | null;
+  subtotal: string | number;
+  tax_amount: string | number;
+  total_amount: string | number;
+  paid_amount: string | number;
+  status: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'CANCELLED';
+  attachment_url?: string | null;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface VendorPayment {
+  id: number;
+  payment_number: string;
+  vendor_id: number;
+  vendor_name?: string;
+  payment_date: string;
+  payment_mode: string;
+  amount: string | number;
+  reference_number?: string | null;
+  purchase_invoice_id?: number | null;
+  invoice_number?: string | null;
+  notes?: string | null;
+  created_at: string;
+}
+
