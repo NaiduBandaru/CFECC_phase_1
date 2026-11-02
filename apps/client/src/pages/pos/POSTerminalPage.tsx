@@ -16,6 +16,8 @@ import {
   Printer,
   X,
   Package,
+  MessageSquare,
+  Send,
 } from 'lucide-react';
 
 interface CartItem {
@@ -52,6 +54,9 @@ export const POSTerminalPage: React.FC = () => {
   // Completed Receipt Modal
   const [completedSale, setCompletedSale] = useState<any | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState<boolean>(false);
+  const [waSending, setWaSending] = useState<boolean>(false);
+  const [waSentStatus, setWaSentStatus] = useState<string | null>(null);
+  const [waPhoneInput, setWaPhoneInput] = useState<string>('');
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -194,6 +199,8 @@ export const POSTerminalPage: React.FC = () => {
           grandTotal,
           employee: selectedEmployee,
         });
+        setWaPhoneInput(selectedEmployee?.mobile || '');
+        setWaSentStatus(null);
         setIsReceiptModalOpen(true);
         // Reset Cart
         setCart([]);
@@ -204,6 +211,27 @@ export const POSTerminalPage: React.FC = () => {
       setCheckoutError(err.response?.data?.message || 'Transaction could not be completed.');
     } finally {
       setIsCheckingOut(false);
+    }
+  };
+
+  const handleSendWhatsAppReceipt = async () => {
+    if (!completedSale?.id) return;
+    try {
+      setWaSending(true);
+      setWaSentStatus(null);
+      const res = await api.post('/whatsapp/send-receipt', {
+        saleId: completedSale.id,
+        customPhone: waPhoneInput || undefined,
+      });
+      if (res.data.success) {
+        setWaSentStatus(`Dispatched (${res.data.result?.mode || 'SENT'})`);
+      } else {
+        setWaSentStatus(`Failed: ${res.data.message}`);
+      }
+    } catch (err: any) {
+      setWaSentStatus(`Error: ${err.response?.data?.message || 'Dispatch failed'}`);
+    } finally {
+      setWaSending(false);
     }
   };
 
@@ -604,7 +632,40 @@ export const POSTerminalPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="text-center pt-2 text-[10px] text-textSecondary font-sans">
+            {/* WhatsApp Receipt Dispatch via Meta Cloud API */}
+            <div className="bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200 space-y-1.5 font-sans">
+              <div className="flex items-center justify-between text-emerald-950">
+                <span className="font-bold flex items-center space-x-1.5 text-[11px]">
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Send WhatsApp e-Receipt (Meta Cloud API)</span>
+                </span>
+                {waSentStatus && (
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded">
+                    {waSentStatus}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <input
+                  type="text"
+                  placeholder="e.g. 9848022338 or +919848022338"
+                  value={waPhoneInput}
+                  onChange={(e) => setWaPhoneInput(e.target.value)}
+                  className="flex-1 px-2.5 py-1.5 text-xs border border-emerald-300 rounded-md bg-white font-mono focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendWhatsAppReceipt}
+                  disabled={waSending || !waPhoneInput.trim()}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold flex items-center space-x-1 disabled:opacity-50 transition-colors shadow-subtle"
+                >
+                  <Send className="w-3 h-3" />
+                  <span>{waSending ? 'Sending...' : 'Send WhatsApp'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="text-center pt-1 text-[10px] text-textSecondary font-sans">
               Thank you for shopping at CFECC Stores!
             </div>
 

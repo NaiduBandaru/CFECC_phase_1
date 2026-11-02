@@ -11,3 +11,4 @@ migrate().catch((err) => {
   console.error('[Migration] Failed to migrate database:', err);
   process.exit(1);
 });
+

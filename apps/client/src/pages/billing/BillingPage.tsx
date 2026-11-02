@@ -130,9 +130,29 @@ export const BillingPage: React.FC = () => {
       if (res.data.success) {
         setMessage({ type: 'success', text: res.data.message });
         fetchStatements(selectedPeriodId);
+      } else {
+        setMessage({ type: 'error', text: res.data.message });
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.response?.data?.message || 'Failed to dispatch statement' });
+    }
+  };
+
+  // Bulk WhatsApp Dispatch
+  const handleBulkSendWhatsApp = async () => {
+    if (!selectedPeriodId) return;
+    if (!confirm('Are you sure you want to dispatch WhatsApp statements to all employees in this period?')) return;
+    try {
+      setIsProcessing(true);
+      const res = await api.post('/whatsapp/bulk-dispatch-statements', { billingPeriodId: selectedPeriodId });
+      if (res.data.success) {
+        setMessage({ type: 'success', text: res.data.message });
+        fetchStatements(selectedPeriodId);
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.response?.data?.message || 'Failed to dispatch bulk statements' });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -271,11 +291,22 @@ export const BillingPage: React.FC = () => {
 
       {/* Statements Table */}
       <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-        <div className="p-4 border-b border-borderLine flex items-center justify-between">
-          <h3 className="text-sm font-bold text-navy-800">
-            Consolidated Employee Statements & Ledger Reconciliations
-          </h3>
-          <span className="text-xs text-textSecondary">{statements.length} statements generated</span>
+        <div className="p-4 border-b border-borderLine flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-navy-800">
+              Consolidated Employee Statements & Ledger Reconciliations
+            </h3>
+            <span className="text-xs text-textSecondary">{statements.length} statements generated</span>
+          </div>
+
+          <button
+            onClick={handleBulkSendWhatsApp}
+            disabled={isProcessing || statements.length === 0}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-subtle disabled:opacity-50 self-start sm:self-auto"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Dispatch All WhatsApp Statements</span>
+          </button>
         </div>
 
         <div className="overflow-x-auto">
