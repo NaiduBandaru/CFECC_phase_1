@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Store,
+  FileText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -48,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         { name: 'Point of Sale', path: '/pos', icon: ShoppingCart, highlight: true },
         { name: 'Sales Register', path: '/sales', icon: Receipt },
         { name: 'Purchasing & GRN', path: '/purchasing', icon: FileSpreadsheet },
+        { name: 'Purchase Invoices', path: '/purchase-invoices', icon: FileText },
         { name: 'Inventory & Stock', path: '/inventory', icon: Boxes },
       ],
     },

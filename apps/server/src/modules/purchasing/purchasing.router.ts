@@ -382,7 +382,7 @@ purchasingRouter.post('/receipts', authenticateToken, async (req: Request, res: 
 // 7. List Purchase Invoices
 purchasingRouter.get('/invoices', authenticateToken, async (req: Request, res: Response, next) => {
   try {
-    const { status, vendorId } = req.query;
+    const { status, vendorId, search } = req.query;
     let whereClauses: string[] = ['1=1'];
 
     if (status && status !== 'ALL') {
@@ -393,20 +393,151 @@ purchasingRouter.get('/invoices', authenticateToken, async (req: Request, res: R
       whereClauses.push(`pi.vendor_id = ${parseInt(vendorId as string, 10)}`);
     }
 
+    if (search) {
+      const q = (search as string).replace(/'/g, "''").toLowerCase();
+      whereClauses.push(`(
+        LOWER(pi.system_bill_number) LIKE '%${q}%' OR 
+        LOWER(pi.invoice_number) LIKE '%${q}%' OR 
+        LOWER(v.name) LIKE '%${q}%' OR 
+        LOWER(v.vendor_code) LIKE '%${q}%' OR
+        LOWER(COALESCE(gr.grn_number, '')) LIKE '%${q}%'
+      )`);
+    }
+
+    const whereSql = whereClauses.join(' AND ');
+
     const invoices = await executeRawSql(`
       SELECT 
         pi.*,
         v.name as vendor_name,
         v.vendor_code,
-        gr.grn_number
+        gr.grn_number,
+        (pi.total_amount - pi.paid_amount) as balance_due,
+        CASE WHEN pi.due_date < CURRENT_DATE AND pi.status != 'PAID' THEN TRUE ELSE FALSE END as is_overdue
       FROM purchase_invoices pi
       JOIN vendors v ON pi.vendor_id = v.id
       LEFT JOIN goods_receipts gr ON pi.grn_id = gr.id
-      WHERE ${whereClauses.join(' AND ')}
+      WHERE ${whereSql}
       ORDER BY pi.invoice_date DESC, pi.id DESC;
     `);
 
-    return res.json({ success: true, data: invoices.rows });
+    // Financial Metrics Summary
+    const summaryRes = await executeRawSql(`
+      SELECT 
+        COUNT(*) as total_count,
+        COALESCE(SUM(total_amount), 0.00) as total_invoiced,
+        COALESCE(SUM(paid_amount), 0.00) as total_paid,
+        COALESCE(SUM(total_amount - paid_amount), 0.00) as total_outstanding,
+        COALESCE(SUM(CASE WHEN due_date < CURRENT_DATE AND status != 'PAID' THEN (total_amount - paid_amount) ELSE 0 END), 0.00) as overdue_amount
+      FROM purchase_invoices pi
+      WHERE status != 'CANCELLED';
+    `);
+
+    return res.json({ 
+      success: true, 
+      data: invoices.rows,
+      summary: summaryRes.rows[0] || {
+        total_count: 0,
+        total_invoiced: '0.00',
+        total_paid: '0.00',
+        total_outstanding: '0.00',
+        overdue_amount: '0.00',
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 7b. Single Purchase Invoice Details & Disbursements
+purchasingRouter.get('/invoices/:id', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const invoiceId = parseInt(req.params.id as string, 10);
+    const invoiceRes = await executeRawSql(`
+      SELECT 
+        pi.*,
+        v.name as vendor_name,
+        v.vendor_code,
+        v.phone as vendor_phone,
+        v.email as vendor_email,
+        v.gstin as vendor_gstin,
+        v.bank_name,
+        v.account_number,
+        v.ifsc_code,
+        gr.grn_number,
+        gr.delivery_challan_number,
+        gr.vehicle_number
+      FROM purchase_invoices pi
+      JOIN vendors v ON pi.vendor_id = v.id
+      LEFT JOIN goods_receipts gr ON pi.grn_id = gr.id
+      WHERE pi.id = ${invoiceId};
+    `);
+
+    if (!invoiceRes.rows || invoiceRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Purchase invoice not found' });
+    }
+
+    const paymentsRes = await executeRawSql(`
+      SELECT vp.*, u.full_name as recorded_by_name
+      FROM vendor_payments vp
+      LEFT JOIN users u ON vp.created_by = u.id
+      WHERE vp.purchase_invoice_id = ${invoiceId}
+      ORDER BY vp.payment_date DESC;
+    `);
+
+    return res.json({
+      success: true,
+      data: {
+        invoice: invoiceRes.rows[0],
+        payments: paymentsRes.rows,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 7c. Create Purchase Invoice (Manual / Direct Bill)
+purchasingRouter.post('/invoices', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { vendorId, invoiceNumber, grnId, invoiceDate, dueDate, subtotal, taxAmount, totalAmount, notes } = req.body;
+
+    const countRes = await executeRawSql(`SELECT COUNT(*) as count FROM purchase_invoices`);
+    const nextNum = parseInt(countRes.rows[0]?.count || '0', 10) + 1;
+    const systemBillNumber = `PINV-2026-${String(nextNum).padStart(4, '0')}`;
+
+    const numSubtotal = parseFloat(subtotal || '0');
+    const numTax = parseFloat(taxAmount || '0');
+    const numTotal = parseFloat(totalAmount || (numSubtotal + numTax).toString());
+
+    await executeRawSql(`
+      INSERT INTO purchase_invoices (
+        invoice_number, system_bill_number, vendor_id, grn_id,
+        invoice_date, due_date, subtotal, tax_amount, total_amount, paid_amount, status, notes, created_by
+      ) VALUES (
+        '${(invoiceNumber || systemBillNumber).replace(/'/g, "''")}', '${systemBillNumber}', ${parseInt(vendorId, 10)},
+        ${grnId ? parseInt(grnId, 10) : 'NULL'},
+        '${invoiceDate || new Date().toISOString().split('T')[0]}',
+        ${dueDate ? `'${dueDate}'` : 'CURRENT_DATE + INTERVAL \'30 days\''},
+        ${numSubtotal.toFixed(2)}, ${numTax.toFixed(2)}, ${numTotal.toFixed(2)}, 0.00, 'UNPAID',
+        ${notes ? `'${notes.replace(/'/g, "''")}'` : 'NULL'},
+        ${req.user?.id || 'NULL'}
+      );
+    `);
+
+    // Increment vendor current outstanding
+    await executeRawSql(`
+      UPDATE vendors SET
+        current_outstanding = current_outstanding + ${numTotal.toFixed(2)},
+        updated_at = NOW()
+      WHERE id = ${parseInt(vendorId, 10)};
+    `);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Purchase Invoice registered successfully',
+      systemBillNumber,
+    });
   } catch (err) {
     next(err);
   }

@@ -11,6 +11,7 @@ import { VendorsPage } from './pages/vendors/VendorsPage.js';
 import { POSTerminalPage } from './pages/pos/POSTerminalPage.js';
 import { SalesRegisterPage } from './pages/sales/SalesRegisterPage.js';
 import { PurchasingPage } from './pages/purchasing/PurchasingPage.js';
+import { PurchaseInvoicesPage } from './pages/purchasing/PurchaseInvoicesPage.js';
 import { InventoryPage } from './pages/inventory/InventoryPage.js';
 import { BillingPage } from './pages/billing/BillingPage.js';
 import { PayrollPage } from './pages/payroll/PayrollPage.js';
@@ -61,6 +62,7 @@ export function App() {
             <Route path="pos" element={<POSTerminalPage />} />
             <Route path="sales" element={<SalesRegisterPage />} />
             <Route path="purchasing" element={<PurchasingPage />} />
+            <Route path="purchase-invoices" element={<PurchaseInvoicesPage />} />
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="billing" element={<BillingPage />} />
             <Route path="payroll" element={<PayrollPage />} />
