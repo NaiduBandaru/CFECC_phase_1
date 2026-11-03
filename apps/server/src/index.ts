@@ -1,9 +1,21 @@
-import { createApp } from './app.js';
+import { createApp, setDatabaseReady } from './app.js';
 import { config } from './config/index.js';
 import { initDatabase, executeRawSql } from './db/index.js';
 import { seedDatabase } from './db/seed.js';
 
 async function bootstrap() {
+  const app = createApp();
+
+  // 1. Immediately bind and listen on port 5000 so Vite dev proxy never encounters ECONNREFUSED
+  app.listen(config.port, () => {
+    console.log(`[Server] ====================================================`);
+    console.log(`[Server] CFECC Stores Management System API Server running`);
+    console.log(`[Server] Port: http://localhost:${config.port}`);
+    console.log(`[Server] Location: Visakhapatnam, Andhra Pradesh, India`);
+    console.log(`[Server] Environment: ${config.nodeEnv}`);
+    console.log(`[Server] ====================================================`);
+  });
+
   try {
     console.log('[Server] Initializing database...');
     await initDatabase();
@@ -18,16 +30,9 @@ async function bootstrap() {
       console.log(`[Server] Database contains ${count} user accounts.`);
     }
 
-    const app = createApp();
-
-    app.listen(config.port, () => {
-      console.log(`[Server] ====================================================`);
-      console.log(`[Server] CFECC Stores Management System API Server running`);
-      console.log(`[Server] Port: http://localhost:${config.port}`);
-      console.log(`[Server] Location: Visakhapatnam, Andhra Pradesh, India`);
-      console.log(`[Server] Environment: ${config.nodeEnv}`);
-      console.log(`[Server] ====================================================`);
-    });
+    // Open readiness gate to process incoming requests immediately
+    setDatabaseReady(true);
+    console.log('[Server] Database ready. Readiness gate open.');
   } catch (err) {
     console.error('[Server Bootstrap Fatal Error]:', err);
     process.exit(1);

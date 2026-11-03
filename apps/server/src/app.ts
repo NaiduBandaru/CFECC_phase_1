@@ -15,6 +15,12 @@ import { payrollRouter } from './modules/payroll/payroll.router.js';
 import { reportsRouter } from './modules/reports/reports.router.js';
 import { whatsappRouter } from './modules/whatsapp/whatsapp.router.js';
 
+let isDatabaseReady = false;
+
+export function setDatabaseReady(ready = true) {
+  isDatabaseReady = ready;
+}
+
 export function createApp(): Express {
   const app = express();
 
@@ -34,11 +40,32 @@ export function createApp(): Express {
   // Health check
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
-      status: 'UP',
+      status: isDatabaseReady ? 'UP' : 'INITIALIZING',
       system: 'CFECC Stores Management System',
       location: 'Visakhapatnam, Andhra Pradesh',
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // Readiness Gate: hold incoming requests during cold boot while DB connects
+  app.use((req: Request, res: Response, next) => {
+    if (isDatabaseReady || req.path === '/api/health' || req.path === '/health') {
+      return next();
+    }
+    const startTime = Date.now();
+    const checkTimer = setInterval(() => {
+      if (isDatabaseReady) {
+        clearInterval(checkTimer);
+        return next();
+      }
+      if (Date.now() - startTime > 15000) {
+        clearInterval(checkTimer);
+        return res.status(503).json({
+          success: false,
+          message: 'Server is initializing database connections, please retry in a moment.',
+        });
+      }
+    }, 100);
   });
 
   // Domain API Routes

@@ -16,6 +16,16 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true,
+        timeout: 15000,
+        proxyTimeout: 15000,
+        configure: (proxy) => {
+          proxy.on('error', (err, _req, res) => {
+            if (!res.headersSent) {
+              res.writeHead(503, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, message: 'API server warming up, retrying shortly...' }));
+            }
+          });
+        },
       },
     },
   },
