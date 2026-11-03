@@ -160,13 +160,22 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
     const nextNum = parseInt(countRes.rows[0]?.count || '0', 10) + 1;
     const invoiceNumber = `INV-2026-${String(nextNum).padStart(5, '0')}`;
 
+    // Look up active open shift for terminal / cashier
+    const openShiftRes = await executeRawSql(`
+      SELECT id FROM pos_shifts 
+      WHERE status = 'OPEN' 
+      ORDER BY id DESC LIMIT 1
+    `);
+    const activeShiftId = openShiftRes.rows[0]?.id || null;
+
     // 4. Record sale
     const saleRes = await executeRawSql(`
       INSERT INTO sales (
-        invoice_number, sale_type, employee_id, customer_name, customer_mobile,
+        shift_id, invoice_number, sale_type, employee_id, customer_name, customer_mobile,
         subtotal, discount_amount, tax_amount, total_amount, payment_mode, payment_status,
         billed_by, notes
       ) VALUES (
+        ${activeShiftId ? activeShiftId : 'NULL'},
         '${invoiceNumber}', '${paymentMode}', ${employeeId || 'NULL'},
         ${customerName ? `'${customerName.replace(/'/g, "''")}'` : 'NULL'},
         ${customerMobile ? `'${customerMobile.replace(/'/g, "''")}'` : 'NULL'},
@@ -269,6 +278,333 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
         employeeName: employeeData ? `${employeeData.first_name} ${employeeData.last_name}` : customerName,
         createdAt: new Date().toISOString(),
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4. Get Current Active Shift
+posRouter.get('/shift/current', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const shiftRes = await executeRawSql(`
+      SELECT 
+        s.*, 
+        u.full_name as cashier_name,
+        u.username as cashier_username
+      FROM pos_shifts s
+      LEFT JOIN users u ON s.cashier_id = u.id
+      WHERE s.status = 'OPEN'
+      ORDER BY s.id DESC
+      LIMIT 1;
+    `);
+
+    if (!shiftRes.rows || shiftRes.rows.length === 0) {
+      return res.json({ success: true, activeShift: null });
+    }
+
+    const shift = shiftRes.rows[0];
+
+    // Compute live sales metrics for the shift
+    const liveMetricsRes = await executeRawSql(`
+      SELECT 
+        COUNT(*) as total_transactions,
+        COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN total_amount ELSE 0 END), 0) as cash_sales,
+        COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN total_amount ELSE 0 END), 0) as upi_sales,
+        COALESCE(SUM(CASE WHEN payment_mode = 'EMPLOYEE_CREDIT' THEN total_amount ELSE 0 END), 0) as credit_sales,
+        COALESCE(SUM(total_amount), 0) as total_sales,
+        COALESCE(SUM(tax_amount), 0) as total_tax
+      FROM sales
+      WHERE shift_id = ${shift.id}
+    `);
+
+    const metrics = liveMetricsRes.rows[0];
+    const openingFloat = parseFloat(shift.opening_float || '0');
+    const cashSales = parseFloat(metrics.cash_sales || '0');
+    const expectedCash = openingFloat + cashSales;
+
+    return res.json({
+      success: true,
+      activeShift: {
+        id: shift.id,
+        shiftNumber: shift.shift_number,
+        terminalId: shift.terminal_id,
+        cashierId: shift.cashier_id,
+        cashierName: shift.cashier_name || 'Store Cashier',
+        startTime: shift.start_time,
+        openingFloat,
+        status: shift.status,
+        liveMetrics: {
+          totalTransactions: parseInt(metrics.total_transactions || '0', 10),
+          cashSales,
+          upiSales: parseFloat(metrics.upi_sales || '0'),
+          creditSales: parseFloat(metrics.credit_sales || '0'),
+          totalSales: parseFloat(metrics.total_sales || '0'),
+          totalTax: parseFloat(metrics.total_tax || '0'),
+          expectedCash,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 5. Open New Shift / Cash Register
+posRouter.post('/shift/open', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { openingFloat = 0, terminalId = 'POS-01', notes } = req.body;
+
+    // Check if an open shift already exists
+    const checkRes = await executeRawSql(`
+      SELECT id, shift_number FROM pos_shifts WHERE status = 'OPEN' LIMIT 1
+    `);
+    if (checkRes.rows && checkRes.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Shift #${checkRes.rows[0].shift_number} is already active. Please close it before starting a new register.`,
+      });
+    }
+
+    const countRes = await executeRawSql(`SELECT COUNT(*) as count FROM pos_shifts`);
+    const nextNum = parseInt(countRes.rows[0]?.count || '0', 10) + 1;
+    const shiftNumber = `SHF-2026-${String(nextNum).padStart(5, '0')}`;
+
+    const parsedFloat = Math.max(0, parseFloat(openingFloat) || 0);
+
+    const insertRes = await executeRawSql(`
+      INSERT INTO pos_shifts (
+        shift_number, cashier_id, terminal_id, start_time, opening_float,
+        expected_cash, status, closing_notes
+      ) VALUES (
+        '${shiftNumber}', ${req.user?.id || 'NULL'}, '${terminalId.replace(/'/g, "''")}',
+        NOW(), ${parsedFloat.toFixed(2)}, ${parsedFloat.toFixed(2)}, 'OPEN',
+        ${notes ? `'${notes.replace(/'/g, "''")}'` : 'NULL'}
+      ) RETURNING id, shift_number, start_time, opening_float;
+    `);
+
+    const newShift = insertRes.rows[0];
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'POS_SHIFT_OPEN',
+      entity: 'POS_SHIFT',
+      entityId: newShift.id,
+      newValues: { shiftNumber, openingFloat: parsedFloat, terminalId },
+      ipAddress: req.ip,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Shift ${shiftNumber} opened with cash float ₹${parsedFloat.toFixed(2)}`,
+      shift: newShift,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 6. Close Shift / EOD Register Closure
+posRouter.post('/shift/close', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { shiftId, closingCashCounted, closingNotes } = req.body;
+
+    if (!shiftId) {
+      return res.status(400).json({ success: false, message: 'Shift ID is required to close register.' });
+    }
+
+    const shiftRes = await executeRawSql(`
+      SELECT * FROM pos_shifts WHERE id = ${shiftId} AND status = 'OPEN'
+    `);
+    if (!shiftRes.rows || shiftRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Active shift not found or already closed.' });
+    }
+
+    const shift = shiftRes.rows[0];
+    const openingFloat = parseFloat(shift.opening_float || '0');
+
+    // Aggregate final sales from sales table
+    const salesAggRes = await executeRawSql(`
+      SELECT 
+        COUNT(*) as total_transactions,
+        COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN total_amount ELSE 0 END), 0) as cash_sales,
+        COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN total_amount ELSE 0 END), 0) as upi_sales,
+        COALESCE(SUM(CASE WHEN payment_mode = 'EMPLOYEE_CREDIT' THEN total_amount ELSE 0 END), 0) as credit_sales,
+        COALESCE(SUM(total_amount), 0) as total_sales,
+        COALESCE(SUM(tax_amount), 0) as total_tax
+      FROM sales
+      WHERE shift_id = ${shiftId}
+    `);
+
+    const agg = salesAggRes.rows[0];
+    const cashSales = parseFloat(agg.cash_sales || '0');
+    const upiSales = parseFloat(agg.upi_sales || '0');
+    const creditSales = parseFloat(agg.credit_sales || '0');
+    const totalSales = parseFloat(agg.total_sales || '0');
+    const totalTransactions = parseInt(agg.total_transactions || '0', 10);
+
+    const expectedCash = openingFloat + cashSales;
+    const countedCash = parseFloat(closingCashCounted || '0');
+    const cashVariance = countedCash - expectedCash;
+
+    await executeRawSql(`
+      UPDATE pos_shifts SET
+        end_time = NOW(),
+        closing_cash_counted = ${countedCash.toFixed(2)},
+        expected_cash = ${expectedCash.toFixed(2)},
+        cash_variance = ${cashVariance.toFixed(2)},
+        total_cash_sales = ${cashSales.toFixed(2)},
+        total_upi_sales = ${upiSales.toFixed(2)},
+        total_credit_sales = ${creditSales.toFixed(2)},
+        total_sales = ${totalSales.toFixed(2)},
+        total_transactions = ${totalTransactions},
+        status = 'CLOSED',
+        closing_notes = ${closingNotes ? `'${closingNotes.replace(/'/g, "''")}'` : 'NULL'},
+        updated_at = NOW()
+      WHERE id = ${shiftId}
+    `);
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'POS_SHIFT_CLOSE',
+      entity: 'POS_SHIFT',
+      entityId: shiftId,
+      newValues: {
+        shiftNumber: shift.shift_number,
+        expectedCash,
+        countedCash,
+        cashVariance,
+        totalSales,
+      },
+      ipAddress: req.ip,
+    });
+
+    return res.json({
+      success: true,
+      message: `Shift ${shift.shift_number} successfully closed. Variance: ₹${cashVariance.toFixed(2)}`,
+      zReport: {
+        shiftId,
+        shiftNumber: shift.shift_number,
+        startTime: shift.start_time,
+        endTime: new Date().toISOString(),
+        openingFloat,
+        closingCashCounted: countedCash,
+        expectedCash,
+        cashVariance,
+        cashSales,
+        upiSales,
+        creditSales,
+        totalSales,
+        totalTransactions,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 7. Detailed Z-Report for Thermal Printing
+posRouter.get('/shift/z-report/:id', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const shiftId = parseInt(req.params.id as string, 10);
+    const shiftRes = await executeRawSql(`
+      SELECT 
+        s.*, 
+        u.full_name as cashier_name,
+        u.username as cashier_username
+      FROM pos_shifts s
+      LEFT JOIN users u ON s.cashier_id = u.id
+      WHERE s.id = ${shiftId}
+    `);
+
+    if (!shiftRes.rows || shiftRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Shift not found.' });
+    }
+
+    const shift = shiftRes.rows[0];
+
+    // Department / Category sales breakdown
+    const categoryBreakdownRes = await executeRawSql(`
+      SELECT 
+        COALESCE(c.name, 'General') as category_name,
+        COUNT(si.id) as item_count,
+        COALESCE(SUM(si.total_price), 0) as category_total
+      FROM sale_items si
+      JOIN sales s ON si.sale_id = s.id
+      JOIN items i ON si.item_id = i.id
+      LEFT JOIN item_categories c ON i.category_id = c.id
+      WHERE s.shift_id = ${shiftId}
+      GROUP BY c.name
+      ORDER BY category_total DESC
+    `);
+
+    // Invoices list in shift
+    const invoicesRes = await executeRawSql(`
+      SELECT 
+        id, invoice_number, created_at, payment_mode, total_amount, customer_name
+      FROM sales
+      WHERE shift_id = ${shiftId}
+      ORDER BY id ASC
+    `);
+
+    return res.json({
+      success: true,
+      report: {
+        shift: {
+          id: shift.id,
+          shiftNumber: shift.shift_number,
+          terminalId: shift.terminal_id,
+          cashierName: shift.cashier_name || 'Store Cashier',
+          startTime: shift.start_time,
+          endTime: shift.end_time || new Date().toISOString(),
+          status: shift.status,
+          openingFloat: parseFloat(shift.opening_float || '0'),
+          closingCashCounted: parseFloat(shift.closing_cash_counted || '0'),
+          expectedCash: parseFloat(shift.expected_cash || '0'),
+          cashVariance: parseFloat(shift.cash_variance || '0'),
+          cashSales: parseFloat(shift.total_cash_sales || '0'),
+          upiSales: parseFloat(shift.total_upi_sales || '0'),
+          creditSales: parseFloat(shift.total_credit_sales || '0'),
+          totalSales: parseFloat(shift.total_sales || '0'),
+          totalTransactions: parseInt(shift.total_transactions || '0', 10),
+          closingNotes: shift.closing_notes,
+        },
+        categoryBreakdown: categoryBreakdownRes.rows.map((r: any) => ({
+          category: r.category_name,
+          itemCount: parseInt(r.item_count, 10),
+          total: parseFloat(r.category_total),
+        })),
+        invoices: invoicesRes.rows,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 8. List Shifts History
+posRouter.get('/shifts', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { limit = '20', page = '1' } = req.query;
+    const limitNum = parseInt(limit as string, 10) || 20;
+    const offset = (parseInt(page as string, 10) - 1) * limitNum;
+
+    const result = await executeRawSql(`
+      SELECT 
+        s.*, 
+        u.full_name as cashier_name
+      FROM pos_shifts s
+      LEFT JOIN users u ON s.cashier_id = u.id
+      ORDER BY s.id DESC
+      LIMIT ${limitNum} OFFSET ${offset};
+    `);
+
+    const countRes = await executeRawSql(`SELECT COUNT(*) as total FROM pos_shifts`);
+
+    return res.json({
+      success: true,
+      shifts: result.rows,
+      total: parseInt(countRes.rows[0]?.total || '0', 10),
     });
   } catch (err) {
     next(err);

@@ -110,3 +110,4 @@ export const BarcodeSvg: React.FC<BarcodeSvgProps> = ({
     </div>
   );
 };
+

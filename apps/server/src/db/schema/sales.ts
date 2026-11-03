@@ -1,9 +1,33 @@
 import { pgTable, text, serial, timestamp, integer, numeric } from 'drizzle-orm/pg-core';
 import { employees } from './employees.js';
 import { items } from './inventory.js';
+import { users } from './auth.js';
+
+export const posShifts = pgTable('pos_shifts', {
+  id: serial('id').primaryKey(),
+  shiftNumber: text('shift_number').notNull().unique(), // 'SHF-2026-00001'
+  cashierId: integer('cashier_id').references(() => users.id),
+  terminalId: text('terminal_id').default('POS-01').notNull(),
+  startTime: timestamp('start_time').defaultNow().notNull(),
+  endTime: timestamp('end_time'),
+  openingFloat: numeric('opening_float', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  closingCashCounted: numeric('closing_cash_counted', { precision: 12, scale: 2 }),
+  expectedCash: numeric('expected_cash', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  cashVariance: numeric('cash_variance', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  totalCashSales: numeric('total_cash_sales', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  totalUpiSales: numeric('total_upi_sales', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  totalCreditSales: numeric('total_credit_sales', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  totalSales: numeric('total_sales', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  totalTransactions: integer('total_transactions').default(0).notNull(),
+  status: text('status').default('OPEN').notNull(), // 'OPEN', 'CLOSED'
+  closingNotes: text('closing_notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
 export const sales = pgTable('sales', {
   id: serial('id').primaryKey(),
+  shiftId: integer('shift_id').references(() => posShifts.id),
   invoiceNumber: text('invoice_number').notNull().unique(), // 'INV-2026-00001'
   saleType: text('sale_type').default('EMPLOYEE_CREDIT').notNull(), // 'EMPLOYEE_CREDIT', 'CASH', 'UPI', 'SPLIT'
   employeeId: integer('employee_id').references(() => employees.id),

@@ -82,6 +82,7 @@ export async function syncDatabaseSequences() {
     'goods_receipt_items',
     'purchase_invoices',
     'vendor_payments',
+    'pos_shifts',
     'sales',
     'sale_items',
     'sale_returns',
@@ -458,8 +459,31 @@ async function ensureTablesCreated() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS pos_shifts (
+      id SERIAL PRIMARY KEY,
+      shift_number TEXT NOT NULL UNIQUE,
+      cashier_id INTEGER REFERENCES users(id),
+      terminal_id TEXT NOT NULL DEFAULT 'POS-01',
+      start_time TIMESTAMP NOT NULL DEFAULT NOW(),
+      end_time TIMESTAMP,
+      opening_float NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+      closing_cash_counted NUMERIC(12, 2),
+      expected_cash NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+      cash_variance NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+      total_cash_sales NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+      total_upi_sales NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+      total_credit_sales NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+      total_sales NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+      total_transactions INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      closing_notes TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS sales (
       id SERIAL PRIMARY KEY,
+      shift_id INTEGER REFERENCES pos_shifts(id),
       invoice_number TEXT NOT NULL UNIQUE,
       sale_type TEXT NOT NULL DEFAULT 'EMPLOYEE_CREDIT',
       employee_id INTEGER REFERENCES employees(id),
@@ -627,6 +651,8 @@ async function ensureTablesCreated() {
       sent_at TIMESTAMP,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id INTEGER REFERENCES pos_shifts(id);
   `;
 
   await executeScript(ddl);
