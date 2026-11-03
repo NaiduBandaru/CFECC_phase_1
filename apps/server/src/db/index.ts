@@ -27,8 +27,17 @@ export async function initDatabase() {
       const pool = new pg.Pool({
         connectionString: config.databaseUrl,
         ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
-        connectionTimeoutMillis: 3000,
+        connectionTimeoutMillis: 15000,
+        idleTimeoutMillis: 30000,
+        max: 20,
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10000,
       });
+
+      pool.on('error', (err: any) => {
+        console.warn(`[Database Pool Warning]: ${err?.message || err}`);
+      });
+
       // Test connectivity
       const client = await pool.connect();
       client.release();
@@ -119,7 +128,25 @@ export function getDb() {
 
 export async function executeRawSql(sql: string) {
   if (pgPoolInstance) {
-    return await pgPoolInstance.query(sql);
+    try {
+      return await pgPoolInstance.query(sql);
+    } catch (err: any) {
+      const isTransientConnectionIssue =
+        err?.message?.includes('Connection terminated') ||
+        err?.message?.includes('connection timeout') ||
+        err?.message?.includes('timeout') ||
+        err?.message?.includes('socket') ||
+        err?.message?.includes('client has already been released') ||
+        err?.code === 'ECONNRESET' ||
+        err?.code === '57P01';
+
+      if (isTransientConnectionIssue) {
+        console.warn(`[Database] Transient PostgreSQL connection reset (${err?.message || err}). Retrying query with fresh connection...`);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return await pgPoolInstance.query(sql);
+      }
+      throw err;
+    }
   } else if (pgliteInstance) {
     // If multiple statements, use exec, otherwise query
     if (sql.includes(';') && (sql.includes('CREATE TABLE') || sql.includes('INSERT INTO') && sql.split(';').filter(s => s.trim()).length > 1)) {
@@ -133,7 +160,20 @@ export async function executeRawSql(sql: string) {
 
 export async function executeScript(sql: string) {
   if (pgPoolInstance) {
-    return await pgPoolInstance.query(sql);
+    try {
+      return await pgPoolInstance.query(sql);
+    } catch (err: any) {
+      const isTransient =
+        err?.message?.includes('Connection terminated') ||
+        err?.message?.includes('timeout') ||
+        err?.code === 'ECONNRESET';
+      if (isTransient) {
+        console.warn(`[Database] Transient script execution error (${err?.message || err}). Retrying once...`);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return await pgPoolInstance.query(sql);
+      }
+      throw err;
+    }
   } else if (pgliteInstance) {
     return await pgliteInstance.exec(sql);
   }
