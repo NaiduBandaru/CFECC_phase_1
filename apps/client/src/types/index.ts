@@ -300,6 +300,8 @@ export interface PayrollEntry {
   employee_code: string;
   first_name: string;
   last_name: string;
+  mobile?: string | null;
+  email?: string | null;
   department_name?: string | null;
   bank_name?: string | null;
   account_number?: string | null;

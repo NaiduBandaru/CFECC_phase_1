@@ -170,7 +170,7 @@ payrollRouter.get('/entries', authenticateToken, async (req: Request, res: Respo
 
     const result = await executeRawSql(`
       SELECT pe.*,
-        e.employee_code, e.first_name, e.last_name,
+        e.employee_code, e.first_name, e.last_name, e.mobile, e.email,
         d.name as department_name, des.title as designation_title,
         bd.bank_name, bd.account_number, bd.ifsc_code
       FROM payroll_entries pe
