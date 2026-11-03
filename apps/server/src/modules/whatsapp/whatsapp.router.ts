@@ -321,7 +321,7 @@ whatsappRouter.post('/send-receipt', authenticateToken, async (req: Request, res
     }
 
     const sale = saleRes.rows[0];
-    const targetPhone = customPhone || sale.employee_mobile;
+    const targetPhone = customPhone || sale.customer_mobile || sale.employee_mobile;
 
     if (!targetPhone) {
       return res.status(400).json({
@@ -330,16 +330,19 @@ whatsappRouter.post('/send-receipt', authenticateToken, async (req: Request, res
       });
     }
 
-    const customerName = sale.first_name ? `${sale.first_name} ${sale.last_name}` : 'Valued Customer';
+    const customerName = sale.first_name ? `${sale.first_name} ${sale.last_name}` : sale.customer_name || 'Valued Customer';
+    const billNumber = sale.invoice_number || sale.bill_number || `BILL-${sale.id}`;
+    const totalAmount = sale.total_amount ?? sale.final_amount ?? 0;
+    const saleDate = new Date(sale.created_at || sale.sale_date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
     const result = await sendPosReceipt({
       phone: targetPhone,
       customerName,
-      billNumber: sale.bill_number,
-      totalAmount: sale.final_amount,
-      paymentMode: sale.payment_mode,
+      billNumber,
+      totalAmount,
+      paymentMode: sale.payment_mode || 'CASH',
       itemsCount: parseInt(sale.items_count || '1', 10),
-      date: new Date(sale.sale_date).toLocaleDateString('en-IN'),
+      date: saleDate,
       saleId: sale.id,
     });
 

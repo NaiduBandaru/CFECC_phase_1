@@ -253,7 +253,9 @@ export async function sendPosReceipt(params: {
   saleId?: number;
 }): Promise<SendResult> {
   const dateStr = params.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const formattedAmount = parseFloat(params.totalAmount.toString()).toFixed(2);
+  const formattedAmount = parseFloat((params.totalAmount ?? 0).toString()).toFixed(2);
+  const billNum = params.billNumber || 'RECEIPT';
+  const custName = params.customerName || 'Valued Customer';
 
   // 1. Try sending Meta pre-approved order confirmation template
   const templatePayload = {
@@ -265,8 +267,8 @@ export async function sendPosReceipt(params: {
         {
           type: 'body',
           parameters: [
-            { type: 'text', text: params.customerName },
-            { type: 'text', text: params.billNumber },
+            { type: 'text', text: custName },
+            { type: 'text', text: billNum },
             { type: 'text', text: dateStr },
           ],
         },
@@ -336,10 +338,10 @@ export async function sendMonthlyStatement(params: {
   invoiceNumber: string;
   invoiceId?: number;
 }): Promise<SendResult> {
-  const opening = parseFloat(params.openingBalance.toString()).toFixed(2);
-  const purchases = parseFloat(params.currentPurchases.toString()).toFixed(2);
-  const recovered = parseFloat(params.recoveredAmount.toString()).toFixed(2);
-  const closing = parseFloat(params.closingOutstanding.toString()).toFixed(2);
+  const opening = parseFloat((params.openingBalance ?? 0).toString()).toFixed(2);
+  const purchases = parseFloat((params.currentPurchases ?? 0).toString()).toFixed(2);
+  const recovered = parseFloat((params.recoveredAmount ?? 0).toString()).toFixed(2);
+  const closing = parseFloat((params.closingOutstanding ?? 0).toString()).toFixed(2);
 
   const textBody =
 `🏛️ *CFECC STORES - MONTHLY RECOVERY STATEMENT*
