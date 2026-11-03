@@ -16,6 +16,7 @@ import {
   Trash2,
   Search,
   Printer,
+  MessageSquare,
 } from 'lucide-react';
 
 export const PurchasingPage: React.FC = () => {
@@ -357,6 +358,15 @@ export const PurchasingPage: React.FC = () => {
     }
   };
 
+  const handleSendWhatsAppPo = async (poId: number) => {
+    try {
+      const res = await api.post('/whatsapp/send-vendor-po', { poId });
+      alert(res.data.message || 'WhatsApp Purchase Order dispatched to vendor!');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to dispatch WhatsApp PO');
+    }
+  };
+
   const handleReceiveGoods = async (e: React.FormEvent) => {
     e.preventDefault();
     const vendorId = activePoForGrn ? activePoForGrn.vendor_id : parseInt(directGrnVendorId, 10);
@@ -676,6 +686,13 @@ export const PurchasingPage: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center space-x-1.5">
+                          <button
+                            title="Dispatch PO via WhatsApp"
+                            onClick={() => handleSendWhatsAppPo(po.id)}
+                            className="p-1 hover:bg-emerald-50 rounded text-emerald-600 transition-colors"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             title="View PO Details"
                             onClick={() => handleViewPo(po.id)}

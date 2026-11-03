@@ -17,6 +17,7 @@ import {
   ArrowUpDown,
   SlidersHorizontal,
   CheckSquare,
+  MessageSquare,
 } from 'lucide-react';
 
 export const EmployeeDirectoryPage: React.FC = () => {
@@ -85,6 +86,26 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState('');
   const [importResult, setImportResult] = useState<any | null>(null);
+
+  const [waSendingId, setWaSendingId] = useState<number | null>(null);
+
+  const handleQuickWhatsAppBalance = async (emp: Employee) => {
+    try {
+      setWaSendingId(emp.id);
+      const res = await api.post('/whatsapp/send-employee-balance', {
+        employeeId: emp.id,
+      });
+      if (res.data.success) {
+        alert(res.data.message || `Balance statement sent to ${emp.first_name}!`);
+      } else {
+        alert(res.data.message || 'Failed to dispatch WhatsApp statement');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to dispatch message');
+    } finally {
+      setWaSendingId(null);
+    }
+  };
 
   const navigate = useNavigate();
 
@@ -632,18 +653,31 @@ export const EmployeeDirectoryPage: React.FC = () => {
                         </td>
                       )}
 
-                      {/* Action Arrow */}
+                      {/* Actions */}
                       <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/employees/${emp.id}`);
-                          }}
-                          className="p-1 rounded text-textSecondary hover:text-primary hover:bg-blue-50 transition-colors"
-                          title="View Full Profile"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center space-x-1">
+                          <button
+                            disabled={waSendingId === emp.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickWhatsAppBalance(emp);
+                            }}
+                            className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                            title={`Send WhatsApp Credit Balance to ${emp.mobile}`}
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/employees/${emp.id}`);
+                            }}
+                            className="p-1 rounded text-textSecondary hover:text-primary hover:bg-blue-50 transition-colors"
+                            title="View Full Profile"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -7,6 +7,10 @@ import {
   sendPosReceipt,
   sendMonthlyStatement,
   sendTestMessage,
+  sendEmployeeBalanceAlert,
+  sendVendorPurchaseOrder,
+  sendVendorPaymentAdvice,
+  sendPayrollRecoveryAdvice,
 } from '../../services/whatsapp.service.js';
 
 export const whatsappRouter = Router();
@@ -393,6 +397,275 @@ whatsappRouter.get('/logs', authenticateToken, async (_req: Request, res: Respon
       LIMIT 100;
     `);
     return res.json({ success: true, data: logs.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 4. Dispatch Live Credit Balance Alert to Employee
+ */
+whatsappRouter.post('/send-employee-balance', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { employeeId, customPhone } = req.body;
+    if (!employeeId) {
+      return res.status(400).json({ success: false, message: 'Employee ID is required' });
+    }
+
+    const empRes = await executeRawSql(`
+      SELECT id, employee_code, first_name, last_name, mobile, credit_limit, current_outstanding, available_credit
+      FROM employees
+      WHERE id = ${parseInt(employeeId, 10)};
+    `);
+
+    if (!empRes.rows || empRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const emp = empRes.rows[0];
+    const targetPhone = customPhone || emp.mobile;
+
+    if (!targetPhone) {
+      return res.status(400).json({ success: false, message: 'Employee has no registered mobile number' });
+    }
+
+    const result = await sendEmployeeBalanceAlert({
+      phone: targetPhone,
+      employeeName: `${emp.first_name} ${emp.last_name}`,
+      employeeCode: emp.employee_code,
+      currentOutstanding: emp.current_outstanding,
+      creditLimit: emp.credit_limit,
+      availableCredit: emp.available_credit,
+      employeeId: emp.id,
+    });
+
+    return res.json({
+      success: result.success,
+      message: result.success
+        ? `Balance alert dispatched to ${emp.first_name} (${targetPhone}) [${result.mode}]`
+        : `Failed to dispatch: ${result.errorMessage}`,
+      result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 5. Dispatch Purchase Order notice to Vendor
+ */
+whatsappRouter.post('/send-vendor-po', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { poId, customPhone } = req.body;
+    if (!poId) {
+      return res.status(400).json({ success: false, message: 'PO ID is required' });
+    }
+
+    const poRes = await executeRawSql(`
+      SELECT 
+        po.*,
+        v.name as vendor_name,
+        v.phone as vendor_phone,
+        (SELECT COUNT(*) FROM purchase_order_items poi WHERE poi.po_id = po.id) as items_count
+      FROM purchase_orders po
+      JOIN vendors v ON po.vendor_id = v.id
+      WHERE po.id = ${parseInt(poId, 10)};
+    `);
+
+    if (!poRes.rows || poRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Purchase Order not found' });
+    }
+
+    const po = poRes.rows[0];
+    const targetPhone = customPhone || po.vendor_phone;
+
+    if (!targetPhone) {
+      return res.status(400).json({ success: false, message: 'Vendor has no registered mobile number' });
+    }
+
+    const result = await sendVendorPurchaseOrder({
+      phone: targetPhone,
+      vendorName: po.vendor_name,
+      poNumber: po.po_number,
+      totalAmount: po.total_amount,
+      itemsCount: parseInt(po.items_count || '1', 10),
+      orderDate: po.order_date,
+      poId: po.id,
+    });
+
+    return res.json({
+      success: result.success,
+      message: result.success
+        ? `PO notice dispatched to ${po.vendor_name} (${targetPhone}) [${result.mode}]`
+        : `Failed to dispatch: ${result.errorMessage}`,
+      result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 6. Dispatch Vendor Payment Advice
+ */
+whatsappRouter.post('/send-vendor-payment', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { paymentId, customPhone } = req.body;
+    if (!paymentId) {
+      return res.status(400).json({ success: false, message: 'Payment ID is required' });
+    }
+
+    const payRes = await executeRawSql(`
+      SELECT 
+        vp.*,
+        v.name as vendor_name,
+        v.phone as vendor_phone
+      FROM vendor_payments vp
+      JOIN vendors v ON vp.vendor_id = v.id
+      WHERE vp.id = ${parseInt(paymentId, 10)};
+    `);
+
+    if (!payRes.rows || payRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Payment record not found' });
+    }
+
+    const pay = payRes.rows[0];
+    const targetPhone = customPhone || pay.vendor_phone;
+
+    if (!targetPhone) {
+      return res.status(400).json({ success: false, message: 'Vendor has no registered mobile number' });
+    }
+
+    const result = await sendVendorPaymentAdvice({
+      phone: targetPhone,
+      vendorName: pay.vendor_name,
+      paymentNumber: pay.payment_number,
+      amount: pay.amount,
+      paymentMode: pay.payment_mode,
+      referenceNumber: pay.reference_number,
+      paymentId: pay.id,
+    });
+
+    return res.json({
+      success: result.success,
+      message: result.success
+        ? `Payment advice dispatched to ${pay.vendor_name} (${targetPhone}) [${result.mode}]`
+        : `Failed to dispatch: ${result.errorMessage}`,
+      result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 7. Dispatch Salary Store Recovery Advice
+ */
+whatsappRouter.post('/send-payroll-advice', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { payrollEntryId, customPhone } = req.body;
+    if (!payrollEntryId) {
+      return res.status(400).json({ success: false, message: 'Payroll Entry ID is required' });
+    }
+
+    const entryRes = await executeRawSql(`
+      SELECT 
+        pe.*,
+        pp.month_year,
+        e.employee_code, e.first_name, e.last_name, e.mobile
+      FROM payroll_entries pe
+      JOIN payroll_periods pp ON pe.payroll_period_id = pp.id
+      JOIN employees e ON pe.employee_id = e.id
+      WHERE pe.id = ${parseInt(payrollEntryId, 10)};
+    `);
+
+    if (!entryRes.rows || entryRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Payroll record not found' });
+    }
+
+    const entry = entryRes.rows[0];
+    const targetPhone = customPhone || entry.mobile;
+
+    if (!targetPhone) {
+      return res.status(400).json({ success: false, message: 'Employee has no registered mobile number' });
+    }
+
+    const result = await sendPayrollRecoveryAdvice({
+      phone: targetPhone,
+      employeeName: `${entry.first_name} ${entry.last_name}`,
+      employeeCode: entry.employee_code,
+      periodName: entry.month_year,
+      deductionAmount: entry.store_recovery_amount,
+      netSalary: entry.net_salary,
+      entryId: entry.id,
+    });
+
+    return res.json({
+      success: result.success,
+      message: result.success
+        ? `Payroll deduction notice dispatched to ${entry.first_name} (${targetPhone}) [${result.mode}]`
+        : `Failed to dispatch: ${result.errorMessage}`,
+      result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 8. Bulk Dispatch Salary Store Recovery Advice for a Payroll Period
+ */
+whatsappRouter.post('/bulk-payroll-advice', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { payrollPeriodId } = req.body;
+    if (!payrollPeriodId) {
+      return res.status(400).json({ success: false, message: 'Payroll Period ID is required' });
+    }
+
+    const entriesRes = await executeRawSql(`
+      SELECT 
+        pe.*,
+        pp.month_year,
+        e.employee_code, e.first_name, e.last_name, e.mobile
+      FROM payroll_entries pe
+      JOIN payroll_periods pp ON pe.payroll_period_id = pp.id
+      JOIN employees e ON pe.employee_id = e.id
+      WHERE pe.payroll_period_id = ${parseInt(payrollPeriodId, 10)}
+        AND pe.store_recovery_amount > 0;
+    `);
+
+    const entries = entriesRes.rows;
+    if (entries.length === 0) {
+      return res.json({ success: true, message: 'No recovery records to dispatch in this period', count: 0 });
+    }
+
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const entry of entries) {
+      if (entry.mobile) {
+        const res = await sendPayrollRecoveryAdvice({
+          phone: entry.mobile,
+          employeeName: `${entry.first_name} ${entry.last_name}`,
+          employeeCode: entry.employee_code,
+          periodName: entry.month_year,
+          deductionAmount: entry.store_recovery_amount,
+          netSalary: entry.net_salary,
+          entryId: entry.id,
+        });
+        if (res.success) successCount++;
+        else failedCount++;
+      } else {
+        failedCount++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Dispatched ${successCount} WhatsApp payroll notices (${failedCount} skipped or failed)`,
+      successCount,
+      failedCount,
+    });
   } catch (err) {
     next(err);
   }

@@ -13,6 +13,7 @@ import {
   Receipt,
   Download,
   Search,
+  MessageSquare,
 } from 'lucide-react';
 import { PayrollPeriod, PayrollEntry, RecoveryRecord } from '../../types/index.js';
 
@@ -193,6 +194,35 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
     setIsPayslipModalOpen(true);
   };
 
+  const [waSendingEntryId, setWaSendingEntryId] = useState<number | null>(null);
+  const [waBulkSending, setWaBulkSending] = useState(false);
+
+  const handleSendWhatsAppPayslip = async (entryId: number) => {
+    try {
+      setWaSendingEntryId(entryId);
+      const res = await api.post('/whatsapp/send-payroll-advice', { payrollEntryId: entryId });
+      alert(res.data.message || 'WhatsApp recovery advice dispatched!');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to dispatch WhatsApp message');
+    } finally {
+      setWaSendingEntryId(null);
+    }
+  };
+
+  const handleBulkSendWhatsAppPayroll = async () => {
+    if (!selectedPeriodId) return;
+    if (!window.confirm('Dispatch WhatsApp payroll deduction notices to all employees in this period?')) return;
+    try {
+      setWaBulkSending(true);
+      const res = await api.post('/whatsapp/bulk-payroll-advice', { payrollPeriodId: parseInt(selectedPeriodId, 10) });
+      alert(res.data.message || 'WhatsApp notices dispatched successfully!');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to dispatch bulk notices');
+    } finally {
+      setWaBulkSending(false);
+    }
+  };
+
   const handleExportRecoveriesCSV = () => {
     if (recoveryRecords.length === 0) {
       alert('No recovery records to export.');
@@ -367,6 +397,16 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                   </>
                 )}
               </button>
+
+              <button
+                onClick={handleBulkSendWhatsAppPayroll}
+                disabled={waBulkSending || entries.length === 0}
+                className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold transition-colors disabled:opacity-50"
+                title="Dispatch WhatsApp recovery slips to all employees"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{waBulkSending ? 'Sending...' : 'WhatsApp Slips'}</span>
+              </button>
             </div>
           </div>
 
@@ -483,13 +523,23 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                           <StatusBadge status={entry.payment_status} />
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => handleViewPayslip(entry)}
-                            className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-slate-100 hover:bg-navy-800 hover:text-white text-navy-800 text-[11px] font-semibold transition-colors"
-                          >
-                            <FileText className="w-3 h-3" />
-                            <span>Payslip</span>
-                          </button>
+                          <div className="flex items-center justify-center space-x-1.5">
+                            <button
+                              disabled={waSendingEntryId === entry.id}
+                              onClick={() => handleSendWhatsAppPayslip(entry.id)}
+                              className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                              title="Send WhatsApp Salary & Recovery Advice"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleViewPayslip(entry)}
+                              className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-slate-100 hover:bg-navy-800 hover:text-white text-navy-800 text-[11px] font-semibold transition-colors"
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span>Payslip</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -873,8 +923,16 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
               </div>
             </div>
 
-            {/* Print Action */}
-            <div className="flex justify-end pt-3 border-t border-borderLine print:hidden">
+            {/* Actions */}
+            <div className="flex justify-end items-center space-x-2 pt-3 border-t border-borderLine print:hidden">
+              <button
+                onClick={() => handleSendWhatsAppPayslip(selectedEntry.id)}
+                disabled={waSendingEntryId === selectedEntry.id}
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-subtle transition-colors disabled:opacity-50"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>{waSendingEntryId === selectedEntry.id ? 'Sending...' : 'Send WhatsApp Payslip'}</span>
+              </button>
               <button
                 onClick={() => window.print()}
                 className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-navy-800 hover:bg-navy-900 text-white font-semibold text-xs shadow-subtle transition-colors"

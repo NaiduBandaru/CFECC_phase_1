@@ -21,6 +21,7 @@ import {
   Edit,
   Trash2,
   Plus,
+  MessageSquare,
 } from 'lucide-react';
 
 export const EmployeeProfilePage: React.FC = () => {
@@ -37,6 +38,30 @@ export const EmployeeProfilePage: React.FC = () => {
   const [creditEnabledInput, setCreditEnabledInput] = useState<boolean>(true);
   const [isUpdatingCredit, setIsUpdatingCredit] = useState<boolean>(false);
   const [creditUpdateSuccess, setCreditUpdateSuccess] = useState<string | null>(null);
+
+  // WhatsApp Balance Statement
+  const [waSending, setWaSending] = useState(false);
+  const [waNotice, setWaNotice] = useState<string | null>(null);
+
+  const handleSendWhatsAppBalance = async () => {
+    if (!data?.basic?.id) return;
+    try {
+      setWaSending(true);
+      setWaNotice(null);
+      const res = await api.post('/whatsapp/send-employee-balance', {
+        employeeId: data.basic.id,
+      });
+      if (res.data.success) {
+        setWaNotice(res.data.message || 'WhatsApp balance dispatched!');
+      } else {
+        alert(res.data.message || 'Failed to dispatch WhatsApp statement');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to send WhatsApp message');
+    } finally {
+      setWaSending(false);
+    }
+  };
 
   // Edit Personal & Contact Modal
   const [isEditPersonalModalOpen, setIsEditPersonalModalOpen] = useState(false);
@@ -335,8 +360,30 @@ export const EmployeeProfilePage: React.FC = () => {
               ₹{parseFloat(emp.available_credit).toLocaleString('en-IN')}
             </div>
           </div>
+
+          <div className="h-8 w-px bg-borderLine hidden sm:block" />
+
+          <button
+            onClick={handleSendWhatsAppBalance}
+            disabled={waSending}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-subtle transition-colors disabled:opacity-50"
+            title={`Dispatch WhatsApp balance statement to ${data.contact.mobile}`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>{waSending ? 'Sending...' : 'WhatsApp Balance'}</span>
+          </button>
         </div>
       </div>
+
+      {waNotice && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{waNotice}</span>
+          </div>
+          <button onClick={() => setWaNotice(null)} className="text-emerald-700 font-bold hover:underline">Dismiss</button>
+        </div>
+      )}
 
       {/* 11 Tabs Navigation */}
       <div className="bg-surface rounded-cfecc border border-borderLine p-1 shadow-subtle overflow-x-auto">
