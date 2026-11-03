@@ -29,3 +29,53 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Thermal Receipt & Barcode Sticker Print Rules */
+@media print {
+  body {
+    background: transparent !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #printable-receipt, #printable-receipt * {
+    visibility: visible;
+  }
+  #printable-receipt {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    margin: 0;
+    padding: 4mm;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #000;
+    background: #fff;
+  }
+  #printable-receipt.thermal-58mm {
+    width: 58mm;
+    font-size: 10px;
+    padding: 2mm 3mm;
+  }
+  #printable-barcodes, #printable-barcodes * {
+    visibility: visible;
+  }
+  #printable-barcodes {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 8mm;
+    background: #fff;
+  }
+  @page {
+    margin: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+
