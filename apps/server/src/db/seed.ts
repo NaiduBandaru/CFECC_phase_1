@@ -490,6 +490,48 @@ export async function seedDatabase() {
     ON CONFLICT (recovery_number) DO NOTHING;
   `);
 
+  // 25. POS Shifts (1 Closed Shift + 1 Open Register Shift)
+  await executeRawSql(`
+    INSERT INTO pos_shifts (
+      id, shift_number, cashier_id, terminal_id, start_time, end_time,
+      opening_float, closing_cash_counted, expected_cash, cash_variance,
+      total_cash_sales, total_upi_sales, total_credit_sales, total_sales,
+      total_transactions, status, closing_notes, created_at, updated_at
+    ) VALUES 
+      (
+        1, 'SH-2026-0001', 1, 'POS-01', NOW() - INTERVAL '1 day 8 hours', NOW() - INTERVAL '1 day',
+        2000.00, 7840.00, 7840.00, 0.00,
+        5840.00, 3420.00, 6800.00, 16060.00,
+        14, 'CLOSED', 'Shift closed with zero cash variance. End of day cash verified by accounts.',
+        NOW() - INTERVAL '1 day 8 hours', NOW() - INTERVAL '1 day'
+      ),
+      (
+        2, 'SH-2026-0002', 1, 'POS-01', NOW() - INTERVAL '4 hours', NULL,
+        2000.00, NULL, 4820.00, 0.00,
+        2820.00, 1950.00, 4200.00, 8970.00,
+        7, 'OPEN', NULL,
+        NOW() - INTERVAL '4 hours', NOW()
+      )
+    ON CONFLICT (shift_number) DO NOTHING;
+  `);
+
+  // 26. Direct Payments (Employee Over-The-Counter Cash & UPI Settlements)
+  await executeRawSql(`
+    INSERT INTO payments (
+      id, payment_number, employee_id, payment_date, payment_mode, amount, transaction_reference, remarks, received_by, created_at
+    ) VALUES
+      (1, 'PAY-2026-0001', 1, NOW() - INTERVAL '2 days', 'UPI', 1500.00, 'UPI/9848022334/928374', 'Mid-month store bill payment via PhonePe', 1, NOW() - INTERVAL '2 days'),
+      (2, 'PAY-2026-0002', 3, NOW() - INTERVAL '1 day', 'CASH', 890.00, 'CASH-REC-1049', 'Direct store counter cash payment', 1, NOW() - INTERVAL '1 day'),
+      (3, 'PAY-2026-0003', 4, NOW() - INTERVAL '5 hours', 'UPI', 2000.00, 'UPI/9440188990/817263', 'UPI partial repayment for store purchases', 1, NOW() - INTERVAL '5 hours'),
+      (4, 'PAY-2026-0004', 7, NOW() - INTERVAL '2 hours', 'CASH', 1200.00, 'CASH-REC-1050', 'Counter cash deposit against grocery balance', 1, NOW() - INTERVAL '2 hours')
+    ON CONFLICT (payment_number) DO NOTHING;
+  `);
+
+  // 27. Adjust Low Stock Items for realistic replenishment warnings
+  await executeRawSql(`UPDATE items SET current_stock = 4.000 WHERE item_code = 'ITM-003'`);
+  await executeRawSql(`UPDATE items SET current_stock = 8.000 WHERE item_code = 'ITM-004'`);
+  await executeRawSql(`UPDATE items SET current_stock = 7.000 WHERE item_code = 'ITM-005'`);
+
   // Ensure all sequences are updated past the seeded IDs
   await syncDatabaseSequences();
 
