@@ -252,11 +252,33 @@ export async function sendPosReceipt(params: {
   date?: string;
   saleId?: number;
 }): Promise<SendResult> {
-  const dateStr = params.date || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const dateStr = params.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const formattedAmount = parseFloat(params.totalAmount.toString()).toFixed(2);
 
-  // Template Body fallback or interactive text message
-  const textBody =
+  // 1. Try sending Meta pre-approved order confirmation template
+  const templatePayload = {
+    type: 'template',
+    template: {
+      name: 'jaspers_market_order_confirmation_v1',
+      language: { code: 'en_US' },
+      components: [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', text: params.customerName },
+            { type: 'text', text: params.billNumber },
+            { type: 'text', text: dateStr },
+          ],
+        },
+      ],
+    },
+  };
+
+  let result = await sendMetaCloudMessage(params.phone, templatePayload);
+
+  // 2. If template failed (e.g. not created or custom template needed), fallback to text message
+  if (!result.success && result.mode === 'LIVE') {
+    const textBody =
 `🧾 *CFECC STORES - SALE MEMO*
 ━━━━━━━━━━━━━━━━━━━━
 *Bill No:* ${params.billNumber}
@@ -270,12 +292,16 @@ export async function sendPosReceipt(params: {
 Thank you for visiting CFECC Stores, Visakhapatnam!
 _For balance queries, visit the CFECC Stores counter._`;
 
-  const payload = {
-    type: 'text',
-    text: { preview_url: false, body: textBody },
-  };
+    const textPayload = {
+      type: 'text',
+      text: { preview_url: false, body: textBody },
+    };
 
-  const result = await sendMetaCloudMessage(params.phone, payload);
+    const textResult = await sendMetaCloudMessage(params.phone, textPayload);
+    if (textResult.success) {
+      result = textResult;
+    }
+  }
 
   // Record in whatsapp_logs
   await executeRawSql(`
@@ -285,7 +311,7 @@ _For balance queries, visit the CFECC Stores counter._`;
     ) VALUES (
       '${params.phone}', '${params.customerName.replace(/'/g, "''")}',
       'POS_RECEIPT', 'SALE', '${params.billNumber}',
-      'cfecc_pos_receipt', '${JSON.stringify({ billNumber: params.billNumber, total: formattedAmount }).replace(/'/g, "''")}',
+      'jaspers_market_order_confirmation_v1', '${JSON.stringify({ billNumber: params.billNumber, total: formattedAmount }).replace(/'/g, "''")}',
       '${result.status}', ${result.messageId ? `'${result.messageId}'` : 'NULL'},
       ${result.errorMessage ? `'${result.errorMessage.replace(/'/g, "''")}'` : 'NULL'},
       NOW()
@@ -369,24 +395,67 @@ _CFECC Stores Management System - Visakhapatnam_`;
  * 3. Dispatches a Test Message to verify Meta API connection
  */
 export async function sendTestMessage(targetPhone: string, testNote?: string): Promise<SendResult> {
-  const timestamp = new Date().toLocaleString('en-IN');
-  const textBody =
+  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // 1. Try sending the Meta verified order confirmation template first
+  const templatePayload = {
+    type: 'template',
+    template: {
+      name: 'jaspers_market_order_confirmation_v1',
+      language: { code: 'en_US' },
+      components: [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', text: 'CFECC Administrator' },
+            { type: 'text', text: testNote || 'TEST-PING-001' },
+            { type: 'text', text: dateStr },
+          ],
+        },
+      ],
+    },
+  };
+
+  let result = await sendMetaCloudMessage(targetPhone, templatePayload);
+
+  // 2. If that template failed, try hello_world template
+  if (!result.success && result.mode === 'LIVE') {
+    const helloPayload = {
+      type: 'template',
+      template: {
+        name: 'hello_world',
+        language: { code: 'en_US' },
+      },
+    };
+    const helloResult = await sendMetaCloudMessage(targetPhone, helloPayload);
+    if (helloResult.success) {
+      result = helloResult;
+    }
+  }
+
+  // 3. If templates failed, fallback to text
+  if (!result.success && result.mode === 'LIVE') {
+    const textBody =
 `🚀 *CFECC STORES - WHATSAPP API TEST PING*
 ━━━━━━━━━━━━━━━━━━━━
 *System:* CFECC Stores Management Platform
-*Timestamp:* ${timestamp}
+*Timestamp:* ${new Date().toLocaleString('en-IN')}
 *Gateway:* Meta WhatsApp Cloud API (Official)
 *Status:* ✅ Connected & Operating
 ━━━━━━━━━━━━━━━━━━━━
 ${testNote || 'Your Meta WhatsApp Cloud API connection has been successfully verified!'}
 _Visakhapatnam, Andhra Pradesh_`;
 
-  const payload = {
-    type: 'text',
-    text: { preview_url: false, body: textBody },
-  };
+    const textPayload = {
+      type: 'text',
+      text: { preview_url: false, body: textBody },
+    };
 
-  const result = await sendMetaCloudMessage(targetPhone, payload);
+    const textResult = await sendMetaCloudMessage(targetPhone, textPayload);
+    if (textResult.success) {
+      result = textResult;
+    }
+  }
 
   await executeRawSql(`
     INSERT INTO whatsapp_logs (
@@ -395,7 +464,7 @@ _Visakhapatnam, Andhra Pradesh_`;
     ) VALUES (
       '${targetPhone}', 'System Administrator',
       'API_TEST', 'SYSTEM_DIAGNOSTIC', 'PING_${Date.now()}',
-      'cfecc_api_test', '${JSON.stringify({ testNote: testNote || 'Test ping' }).replace(/'/g, "''")}',
+      'jaspers_market_order_confirmation_v1', '${JSON.stringify({ testNote: testNote || 'Test ping' }).replace(/'/g, "''")}',
       '${result.status}', ${result.messageId ? `'${result.messageId}'` : 'NULL'},
       ${result.errorMessage ? `'${result.errorMessage.replace(/'/g, "''")}'` : 'NULL'},
       NOW()
