@@ -568,7 +568,7 @@ export const ItemPricingPage: React.FC = () => {
                   Dual Pricing: <strong className="text-navy-800">100% Active</strong>
                 </span>
                 <span className="text-emerald-700 font-medium font-mono">
-                  Subsidy Configured: {items.filter((i: any) => parseFloat(i.employee_price.toString()) < parseFloat(i.selling_price.toString())).length} items
+                  Subsidy Configured: {items.filter((i: any) => parseFloat(String(i.employee_price || 0)) < parseFloat(String(i.selling_price || 0))).length} items
                 </span>
               </div>
             </div>

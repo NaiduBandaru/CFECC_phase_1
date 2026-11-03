@@ -764,7 +764,7 @@ export const ItemsMasterPage: React.FC = () => {
                 </tr>
               ) : (
                 items.map((item) => {
-                  const isLow = parseFloat(item.current_stock.toString()) <= parseFloat(item.min_stock.toString());
+                  const isLow = parseFloat(String(item.current_stock || 0)) <= parseFloat(String(item.min_stock || 0));
                   const isSelected = selectedIds.includes(item.id);
                   return (
                     <tr key={item.id} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-blue-50/40' : ''}`}>
@@ -813,20 +813,20 @@ export const ItemsMasterPage: React.FC = () => {
 
                       {visibleColumns.purchasePrice && (
                         <td className="py-3 px-4 text-right font-medium text-textSecondary tabular-nums">
-                          ₹{parseFloat(item.purchase_price.toString()).toFixed(2)}
+                          ₹{parseFloat(String(item.purchase_price || 0)).toFixed(2)}
                         </td>
                       )}
 
                       {visibleColumns.sellingPrice && (
                         <td className="py-3 px-4 text-right font-semibold text-navy-800 tabular-nums">
-                          ₹{parseFloat(item.selling_price.toString()).toFixed(2)}
+                          ₹{parseFloat(String(item.selling_price || 0)).toFixed(2)}
                         </td>
                       )}
 
                       {visibleColumns.employeePrice && (
                         <td className="py-3 px-4 text-right tabular-nums">
                           <span className="inline-block px-2 py-0.5 rounded font-bold bg-blue-50 text-primary border border-blue-200">
-                            ₹{parseFloat(item.employee_price.toString()).toFixed(2)}
+                            ₹{parseFloat(String(item.employee_price || 0)).toFixed(2)}
                           </span>
                         </td>
                       )}
@@ -840,14 +840,14 @@ export const ItemsMasterPage: React.FC = () => {
                               }`}
                           >
                             {isLow && <AlertTriangle className="w-3 h-3 mr-1 text-rose-600" />}
-                            {parseFloat(item.current_stock.toString()).toFixed(1)} {item.unit_code}
+                            {parseFloat(String(item.current_stock || 0)).toFixed(1)} {item.unit_code}
                           </span>
                         </td>
                       )}
 
                       {visibleColumns.tax && (
                         <td className="py-3 px-4 text-center font-medium text-textSecondary">
-                          {parseFloat(item.tax_rate.toString())}%
+                          {parseFloat(String(item.tax_rate || 0))}%
                         </td>
                       )}
 
@@ -904,11 +904,11 @@ export const ItemsMasterPage: React.FC = () => {
           <div className="flex items-center space-x-3 text-[11px]">
             <span className="flex items-center space-x-1 text-emerald-700 font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>In Stock: {items.filter((i: any) => parseFloat(i.current_stock.toString()) > 0).length}</span>
+              <span>In Stock: {items.filter((i) => parseFloat(String(i.current_stock || 0)) > 0).length}</span>
             </span>
             <span className="flex items-center space-x-1 text-rose-700 font-medium">
               <span className="w-2 h-2 rounded-full bg-rose-500" />
-              <span>Low Stock: {items.filter((i: any) => parseFloat(i.current_stock.toString()) <= parseFloat(i.min_stock_level.toString())).length}</span>
+              <span>Low Stock: {items.filter((i) => parseFloat(String(i.current_stock || 0)) <= parseFloat(String(i.min_stock || 0))).length}</span>
             </span>
           </div>
         </div>
