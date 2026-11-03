@@ -21,8 +21,13 @@ import {
   Send,
   Lock,
   Unlock,
-  FileText,
-  Receipt,
+  Trash2,
+  Zap,
+  Calculator,
+  Tag,
+  ArrowRight,
+  Sparkles,
+  Check,
 } from 'lucide-react';
 
 interface CartItem {
@@ -32,6 +37,7 @@ interface CartItem {
   unitCode: string;
   unitPrice: number;
   employeePrice: number;
+  sellingPrice: number;
   quantity: number;
   taxRate: number;
   currentStock: number;
@@ -53,8 +59,10 @@ export const POSTerminalPage: React.FC = () => {
   // Cart & Checkout
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMode, setPaymentMode] = useState<'EMPLOYEE_CREDIT' | 'CASH' | 'UPI'>('EMPLOYEE_CREDIT');
+  const [cashTendered, setCashTendered] = useState<string>('');
   const [isCheckingOut, setIsCheckingOut] = useState<boolean>(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [justScannedCode, setJustScannedCode] = useState<string | null>(null);
 
   // Completed Receipt Modal
   const [completedSale, setCompletedSale] = useState<any | null>(null);
@@ -66,7 +74,7 @@ export const POSTerminalPage: React.FC = () => {
 
   // Shift Management & Register Closure States
   const [activeShift, setActiveShift] = useState<any | null>(null);
-  const [isShiftLoading, setIsShiftLoading] = useState<boolean>(true);
+  const [_isShiftLoading, setIsShiftLoading] = useState<boolean>(true);
   const [isOpenShiftModalOpen, setIsOpenShiftModalOpen] = useState<boolean>(false);
   const [isCloseShiftModalOpen, setIsCloseShiftModalOpen] = useState<boolean>(false);
   const [isZReportModalOpen, setIsZReportModalOpen] = useState<boolean>(false);
@@ -83,6 +91,32 @@ export const POSTerminalPage: React.FC = () => {
     fetchInitialCatalog();
     fetchActiveShift();
   }, []);
+
+  // Keyboard Shortcuts Listener (F2: Barcode, F4: Payment Mode, Ctrl+Enter: Checkout)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        barcodeInputRef.current?.focus();
+        barcodeInputRef.current?.select();
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        setPaymentMode((prev) => {
+          if (prev === 'EMPLOYEE_CREDIT') return 'UPI';
+          if (prev === 'UPI') return 'CASH';
+          return 'EMPLOYEE_CREDIT';
+        });
+      } else if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        if (cart.length > 0 && !isCheckingOut) {
+          handleCheckout();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cart, isCheckingOut, paymentMode, selectedEmployee]);
 
   const fetchActiveShift = async () => {
     try {
@@ -180,22 +214,45 @@ export const POSTerminalPage: React.FC = () => {
     setEmployeeSuggestions([]);
     setEmployeeQuery('');
     setPaymentMode('EMPLOYEE_CREDIT');
+
+    // Recalculate cart item prices to staff subsidized rates
+    setCart((prev) =>
+      prev.map((c) => ({
+        ...c,
+        unitPrice: c.employeePrice,
+      }))
+    );
+  };
+
+  const handleClearEmployee = () => {
+    setSelectedEmployee(null);
+    if (paymentMode === 'EMPLOYEE_CREDIT') {
+      setPaymentMode('CASH');
+    }
+    // Revert cart item prices to standard selling prices
+    setCart((prev) =>
+      prev.map((c) => ({
+        ...c,
+        unitPrice: c.sellingPrice,
+      }))
+    );
   };
 
   // Add Item to Cart
   const handleAddToCart = (product: any) => {
     setCheckoutError(null);
-    const existing = cart.find(c => c.itemId === product.id);
+    const existing = cart.find((c) => c.itemId === product.id);
 
-    // If employee is selected, automatically apply the subsidized employeePrice!
     const effectivePrice = selectedEmployee
       ? parseFloat(product.employee_price)
       : parseFloat(product.selling_price);
 
     if (existing) {
-      setCart(cart.map(c => 
-        c.itemId === product.id ? { ...c, quantity: c.quantity + 1 } : c
-      ));
+      setCart(
+        cart.map((c) =>
+          c.itemId === product.id ? { ...c, quantity: c.quantity + 1 } : c
+        )
+      );
     } else {
       setCart([
         ...cart,
@@ -206,6 +263,7 @@ export const POSTerminalPage: React.FC = () => {
           unitCode: product.unit_code || 'PCS',
           unitPrice: effectivePrice,
           employeePrice: parseFloat(product.employee_price),
+          sellingPrice: parseFloat(product.selling_price),
           quantity: 1,
           taxRate: parseFloat(product.tax_rate || '0'),
           currentStock: parseFloat(product.current_stock || '0'),
@@ -220,12 +278,15 @@ export const POSTerminalPage: React.FC = () => {
     if (!barcodeInput.trim()) return;
 
     try {
-      const res = await api.get(`/pos/lookup-item?barcode=${encodeURIComponent(barcodeInput.trim())}`);
+      const code = barcodeInput.trim();
+      const res = await api.get(`/pos/lookup-item?barcode=${encodeURIComponent(code)}`);
       if (res.data.success && res.data.items.length > 0) {
         handleAddToCart(res.data.items[0]);
+        setJustScannedCode(code);
+        setTimeout(() => setJustScannedCode(null), 1500);
         setBarcodeInput('');
       } else {
-        setCheckoutError(`Item with barcode '${barcodeInput}' not found.`);
+        setCheckoutError(`Item with barcode '${code}' not found.`);
       }
     } catch (err) {
       console.error(err);
@@ -233,27 +294,47 @@ export const POSTerminalPage: React.FC = () => {
   };
 
   const updateQuantity = (itemId: number, delta: number) => {
-    setCart(cart.map(c => {
-      if (c.itemId === itemId) {
-        const newQty = c.quantity + delta;
-        return newQty > 0 ? { ...c, quantity: newQty } : null;
-      }
-      return c;
-    }).filter(Boolean) as CartItem[]);
+    setCart(
+      cart
+        .map((c) => {
+          if (c.itemId === itemId) {
+            const newQty = c.quantity + delta;
+            return newQty > 0 ? { ...c, quantity: newQty } : null;
+          }
+          return c;
+        })
+        .filter(Boolean) as CartItem[]
+    );
   };
 
   const removeItem = (itemId: number) => {
-    setCart(cart.filter(c => c.itemId !== itemId));
+    setCart(cart.filter((c) => c.itemId !== itemId));
   };
 
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const totalTax = cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity * (item.taxRate / 100)), 0);
+  const totalTax = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity * (item.taxRate / 100), 0);
   const grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
+  const totalItemsCount = cart.reduce((s, i) => s + i.quantity, 0);
+
+  // Cash Change Return calculation
+  const tenderedNumeric = parseFloat(cashTendered) || 0;
+  const changeToReturn = Math.max(0, tenderedNumeric - grandTotal);
+
+  // Credit validation: check if order exceeds available credit
+  const availableCreditNum = selectedEmployee ? parseFloat(selectedEmployee.availableCredit || 0) : 0;
+  const isCreditExceeded = paymentMode === 'EMPLOYEE_CREDIT' && selectedEmployee && grandTotal > availableCreditNum;
 
   // Checkout execution
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    if (isCreditExceeded) {
+      setCheckoutError(
+        `Order total (₹${grandTotal.toFixed(2)}) exceeds available credit limit (₹${availableCreditNum.toFixed(2)}).`
+      );
+      return;
+    }
+
     setCheckoutError(null);
     setIsCheckingOut(true);
 
@@ -263,7 +344,7 @@ export const POSTerminalPage: React.FC = () => {
         customerName: selectedEmployee ? `${selectedEmployee.name}` : 'Walk-in Customer',
         customerMobile: selectedEmployee?.mobile || null,
         paymentMode,
-        items: cart.map(c => ({
+        items: cart.map((c) => ({
           itemId: c.itemId,
           quantity: c.quantity,
           unitPrice: c.unitPrice,
@@ -283,9 +364,10 @@ export const POSTerminalPage: React.FC = () => {
         setWaPhoneInput(selectedEmployee?.mobile || '');
         setWaSentStatus(null);
         setIsReceiptModalOpen(true);
-        // Reset Cart
+        // Reset Cart & Tender
         setCart([]);
         setSelectedEmployee(null);
+        setCashTendered('');
         fetchInitialCatalog();
         fetchActiveShift();
       }
@@ -318,39 +400,49 @@ export const POSTerminalPage: React.FC = () => {
   };
 
   // Filter products by category & search
-  const filteredProducts = items.filter(itm => {
+  const filteredProducts = items.filter((itm) => {
     const matchesCat = selectedCategory === 'ALL' || itm.category_name === selectedCategory;
-    const matchesSearch = !itemSearch || 
-      itm.name.toLowerCase().includes(itemSearch.toLowerCase()) || 
+    const matchesSearch =
+      !itemSearch ||
+      itm.name.toLowerCase().includes(itemSearch.toLowerCase()) ||
       itm.item_code.toLowerCase().includes(itemSearch.toLowerCase());
     return matchesCat && matchesSearch;
   });
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* Top Shift & Register Management Bar */}
-      <div className="lg:col-span-12 bg-surface rounded-cfecc border border-borderLine shadow-subtle p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center space-x-3 w-full sm:w-auto">
+    <div className="space-y-4">
+      {/* 1. TOP TERMINAL STATUS DECK */}
+      <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle p-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div className="flex items-center space-x-3 w-full md:w-auto">
           {activeShift ? (
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <span className="flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Shift #{activeShift.shiftNumber}</span>
+                <span>TERMINAL {activeShift.terminalId || 'POS-01'} &bull; SHIFT #{activeShift.shiftNumber}</span>
               </span>
-              <span className="text-xs text-textSecondary font-medium">
-                Terminal: <strong className="text-navy-800">{activeShift.terminalId}</strong>
+              <span className="text-xs text-textSecondary flex items-center space-x-1">
+                <span>Cashier:</span>
+                <strong className="text-navy-800 font-semibold">{activeShift.cashierName || 'Rajesh Varma'}</strong>
               </span>
-              <span className="text-xs text-textSecondary font-medium">
-                Cashier: <strong className="text-navy-800">{activeShift.cashierName}</strong>
+              <span className="hidden sm:inline text-textSecondary">&bull;</span>
+              <span className="text-xs text-textSecondary flex items-center space-x-1">
+                <span>Float:</span>
+                <strong className="text-navy-800 font-mono">₹{activeShift.openingFloat.toFixed(2)}</strong>
               </span>
-              <span className="text-xs text-textSecondary font-medium">
-                Float: <strong className="text-navy-800">₹{activeShift.openingFloat.toFixed(2)}</strong>
+              <span className="hidden sm:inline text-textSecondary">&bull;</span>
+              <span className="text-xs text-textSecondary flex items-center space-x-1">
+                <span>Drawer Cash:</span>
+                <strong className="text-emerald-700 font-mono font-bold">
+                  ₹{(activeShift.liveMetrics?.expectedCash || activeShift.openingFloat).toFixed(2)}
+                </strong>
               </span>
-              <span className="text-xs text-textSecondary font-medium">
-                Cash in Drawer: <strong className="text-emerald-700 font-bold">₹{(activeShift.liveMetrics?.expectedCash || activeShift.openingFloat).toFixed(2)}</strong>
-              </span>
-              <span className="text-xs text-textSecondary font-medium">
-                Turnover: <strong className="text-primary font-bold">₹{(activeShift.liveMetrics?.totalSales || 0).toFixed(2)}</strong> ({activeShift.liveMetrics?.totalTransactions || 0} bills)
+              <span className="hidden sm:inline text-textSecondary">&bull;</span>
+              <span className="text-xs text-textSecondary flex items-center space-x-1">
+                <span>Turnover:</span>
+                <strong className="text-primary font-mono font-bold">
+                  ₹{(activeShift.liveMetrics?.totalSales || 0).toFixed(2)}
+                </strong>
+                <span className="text-[10px] text-textSecondary">({activeShift.liveMetrics?.totalTransactions || 0} bills)</span>
               </span>
             </div>
           ) : (
@@ -360,17 +452,19 @@ export const POSTerminalPage: React.FC = () => {
                 <span>Register Closed (No Active Shift)</span>
               </span>
               <span className="text-xs text-textSecondary hidden md:inline">
-                Start shift to track cash drawer float, payments reconciliation and EOD Z-Reports.
+                Open register float to record cash sales and EOD balance audit.
               </span>
             </div>
           )}
         </div>
 
-        <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+        <div className="flex items-center space-x-2 w-full md:w-auto justify-end">
           {activeShift ? (
             <button
               onClick={() => {
-                setClosingCashCountedInput((activeShift.liveMetrics?.expectedCash || activeShift.openingFloat).toFixed(2));
+                setClosingCashCountedInput(
+                  (activeShift.liveMetrics?.expectedCash || activeShift.openingFloat).toFixed(2)
+                );
                 setClosingNotesInput('');
                 setShiftError(null);
                 setIsCloseShiftModalOpen(true);
@@ -396,326 +490,545 @@ export const POSTerminalPage: React.FC = () => {
         </div>
       </div>
 
-      {/* LEFT SECTION (Col 7): Product Catalog & Barcode Scanner */}
-      <div className="lg:col-span-7 space-y-4">
-        {/* Barcode & Search Controls */}
-        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Barcode Quick Scan */}
-            <form onSubmit={handleBarcodeSubmit} className="relative">
-              <Barcode className="w-4 h-4 text-primary absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                ref={barcodeInputRef}
-                type="text"
-                placeholder="Scan Barcode (Press Enter)..."
-                value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-blue-50/40 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono"
-              />
-            </form>
+      {/* 2. MAIN POS WORKSPACE: 2 COLUMNS (CATALOG 7 COLS | ORDER DESK 5 COLS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* LEFT COLUMN: BARCODE SCANNER, SEARCH & PRODUCT CATALOG (7 COLS) */}
+        <div className="lg:col-span-7 space-y-4">
+          {/* Barcode & Search Controls */}
+          <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Barcode Scanner Input */}
+              <form onSubmit={handleBarcodeSubmit} className="relative">
+                <Barcode
+                  className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
+                    justScannedCode ? 'text-emerald-500 animate-bounce' : 'text-primary'
+                  }`}
+                />
+                <input
+                  ref={barcodeInputRef}
+                  type="text"
+                  placeholder="Scan Barcode [F2] &bull; Press Enter..."
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  className={`w-full pl-9 pr-8 py-2 text-xs rounded-lg font-mono transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
+                    justScannedCode
+                      ? 'bg-emerald-50 border-2 border-emerald-400 text-emerald-900'
+                      : 'bg-blue-50/40 border border-blue-200 focus:bg-white text-navy-800'
+                  }`}
+                />
+                {barcodeInput && (
+                  <button
+                    type="button"
+                    onClick={() => setBarcodeInput('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </form>
 
-            {/* Product Name Search */}
-            <div className="relative">
-              <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search products by title..."
-                value={itemSearch}
-                onChange={(e) => setItemSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
-              />
-            </div>
-          </div>
-
-          {/* Category Tabs */}
-          <div className="flex space-x-2 overflow-x-auto pt-1">
-            <button
-              onClick={() => setSelectedCategory('ALL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                selectedCategory === 'ALL' ? 'bg-navy-800 text-white' : 'bg-slate-100 text-textSecondary hover:text-textPrimary'
-              }`}
-            >
-              All Items
-            </button>
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setSelectedCategory(c.name)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                  selectedCategory === c.name ? 'bg-navy-800 text-white' : 'bg-slate-100 text-textSecondary hover:text-textPrimary'
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Product Cards Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[580px] overflow-y-auto pr-1">
-          {filteredProducts.map((p) => {
-            const hasStock = parseFloat(p.current_stock) > 0;
-            return (
-              <button
-                key={p.id}
-                disabled={!hasStock}
-                onClick={() => handleAddToCart(p)}
-                className={`text-left p-3.5 bg-surface rounded-cfecc border border-borderLine shadow-subtle hover:border-primary hover:shadow-elevated transition-all flex flex-col justify-between ${
-                  !hasStock ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                <div>
-                  <div className="text-[10px] text-textSecondary font-mono uppercase">{p.item_code}</div>
-                  <div className="text-xs font-bold text-navy-800 line-clamp-2 mt-0.5 leading-snug">{p.name}</div>
-                  <div className="text-[10px] text-textSecondary mt-1">
-                    Stock: <span className="font-semibold text-textPrimary">{parseFloat(p.current_stock)} {p.unit_code}</span>
-                  </div>
-                </div>
-
-                <div className="mt-3 pt-2 border-t border-borderLine flex items-center justify-between w-full">
-                  <div>
-                    {selectedEmployee ? (
-                      <div>
-                        <div className="text-[10px] text-primary font-semibold">Staff Rate</div>
-                        <div className="text-xs font-bold text-primary tabular-nums">
-                          ₹{parseFloat(p.employee_price).toFixed(2)}
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="text-[10px] text-textSecondary">Price</div>
-                        <div className="text-xs font-bold text-navy-800 tabular-nums">
-                          ₹{parseFloat(p.selling_price).toFixed(2)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <span className="p-1 rounded bg-slate-100 hover:bg-primary hover:text-white transition-colors">
-                    <Plus className="w-3.5 h-3.5" />
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* RIGHT SECTION (Col 5): Employee Selection & Cart Checkout */}
-      <div className="lg:col-span-5 bg-surface rounded-cfecc border border-borderLine shadow-subtle p-5 space-y-4">
-        {/* Employee Selection */}
-        <div>
-          <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1.5">
-            1. Select Employee / Credit Account
-          </label>
-          {selectedEmployee ? (
-            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg flex items-center justify-between">
-              <div>
-                <div className="flex items-center space-x-1.5 font-bold text-navy-800 text-xs">
-                  <span>{selectedEmployee.name}</span>
-                  <span className="text-[11px] text-textSecondary">({selectedEmployee.employeeCode})</span>
-                </div>
-                <div className="text-[11px] text-textSecondary mt-0.5 flex items-center space-x-3">
-                  <span>Limit: ₹{selectedEmployee.creditLimit}</span>
-                  <span>&bull;</span>
-                  <span className="text-emerald-700 font-semibold">Available: ₹{selectedEmployee.availableCredit}</span>
-                </div>
+              {/* Product Text Search */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search item title or code..."
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white text-navy-800"
+                />
+                {itemSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setItemSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
-              <button
-                onClick={() => setSelectedEmployee(null)}
-                className="p-1 text-slate-400 hover:text-status-danger transition-colors"
-                title="Change Employee"
-              >
-                <X className="w-4 h-4" />
-              </button>
             </div>
-          ) : (
-            <div className="relative">
-              <User className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search employee by code, name, mobile..."
-                value={employeeQuery}
-                onChange={(e) => handleEmployeeSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
-              />
-              {/* Autocomplete Dropdown */}
-              {employeeSuggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-surface border border-borderLine rounded-lg shadow-elevated divide-y divide-borderLine max-h-48 overflow-y-auto">
-                  {employeeSuggestions.map((emp) => (
-                    <button
-                      key={emp.id}
-                      type="button"
-                      onClick={() => handleSelectEmployee(emp)}
-                      className="w-full text-left p-2.5 hover:bg-slate-50 transition-colors flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <div className="font-bold text-navy-800">{emp.name} ({emp.employeeCode})</div>
-                        <div className="text-[11px] text-textSecondary">{emp.department} &bull; {emp.mobile}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[10px] text-emerald-700 font-semibold">Available Credit</div>
-                        <div className="font-bold text-emerald-700 tabular-nums">₹{emp.availableCredit}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex space-x-1.5 overflow-x-auto pb-1 scrollbar-none pt-0.5">
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center space-x-1.5 ${
+                  selectedCategory === 'ALL'
+                    ? 'bg-navy-800 text-white shadow-xs'
+                    : 'bg-slate-100 text-textSecondary hover:bg-slate-200 hover:text-navy-800'
+                }`}
+              >
+                <span>All Items</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-mono">
+                  {items.length}
+                </span>
+              </button>
+              {categories.map((c) => {
+                const count = items.filter((i) => i.category_id === c.id || i.category_name === c.name).length;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(c.name)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center space-x-1.5 ${
+                      selectedCategory === c.name
+                        ? 'bg-navy-800 text-white shadow-xs'
+                        : 'bg-slate-100 text-textSecondary hover:bg-slate-200 hover:text-navy-800'
+                    }`}
+                  >
+                    <span>{c.name}</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700 font-mono">
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Product Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[620px] overflow-y-auto pr-1">
+            {filteredProducts.map((p) => {
+              const stock = parseFloat(p.current_stock || '0');
+              const minStock = parseFloat(p.min_stock || '0');
+              const hasStock = stock > 0;
+              const isLow = hasStock && stock <= minStock;
+              const cartItem = cart.find((c) => c.itemId === p.id);
+
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={!hasStock}
+                  onClick={() => handleAddToCart(p)}
+                  className={`text-left p-3.5 bg-surface rounded-cfecc border transition-all flex flex-col justify-between group relative ${
+                    cartItem
+                      ? 'border-primary ring-1 ring-primary/40 bg-blue-50/20 shadow-subtle'
+                      : 'border-borderLine shadow-subtle hover:border-primary/80 hover:shadow-elevated'
+                  } ${!hasStock ? 'opacity-40 cursor-not-allowed bg-slate-50' : 'cursor-pointer active:scale-[0.98]'}`}
+                >
+                  {/* Cart count pill if in cart */}
+                  {cartItem && (
+                    <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary text-white flex items-center space-x-1 shadow-2xs">
+                      <Check className="w-3 h-3" />
+                      <span>{cartItem.quantity}</span>
+                    </span>
+                  )}
+
+                  <div>
+                    <div className="flex items-center space-x-1 text-[10px] font-mono text-textSecondary uppercase">
+                      <span>{p.item_code}</span>
+                      <span>&bull;</span>
+                      <span className="truncate max-w-[90px]">{p.category_name}</span>
+                    </div>
+
+                    <div className="text-xs font-bold text-navy-800 line-clamp-2 mt-1 leading-snug group-hover:text-primary transition-colors">
+                      {p.name}
+                    </div>
+
+                    <div className="text-[10px] text-textSecondary mt-1.5 flex items-center space-x-1.5">
+                      <span
+                        className={`inline-block w-1.5 h-1.5 rounded-full ${
+                          !hasStock ? 'bg-rose-500' : isLow ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`}
+                      />
+                      <span>
+                        Stock: <strong className={isLow ? 'text-amber-700' : 'text-navy-800'}>{stock} {p.unit_code}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-borderLine flex items-end justify-between w-full">
+                    <div>
+                      {selectedEmployee ? (
+                        <div>
+                          <span className="text-[9px] font-bold text-emerald-800 uppercase flex items-center space-x-0.5">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>Staff Rate</span>
+                          </span>
+                          <div className="text-sm font-bold text-emerald-700 font-mono">
+                            ₹{parseFloat(p.employee_price).toFixed(2)}
+                          </div>
+                          <span className="text-[9px] text-textSecondary line-through font-mono">
+                            ₹{parseFloat(p.selling_price).toFixed(2)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="text-[9px] text-textSecondary uppercase font-medium">Retail MRP</span>
+                          <div className="text-sm font-bold text-navy-800 font-mono">
+                            ₹{parseFloat(p.selling_price).toFixed(2)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-1.5 rounded-lg bg-slate-100 group-hover:bg-primary group-hover:text-white text-navy-800 transition-colors shadow-2xs">
+                      <Plus className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: ORDER PAD & CHECKOUT DESK (5 COLS) */}
+        <div className="lg:col-span-5 bg-surface rounded-cfecc border border-borderLine shadow-subtle p-4 space-y-3.5">
+          {/* Section 1: Customer & Credit Account Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-bold text-navy-800 uppercase tracking-wider flex items-center space-x-1.5">
+                <User className="w-3.5 h-3.5 text-primary" />
+                <span>Customer Account</span>
+              </label>
+              {!selectedEmployee && (
+                <span className="text-[10px] text-textSecondary bg-slate-100 px-2 py-0.5 rounded">
+                  Default: Walk-in Cash/UPI
+                </span>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Shopping Cart List */}
-        <div>
-          <div className="flex items-center justify-between pb-2 border-b border-borderLine">
-            <span className="text-[11px] font-bold text-navy-800 uppercase tracking-wider flex items-center space-x-1.5">
-              <ShoppingCart className="w-3.5 h-3.5 text-primary" />
-              <span>Cart ({cart.reduce((s, i) => s + i.quantity, 0)} items)</span>
-            </span>
-            {cart.length > 0 && (
-              <button
-                onClick={() => setCart([])}
-                className="text-[11px] text-status-danger font-semibold hover:underline"
-              >
-                Clear Cart
-              </button>
-            )}
-          </div>
-
-          <div className="divide-y divide-borderLine max-h-60 overflow-y-auto mt-2 pr-1">
-            {cart.length === 0 ? (
-              <div className="py-8 text-center text-xs text-textSecondary">
-                <Package className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                <div>Scan a barcode or click items to add to cart.</div>
-              </div>
-            ) : (
-              cart.map((item) => (
-                <div key={item.itemId} className="py-2.5 flex items-center justify-between text-xs">
-                  <div className="max-w-[170px]">
-                    <div className="font-bold text-navy-800 truncate">{item.name}</div>
-                    <div className="text-[11px] text-textSecondary tabular-nums">
-                      ₹{item.unitPrice.toFixed(2)} / {item.unitCode}
+            {selectedEmployee ? (
+              <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-lg shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-navy-800 text-xs flex items-center space-x-1.5">
+                      <span>{selectedEmployee.name}</span>
+                      <span className="text-[11px] font-mono text-primary font-bold">({selectedEmployee.employeeCode})</span>
+                    </div>
+                    <div className="text-[11px] text-textSecondary">
+                      {selectedEmployee.department || 'Operations'} &bull; {selectedEmployee.mobile}
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleClearEmployee}
+                    className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition-colors"
+                    title="Switch to Walk-in Customer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => updateQuantity(item.itemId, -1)}
-                      className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-textPrimary"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="font-bold tabular-nums w-6 text-center">{item.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(item.itemId, 1)}
-                      className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-textPrimary"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
+                {/* Credit Limit Meter */}
+                <div className="pt-2 border-t border-blue-200/70 text-[11px] space-y-1">
+                  <div className="flex justify-between font-medium">
+                    <span className="text-textSecondary">Credit Available:</span>
+                    <span className="font-mono font-bold text-emerald-800">
+                      ₹{parseFloat(selectedEmployee.availableCredit || 0).toFixed(2)}
+                    </span>
                   </div>
-
-                  <div className="text-right">
-                    <div className="font-bold text-navy-800 tabular-nums">
-                      ₹{(item.unitPrice * item.quantity).toFixed(2)}
-                    </div>
-                    <button
-                      onClick={() => removeItem(item.itemId)}
-                      className="text-[10px] text-slate-400 hover:text-status-danger transition-colors"
-                    >
-                      Remove
-                    </button>
+                  <div className="flex justify-between text-[10px] text-textSecondary">
+                    <span>Limit: ₹{selectedEmployee.creditLimit}</span>
+                    <span>Used: ₹{selectedEmployee.currentOutstanding || '0'}</span>
+                  </div>
+                  <div className="w-full bg-blue-200/70 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-primary h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          ((parseFloat(selectedEmployee.currentOutstanding || 0) + grandTotal) /
+                            (parseFloat(selectedEmployee.creditLimit || 1) || 1)) *
+                            100
+                        )}%`,
+                      }}
+                    />
                   </div>
                 </div>
-              ))
+
+                {/* Subsidized Price Badge */}
+                <div className="bg-emerald-100/70 text-emerald-900 text-[10px] font-bold px-2 py-0.5 rounded flex items-center space-x-1">
+                  <Sparkles className="w-3 h-3 text-emerald-700" />
+                  <span>Staff Subsidized Pricing applied to all items in cart</span>
+                </div>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Lookup Employee (Code, Name, Phone)..."
+                  value={employeeQuery}
+                  onChange={(e) => handleEmployeeSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white text-navy-800 font-sans"
+                />
+                {/* Autocomplete Dropdown */}
+                {employeeSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-surface border border-borderLine rounded-lg shadow-elevated divide-y divide-borderLine max-h-52 overflow-y-auto">
+                    {employeeSuggestions.map((emp) => (
+                      <button
+                        key={emp.id}
+                        type="button"
+                        onClick={() => handleSelectEmployee(emp)}
+                        className="w-full text-left p-2.5 hover:bg-blue-50/60 transition-colors flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <div className="font-bold text-navy-800">
+                            {emp.name} <span className="font-mono text-primary font-normal">({emp.employeeCode})</span>
+                          </div>
+                          <div className="text-[11px] text-textSecondary font-sans">
+                            {emp.department} &bull; {emp.mobile}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] text-emerald-700 font-bold uppercase">Credit Avail.</div>
+                          <div className="font-bold text-emerald-700 font-mono tabular-nums">
+                            ₹{parseFloat(emp.availableCredit || 0).toFixed(2)}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Calculation Totals */}
-        <div className="p-3 bg-slate-50 rounded-lg space-y-1.5 text-xs">
-          <div className="flex justify-between text-textSecondary">
-            <span>Subtotal</span>
-            <span className="font-medium text-navy-800 tabular-nums">₹{subtotal.toFixed(2)}</span>
+          {/* Section 2: Order Cart */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between pb-1.5 border-b border-borderLine">
+              <span className="text-[11px] font-bold text-navy-800 uppercase tracking-wider flex items-center space-x-1.5">
+                <ShoppingCart className="w-3.5 h-3.5 text-primary" />
+                <span>Order Pad ({totalItemsCount} items)</span>
+              </span>
+              {cart.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCart([])}
+                  className="text-[11px] text-rose-600 font-semibold hover:underline flex items-center space-x-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear Cart</span>
+                </button>
+              )}
+            </div>
+
+            <div className="divide-y divide-borderLine max-h-56 overflow-y-auto pr-1">
+              {cart.length === 0 ? (
+                <div className="py-8 text-center text-xs text-textSecondary space-y-1">
+                  <Package className="w-8 h-8 mx-auto text-slate-300" />
+                  <div className="font-semibold text-navy-800">No items in cart</div>
+                  <div className="text-[11px]">Scan barcode or click any product to add</div>
+                </div>
+              ) : (
+                cart.map((item) => (
+                  <div key={item.itemId} className="py-2.5 flex items-center justify-between text-xs group">
+                    <div className="max-w-[170px] sm:max-w-[190px]">
+                      <div className="font-bold text-navy-800 truncate">{item.name}</div>
+                      <div className="text-[11px] text-textSecondary font-mono flex items-center space-x-1.5">
+                        <span>₹{item.unitPrice.toFixed(2)} / {item.unitCode}</span>
+                        {selectedEmployee && (
+                          <span className="text-[10px] text-emerald-700 font-sans font-bold bg-emerald-50 px-1 rounded">
+                            Staff
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quantity Selector */}
+                    <div className="flex items-center space-x-1.5 bg-slate-100 p-0.5 rounded-lg border border-borderLine">
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item.itemId, -1)}
+                        className="p-1 rounded bg-white hover:bg-slate-200 text-textPrimary shadow-2xs transition-colors"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="font-bold font-mono tabular-nums w-6 text-center text-navy-800">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item.itemId, 1)}
+                        className="p-1 rounded bg-white hover:bg-slate-200 text-textPrimary shadow-2xs transition-colors"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    {/* Line Total & Remove */}
+                    <div className="text-right">
+                      <div className="font-bold font-mono text-navy-800 tabular-nums">
+                        ₹{(item.unitPrice * item.quantity).toFixed(2)}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.itemId)}
+                        className="text-[10px] text-slate-400 hover:text-rose-600 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-          <div className="flex justify-between text-textSecondary">
-            <span>Applicable Taxes (GST)</span>
-            <span className="font-medium text-navy-800 tabular-nums">₹{totalTax.toFixed(2)}</span>
+
+          {/* Section 3: Calculation Breakdown */}
+          <div className="p-3 bg-slate-50/90 rounded-lg space-y-1.5 text-xs border border-borderLine">
+            <div className="flex justify-between text-textSecondary">
+              <span>Items Subtotal</span>
+              <span className="font-medium font-mono text-navy-800 tabular-nums">₹{subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-textSecondary">
+              <span>Taxes (GST)</span>
+              <span className="font-medium font-mono text-navy-800 tabular-nums">₹{totalTax.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm font-bold text-navy-800 pt-1.5 border-t border-borderLine">
+              <span className="uppercase text-xs tracking-wider">Net Amount Due</span>
+              <span className="text-lg font-bold font-mono text-primary tabular-nums">₹{grandTotal.toFixed(2)}</span>
+            </div>
           </div>
-          <div className="flex justify-between text-sm font-bold text-navy-800 pt-1.5 border-t border-borderLine">
-            <span>Net Payable Total</span>
-            <span className="text-base text-primary tabular-nums">₹{grandTotal.toFixed(2)}</span>
+
+          {/* Section 4: Payment Tender Selector */}
+          <div>
+            <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-2">
+              Payment Tender Mode [F4]
+            </label>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setPaymentMode('EMPLOYEE_CREDIT')}
+                className={`p-2 rounded-lg border font-semibold flex flex-col items-center justify-center space-y-1 transition-all ${
+                  paymentMode === 'EMPLOYEE_CREDIT'
+                    ? 'bg-blue-50 border-primary text-primary shadow-xs'
+                    : 'border-borderLine text-textSecondary hover:bg-slate-50'
+                }`}
+              >
+                <CreditCard className="w-4 h-4" />
+                <span className="text-[11px]">Monthly Credit</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMode('UPI')}
+                className={`p-2 rounded-lg border font-semibold flex flex-col items-center justify-center space-y-1 transition-all ${
+                  paymentMode === 'UPI'
+                    ? 'bg-blue-50 border-primary text-primary shadow-xs'
+                    : 'border-borderLine text-textSecondary hover:bg-slate-50'
+                }`}
+              >
+                <QrCode className="w-4 h-4" />
+                <span className="text-[11px]">UPI / QR Pay</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMode('CASH')}
+                className={`p-2 rounded-lg border font-semibold flex flex-col items-center justify-center space-y-1 transition-all ${
+                  paymentMode === 'CASH'
+                    ? 'bg-blue-50 border-primary text-primary shadow-xs'
+                    : 'border-borderLine text-textSecondary hover:bg-slate-50'
+                }`}
+              >
+                <IndianRupee className="w-4 h-4" />
+                <span className="text-[11px]">Cash Tender</span>
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Payment Tender Selection */}
-        <div>
-          <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-2">
-            Payment Mode
-          </label>
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setPaymentMode('EMPLOYEE_CREDIT')}
-              className={`p-2 rounded-lg border font-semibold flex flex-col items-center justify-center space-y-1 transition-all ${
-                paymentMode === 'EMPLOYEE_CREDIT'
-                  ? 'bg-blue-50 border-primary text-primary shadow-sm'
-                  : 'border-borderLine text-textSecondary hover:bg-slate-50'
-              }`}
-            >
-              <CreditCard className="w-4 h-4" />
-              <span className="text-[11px]">Monthly Credit</span>
-            </button>
+          {/* Cash Denominations / Change Calculator (shown when CASH is selected) */}
+          {paymentMode === 'CASH' && (
+            <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-amber-900 flex items-center space-x-1">
+                  <Calculator className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Cash Drawer Change Calculator</span>
+                </span>
+                <span className="text-[10px] text-amber-800">Quick Denominations</span>
+              </div>
 
-            <button
-              type="button"
-              onClick={() => setPaymentMode('UPI')}
-              className={`p-2 rounded-lg border font-semibold flex flex-col items-center justify-center space-y-1 transition-all ${
-                paymentMode === 'UPI'
-                  ? 'bg-blue-50 border-primary text-primary shadow-sm'
-                  : 'border-borderLine text-textSecondary hover:bg-slate-50'
-              }`}
-            >
-              <QrCode className="w-4 h-4" />
-              <span className="text-[11px]">UPI Payment</span>
-            </button>
+              {/* Quick Preset Buttons */}
+              <div className="flex flex-wrap gap-1.5">
+                {[grandTotal, 100, 200, 500, 1000, 2000].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setCashTendered(preset.toString())}
+                    className="px-2 py-1 rounded bg-white hover:bg-amber-100 border border-amber-300 font-mono font-bold text-[11px] text-amber-900 shadow-2xs transition-colors"
+                  >
+                    ₹{preset}
+                  </button>
+                ))}
+              </div>
 
-            <button
-              type="button"
-              onClick={() => setPaymentMode('CASH')}
-              className={`p-2 rounded-lg border font-semibold flex flex-col items-center justify-center space-y-1 transition-all ${
-                paymentMode === 'CASH'
-                  ? 'bg-blue-50 border-primary text-primary shadow-sm'
-                  : 'border-borderLine text-textSecondary hover:bg-slate-50'
-              }`}
-            >
-              <IndianRupee className="w-4 h-4" />
-              <span className="text-[11px]">Cash Tender</span>
-            </button>
-          </div>
-        </div>
-
-        {checkoutError && (
-          <div className="p-3 bg-rose-50 border border-rose-200 text-status-danger text-xs rounded-lg flex items-start space-x-1.5">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>{checkoutError}</span>
-          </div>
-        )}
-
-        {/* Checkout Button */}
-        <button
-          onClick={handleCheckout}
-          disabled={cart.length === 0 || isCheckingOut}
-          className="w-full py-3 px-4 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-bold shadow-subtle hover:shadow-elevated transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-        >
-          {isCheckingOut ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              <CheckCircle className="w-4 h-4" />
-              <span>Complete Sale &bull; ₹{grandTotal.toFixed(2)}</span>
-            </>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-amber-900 mb-0.5">Cash Tendered</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={cashTendered}
+                    onChange={(e) => setCashTendered(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-amber-300 rounded font-mono font-bold text-sm bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-emerald-900 mb-0.5">Change to Return</label>
+                  <div className="px-2.5 py-1.5 border border-emerald-300 rounded font-mono font-bold text-sm bg-emerald-50 text-emerald-800 tabular-nums">
+                    ₹{changeToReturn.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
-        </button>
+
+          {/* Validation & Exceeded Warnings */}
+          {isCreditExceeded && (
+            <div className="p-3 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded-lg flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
+              <div>
+                <span className="font-bold">Credit Limit Exceeded:</span>
+                <p className="text-[11px] mt-0.5">
+                  Order total (₹{grandTotal.toFixed(2)}) exceeds available credit of ₹{availableCreditNum.toFixed(2)}. Please switch tender to Cash or UPI.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {checkoutError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-status-danger text-xs rounded-lg flex items-start space-x-1.5">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{checkoutError}</span>
+            </div>
+          )}
+
+          {/* Complete Checkout Button */}
+          <button
+            type="button"
+            onClick={handleCheckout}
+            disabled={cart.length === 0 || isCheckingOut || isCreditExceeded}
+            className="w-full py-3 px-4 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-bold shadow-subtle hover:shadow-elevated transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+          >
+            {isCheckingOut ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <CheckCircle className="w-4 h-4" />
+                <span>Complete Sale &bull; ₹{grandTotal.toFixed(2)}</span>
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </>
+            )}
+          </button>
+
+          {/* Keyboard Shortcuts Helper Bar */}
+          <div className="pt-1 flex items-center justify-center space-x-3 text-[10px] text-textSecondary font-mono border-t border-borderLine">
+            <span>[F2] Barcode</span>
+            <span>&bull;</span>
+            <span>[F4] Payment Mode</span>
+            <span>&bull;</span>
+            <span>[Ctrl+Enter] Complete</span>
+          </div>
+        </div>
       </div>
+
+      {/* 3. MODALS: RECEIPT, OPEN SHIFT, CLOSE SHIFT, Z-REPORT */}
 
       {/* Invoice Receipt Modal */}
       <Modal
@@ -726,7 +1039,7 @@ export const POSTerminalPage: React.FC = () => {
         maxWidth="md"
       >
         {completedSale && (
-          <div className="space-y-4 text-xs">
+          <div className="space-y-4 text-xs font-sans">
             {/* Paper Size selector (no-print) */}
             <div className="no-print flex items-center justify-between pb-2 border-b border-borderLine">
               <span className="text-textSecondary text-[11px] font-semibold">Thermal Paper Roll Width:</span>
@@ -773,7 +1086,12 @@ export const POSTerminalPage: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span>Date & Time:</span>
-                  <span>{new Date(completedSale.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  <span>
+                    {new Date(completedSale.createdAt).toLocaleString('en-IN', {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    })}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Customer:</span>
@@ -896,7 +1214,7 @@ export const POSTerminalPage: React.FC = () => {
         )}
       </Modal>
 
-      {/* 1. Open Shift / Start Register Modal */}
+      {/* Open Shift Modal */}
       <Modal
         isOpen={isOpenShiftModalOpen}
         onClose={() => setIsOpenShiftModalOpen(false)}
@@ -964,7 +1282,7 @@ export const POSTerminalPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* 2. Close Shift / EOD Register Closure Modal */}
+      {/* Close Shift Modal */}
       <Modal
         isOpen={isCloseShiftModalOpen}
         onClose={() => setIsCloseShiftModalOpen(false)}
@@ -980,14 +1298,13 @@ export const POSTerminalPage: React.FC = () => {
           )}
 
           {activeShift && (() => {
-            const expCash = (activeShift.liveMetrics?.expectedCash || activeShift.openingFloat);
+            const expCash = activeShift.liveMetrics?.expectedCash || activeShift.openingFloat;
             const counted = parseFloat(closingCashCountedInput) || 0;
             const variance = counted - expCash;
             const isBalanced = Math.abs(variance) < 0.01;
 
             return (
               <>
-                {/* 3 Summary Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="p-3 bg-slate-50 border border-borderLine rounded-lg">
                     <div className="text-[10px] uppercase font-bold text-textSecondary">Cash in Drawer</div>
@@ -1020,7 +1337,6 @@ export const POSTerminalPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Cash Counting & Variance Calculation */}
                 <div className="p-3.5 bg-slate-50 border border-borderLine rounded-lg space-y-3">
                   <div>
                     <label className="block font-bold text-navy-800 uppercase text-[11px] mb-1">
@@ -1039,7 +1355,6 @@ export const POSTerminalPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Real-time Variance Badge */}
                   <div
                     className={`p-2.5 rounded-lg border flex items-center justify-between text-xs font-semibold ${
                       isBalanced
@@ -1062,7 +1377,6 @@ export const POSTerminalPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Closing Notes */}
                 <div>
                   <label className="block font-bold text-navy-800 uppercase text-[11px] mb-1">
                     Supervisor / Cashier Remarks (Optional)
@@ -1099,7 +1413,7 @@ export const POSTerminalPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* 3. Z-Report Thermal Slip Modal */}
+      {/* Z-Report Thermal Slip Modal */}
       <Modal
         isOpen={isZReportModalOpen}
         onClose={() => setIsZReportModalOpen(false)}
@@ -1109,7 +1423,6 @@ export const POSTerminalPage: React.FC = () => {
       >
         {zReportData && (
           <div className="space-y-4">
-            {/* Format toggle (no-print) */}
             <div className="no-print flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-borderLine">
               <span className="text-xs font-semibold text-textSecondary">Paper Width:</span>
               <div className="flex space-x-1">
@@ -1134,7 +1447,6 @@ export const POSTerminalPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Printable Thermal Z-Report */}
             <div
               id="printable-receipt"
               className={`space-y-3 font-mono border border-dashed border-slate-300 p-4 rounded-lg bg-white mx-auto shadow-sm ${
@@ -1150,7 +1462,6 @@ export const POSTerminalPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Shift details */}
               <div className="space-y-1 text-black text-[10px] sm:text-[11px]">
                 <div className="flex justify-between">
                   <span>Shift Number:</span>
@@ -1174,7 +1485,6 @@ export const POSTerminalPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Cash Drawer Reconciliation */}
               <div className="border-t border-b border-dashed border-slate-400 py-1.5 space-y-1 text-black text-[10px] sm:text-[11px]">
                 <div className="font-bold text-[10px] uppercase text-black pb-0.5 border-b border-dotted">
                   DRAWER CASH RECONCILIATION
@@ -1205,7 +1515,6 @@ export const POSTerminalPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Payment Summary */}
               <div className="space-y-1 text-black text-[10px] sm:text-[11px]">
                 <div className="font-bold text-[10px] uppercase text-black pb-0.5 border-b border-dotted">
                   COLLECTION BY PAYMENT MODE
@@ -1232,7 +1541,6 @@ export const POSTerminalPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Category Breakdown */}
               {zReportData.categoryBreakdown?.length > 0 && (
                 <div className="border-t border-dashed border-slate-400 pt-1.5 space-y-1 text-black text-[10px] sm:text-[11px]">
                   <div className="font-bold text-[10px] uppercase text-black pb-0.5 border-b border-dotted">
@@ -1247,7 +1555,6 @@ export const POSTerminalPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Signatures */}
               <div className="pt-4 pb-2 border-t border-dashed border-slate-400 space-y-4 text-[9px] text-black">
                 <div className="flex justify-between pt-3">
                   <div>Cashier Signature</div>
@@ -1259,7 +1566,6 @@ export const POSTerminalPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Modal Controls (no-print) */}
             <div className="no-print flex space-x-2 pt-2 border-t border-borderLine font-sans">
               <button
                 type="button"
@@ -1283,4 +1589,3 @@ export const POSTerminalPage: React.FC = () => {
     </div>
   );
 };
-
