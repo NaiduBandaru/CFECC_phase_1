@@ -122,13 +122,13 @@ export const InventoryPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Tab 1: Live Stock Table */}
+      {/* Tab 1: Live Stock Table with Standard Format and Auto Screen Adjust */}
       {activeTab === 'stock' && (
-        <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+        <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col">
+          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+            <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+              <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+                <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                   <th className="py-3 px-4">Item Code & Name</th>
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4 text-right">Current Stock</th>
@@ -194,16 +194,31 @@ export const InventoryPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Standard Floating Summary Footer */}
+          <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+            <div>
+              Showing <span className="font-bold text-navy-800 font-mono">{stock.length}</span> inventory commodities &bull; Total Value:{' '}
+              <strong className="text-navy-900 font-mono text-sm font-black">
+                ₹{stock.reduce((acc, i) => acc + parseFloat(i.stock_valuation || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </strong>
+            </div>
+            <div className="flex items-center space-x-3 text-[11px]">
+              <span className="text-rose-700 font-medium">
+                Below Min Level: {stock.filter((i) => parseFloat(i.current_stock) <= parseFloat(i.min_stock)).length} SKUs
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Tab 2: Stock Movement Audit Trail */}
+      {/* Tab 2: Stock Movement Audit Trail with Standard Format */}
       {activeTab === 'movements' && (
-        <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+        <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col">
+          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+            <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+              <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+                <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                   <th className="py-3 px-4">Date & Time</th>
                   <th className="py-3 px-4">Item Name</th>
                   <th className="py-3 px-4">Movement Type</th>
@@ -247,6 +262,16 @@ export const InventoryPage: React.FC = () => {
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Standard Floating Summary Footer */}
+          <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+            <div>
+              Showing <span className="font-bold text-navy-800 font-mono">{movements.length}</span> verified inventory movement transactions
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium">
+              Real-time FIFO Stock Ledger
+            </div>
           </div>
         </div>
       )}

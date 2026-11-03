@@ -550,10 +550,10 @@ export const ReportsPage: React.FC = () => {
 
               {/* Inward Invoices Table */}
               <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+                  <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+                      <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                         <th className="py-3 px-4">Bill Ref / Inv #</th>
                         <th className="py-3 px-4">Date</th>
                         <th className="py-3 px-4">Vendor Details</th>
@@ -652,10 +652,10 @@ export const ReportsPage: React.FC = () => {
               </div>
 
               <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+                  <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+                      <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                         <th className="py-3 px-4">Vendor Code & Name</th>
                         <th className="py-3 px-4">Contact & Phone</th>
                         <th className="py-3 px-4">GSTIN & Terms</th>
@@ -724,10 +724,10 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+                  <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+                      <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                         <th className="py-3 px-4">Item Details</th>
                         <th className="py-3 px-4">Category</th>
                         <th className="py-3 px-4 text-right">In-Stock Qty</th>
@@ -798,10 +798,10 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+                  <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+                      <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                         <th className="py-3 px-4">GRN #</th>
                         <th className="py-3 px-4">Receipt Date</th>
                         <th className="py-3 px-4">Vendor & PO Ref</th>
@@ -913,10 +913,10 @@ export const ReportsPage: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+                  <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+                      <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                         <th className="py-3 px-4">Supplier GSTIN</th>
                         <th className="py-3 px-4">Supplier Name</th>
                         <th className="py-3 px-4">Invoice # & Date</th>
@@ -989,10 +989,10 @@ export const ReportsPage: React.FC = () => {
         <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
           {/* Outstanding Report */}
           {activeReport === 'outstanding' && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+              <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+                <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+                  <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                     <th className="py-3 px-4">Employee</th>
                     <th className="py-3 px-4">Department & Designation</th>
                     <th className="py-3 px-4">Mobile</th>
@@ -1031,10 +1031,10 @@ export const ReportsPage: React.FC = () => {
 
           {/* Inventory Report */}
           {activeReport === 'inventory' && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+              <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+                <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+                  <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                     <th className="py-3 px-4">Commodity Item</th>
                     <th className="py-3 px-4">Category</th>
                     <th className="py-3 px-4 text-right">In-Stock Qty</th>

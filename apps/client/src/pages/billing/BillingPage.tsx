@@ -309,10 +309,10 @@ export const BillingPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[1000px]">
+            <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+              <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                 <th className="py-3 px-4">Statement #</th>
                 <th className="py-3 px-4">Employee</th>
                 <th className="py-3 px-4 text-right">Opening (₹)</th>
@@ -387,6 +387,21 @@ export const BillingPage: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Standard Floating Summary Footer */}
+        <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+          <div>
+            Showing <span className="font-bold text-navy-800 font-mono">{statements.length}</span> member statements &bull; Total Closing Outstanding:{' '}
+            <strong className="text-navy-900 font-mono text-sm font-black">
+              ₹{statements.reduce((acc, s) => acc + parseFloat(s.closing_outstanding?.toString() || '0'), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </strong>
+          </div>
+          <div className="flex items-center space-x-3 text-[11px]">
+            <span className="text-emerald-700 font-medium font-mono">
+              Delivered via WhatsApp: {statements.filter((s) => s.whatsapp_status === 'SENT').length} / {statements.length}
+            </span>
+          </div>
         </div>
       </div>
 

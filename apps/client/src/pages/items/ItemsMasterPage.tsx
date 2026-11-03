@@ -3,6 +3,7 @@ import { api } from '../../lib/api.js';
 import { Item, Category, Unit, ItemPriceHistory } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
 import { BarcodeSvg } from '../../components/ui/BarcodeSvg.js';
+import { FloatingActionBar } from '../../components/ui/FloatingActionBar.js';
 import {
   Package,
   Search,
@@ -626,51 +627,45 @@ export const ItemsMasterPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Bulk Action Toolbar */}
-      {selectedIds.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 p-3 rounded-cfecc flex items-center justify-between animate-fadeIn text-xs">
-          <div className="flex items-center space-x-2">
-            <span className="font-bold text-navy-800">{selectedIds.length} item(s) selected</span>
-          </div>
+      {/* Floating Bulk Action Bar */}
+      <FloatingActionBar
+        selectedCount={selectedIds.length}
+        totalCount={items.length}
+        itemLabel="items"
+        onClear={() => setSelectedIds([])}
+      >
+        <button
+          type="button"
+          onClick={handleOpenBulkBarcodePrint}
+          className="px-3 py-1.5 bg-navy-800 hover:bg-navy-700 text-white font-bold rounded-lg shadow-sm flex items-center space-x-1.5 border border-navy-700"
+        >
+          <Printer className="w-3.5 h-3.5 text-amber-400" />
+          <span>Print Barcodes</span>
+        </button>
+        <button
+          type="button"
+          disabled={isBulkOperating}
+          onClick={() => handleBulkAction('ACTIVATE')}
+          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm"
+        >
+          Mark Active
+        </button>
+        <button
+          type="button"
+          disabled={isBulkOperating}
+          onClick={() => handleBulkAction('DEACTIVATE')}
+          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm"
+        >
+          Mark Inactive
+        </button>
+      </FloatingActionBar>
 
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleOpenBulkBarcodePrint}
-              className="px-3 py-1.5 bg-navy-800 hover:bg-navy-900 text-white font-semibold rounded-lg shadow-sm flex items-center space-x-1.5"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print Barcodes</span>
-            </button>
-            <button
-              disabled={isBulkOperating}
-              onClick={() => handleBulkAction('ACTIVATE')}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-sm"
-            >
-              Mark Active
-            </button>
-            <button
-              disabled={isBulkOperating}
-              onClick={() => handleBulkAction('DEACTIVATE')}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg shadow-sm"
-            >
-              Mark Inactive
-            </button>
-            <button
-              onClick={() => setSelectedIds([])}
-              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-textPrimary font-semibold rounded-lg"
-            >
-              Clear Selection
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Items Table */}
-      <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+      {/* Items Table with Standard Format and Auto Screen Adjust */}
+      <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col">
+        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+            <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+              <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                 <th className="py-3 px-3 w-8 text-center">
                   <button onClick={toggleSelectAll} className="text-textSecondary hover:text-navy-800">
                     {selectedIds.length > 0 && selectedIds.length === items.length ? (
@@ -898,6 +893,24 @@ export const ItemsMasterPage: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Standard Floating Summary Footer */}
+        <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+          <div>
+            Showing <span className="font-bold text-navy-800 font-mono">{items.length}</span> items across{' '}
+            <span className="font-bold text-navy-800 font-mono">{categories.length}</span> active categories
+          </div>
+          <div className="flex items-center space-x-3 text-[11px]">
+            <span className="flex items-center space-x-1 text-emerald-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>In Stock: {items.filter((i: any) => parseFloat(i.current_stock.toString()) > 0).length}</span>
+            </span>
+            <span className="flex items-center space-x-1 text-rose-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              <span>Low Stock: {items.filter((i: any) => parseFloat(i.current_stock.toString()) <= parseFloat(i.min_stock_level.toString())).length}</span>
+            </span>
+          </div>
         </div>
       </div>
 

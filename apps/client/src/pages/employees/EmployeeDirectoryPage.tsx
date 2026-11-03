@@ -4,6 +4,8 @@ import { api } from '../../lib/api.js';
 import { Employee } from '../../types/index.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import { Modal } from '../../components/ui/Modal.js';
+import { FloatingActionBar } from '../../components/ui/FloatingActionBar.js';
+import { TablePagination } from '../../components/ui/TablePagination.js';
 import {
   Users,
   Search,
@@ -419,50 +421,52 @@ export const EmployeeDirectoryPage: React.FC = () => {
       </div>
 
       {/* Floating Bulk Actions Bar when items selected */}
-      {selectedIds.length > 0 && (
-        <div className="bg-navy-800 text-white p-3 rounded-lg flex items-center justify-between text-xs animate-in fade-in shadow-elevated">
-          <div className="flex items-center space-x-2 font-medium">
-            <CheckSquare className="w-4 h-4 text-primary" />
-            <span>{selectedIds.length} employees selected</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => handleBulkAction('SET_CREDIT', true)}
-              disabled={isBulkProcessing}
-              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 rounded font-semibold transition-colors"
-            >
-              Enable Credit
-            </button>
-            <button
-              onClick={() => handleBulkAction('SET_CREDIT', false)}
-              disabled={isBulkProcessing}
-              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 rounded font-semibold transition-colors"
-            >
-              Block Credit
-            </button>
-            <button
-              onClick={() => handleBulkAction('SET_STATUS', 'ACTIVE')}
-              disabled={isBulkProcessing}
-              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 rounded font-semibold transition-colors"
-            >
-              Mark Active
-            </button>
-            <button
-              onClick={() => setSelectedIds([])}
-              className="px-2 py-1 text-slate-300 hover:text-white"
-            >
-              Deselect
-            </button>
-          </div>
-        </div>
-      )}
+      <FloatingActionBar
+        selectedCount={selectedIds.length}
+        totalCount={employees.length}
+        itemLabel="employees"
+        onClear={() => setSelectedIds([])}
+      >
+        <button
+          type="button"
+          onClick={() => handleBulkAction('SET_CREDIT', true)}
+          disabled={isBulkProcessing}
+          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-bold transition-colors shadow-2xs"
+        >
+          Enable Credit
+        </button>
+        <button
+          type="button"
+          onClick={() => handleBulkAction('SET_CREDIT', false)}
+          disabled={isBulkProcessing}
+          className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 rounded-lg font-bold transition-colors shadow-2xs"
+        >
+          Block Credit
+        </button>
+        <button
+          type="button"
+          onClick={() => handleBulkAction('SET_STATUS', 'ACTIVE')}
+          disabled={isBulkProcessing}
+          className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold transition-colors shadow-2xs"
+        >
+          Mark Active
+        </button>
+        <button
+          type="button"
+          onClick={() => handleBulkAction('SET_STATUS', 'SUSPENDED')}
+          disabled={isBulkProcessing}
+          className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 rounded-lg font-bold transition-colors shadow-2xs"
+        >
+          Suspend
+        </button>
+      </FloatingActionBar>
 
-      {/* Employee Data Table */}
-      <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+      {/* Employee Data Table with Standard Format and Auto Screen Adjust */}
+      <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col">
+        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+          <table className="w-full text-left border-collapse text-xs min-w-[950px]">
+            <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+              <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                 <th className="py-3 px-3 text-center w-8">
                   <input
                     type="checkbox"
@@ -687,29 +691,15 @@ export const EmployeeDirectoryPage: React.FC = () => {
           </table>
         </div>
 
-        {/* Pagination Footer */}
-        <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-borderLine text-xs text-textSecondary">
-          <div>
-            Showing <span className="font-semibold">{employees.length}</span> of <span className="font-semibold">{pagination.total}</span> employees
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              disabled={pagination.page <= 1}
-              onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-              className="px-2.5 py-1 rounded bg-surface border border-borderLine disabled:opacity-50 hover:bg-slate-100 font-medium"
-            >
-              Previous
-            </button>
-            <span className="font-semibold text-navy-800">Page {pagination.page} of {pagination.totalPages || 1}</span>
-            <button
-              disabled={pagination.page >= pagination.totalPages}
-              onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-              className="px-2.5 py-1 rounded bg-surface border border-borderLine disabled:opacity-50 hover:bg-slate-100 font-medium"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        {/* Standard Floating Pagination Footer */}
+        <TablePagination
+          currentPage={pagination.page}
+          totalItems={pagination.total}
+          pageSize={pagination.limit}
+          itemLabel="employees"
+          onPageChange={(page) => setPagination((prev) => ({ ...prev, page }))}
+          onPageSizeChange={(limit) => setPagination((prev) => ({ ...prev, limit, page: 1 }))}
+        />
       </div>
 
       {/* Bulk CSV Import Modal */}

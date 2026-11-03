@@ -381,12 +381,12 @@ export const SalesRegisterPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Sales Invoices Table */}
-      <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+      {/* Sales Invoices Table with Standard Format and Auto Screen Adjust */}
+      <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col">
+        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[1000px]">
+            <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+              <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                 <th
                   onClick={() => handleSort('invoice_number')}
                   className="py-3 px-4 cursor-pointer hover:text-navy-800"
@@ -529,6 +529,25 @@ export const SalesRegisterPage: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Standard Floating Summary Footer */}
+        <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+          <div>
+            Showing <span className="font-bold text-navy-800 font-mono">{sales.length}</span> invoices &bull; Total Sales:{' '}
+            <strong className="text-navy-900 font-mono text-sm font-black">
+              ₹{parseFloat(summary.total_revenue || '0').toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </strong>
+          </div>
+          <div className="flex items-center space-x-3 text-[11px]">
+            <span className="text-primary font-medium font-mono">
+              Credit: ₹{parseFloat(summary.credit_revenue || '0').toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+            <span className="text-slate-400">&bull;</span>
+            <span className="text-emerald-700 font-medium font-mono">
+              Direct/UPI: ₹{parseFloat(summary.direct_revenue || '0').toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
         </div>
       </div>
 
