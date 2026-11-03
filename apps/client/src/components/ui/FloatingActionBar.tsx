@@ -68,3 +68,4 @@ export const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
     </aside>
   );
 };
+

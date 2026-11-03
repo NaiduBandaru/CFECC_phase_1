@@ -21,7 +21,7 @@ import {
 
 export const PurchasingPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ORDERS' | 'GRN' | 'INVOICES' | 'RETURNS'>('ORDERS');
-  
+
   // Data States
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [receipts, setReceipts] = useState<GoodsReceipt[]>([]);
@@ -568,9 +568,8 @@ export const PurchasingPage: React.FC = () => {
       <div className="flex space-x-2 border-b border-borderLine">
         <button
           onClick={() => setActiveTab('ORDERS')}
-          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${
-            activeTab === 'ORDERS' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
-          }`}
+          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${activeTab === 'ORDERS' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
+            }`}
         >
           <FileSpreadsheet className="w-3.5 h-3.5" />
           <span>Purchase Orders ({orders.length})</span>
@@ -578,9 +577,8 @@ export const PurchasingPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('GRN')}
-          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${
-            activeTab === 'GRN' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
-          }`}
+          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${activeTab === 'GRN' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
+            }`}
         >
           <Truck className="w-3.5 h-3.5" />
           <span>Goods Receipts (GRN) ({receipts.length})</span>
@@ -588,9 +586,8 @@ export const PurchasingPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('INVOICES')}
-          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${
-            activeTab === 'INVOICES' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
-          }`}
+          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${activeTab === 'INVOICES' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
+            }`}
         >
           <Receipt className="w-3.5 h-3.5" />
           <span>Purchase Invoices & Bills ({invoices.length})</span>
@@ -869,13 +866,12 @@ export const PurchasingPage: React.FC = () => {
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span
-                            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              inv.status === 'PAID'
+                            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${inv.status === 'PAID'
                                 ? 'bg-emerald-50 text-emerald-700'
                                 : inv.status === 'PARTIALLY_PAID'
-                                ? 'bg-amber-50 text-amber-700'
-                                : 'bg-rose-50 text-rose-700'
-                            }`}
+                                  ? 'bg-amber-50 text-amber-700'
+                                  : 'bg-rose-50 text-rose-700'
+                              }`}
                           >
                             {inv.status}
                           </span>
@@ -972,7 +968,7 @@ export const PurchasingPage: React.FC = () => {
           {/* Add Line Items Section */}
           <div className="p-3 bg-slate-50 rounded-lg border border-borderLine space-y-3">
             <h4 className="font-bold text-navy-800 uppercase text-[11px]">Add Items to Purchase Order</h4>
-            
+
             <div className="grid grid-cols-12 gap-2">
               <div className="col-span-5">
                 <label className="block font-semibold text-textSecondary uppercase mb-1">Store Item</label>
