@@ -247,61 +247,115 @@ export async function sendPosReceipt(params: {
   customerName: string;
   billNumber: string;
   totalAmount: number | string;
+  subtotal?: number | string;
+  taxAmount?: number | string;
   paymentMode: string;
-  itemsCount: number;
+  itemsCount?: number;
+  itemsList?: Array<{ name: string; quantity: number | string; unitPrice: number | string; totalPrice: number | string }>;
+  currentOutstanding?: number | string;
+  availableCredit?: number | string;
   date?: string;
   saleId?: number;
 }): Promise<SendResult> {
-  const dateStr = params.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateStr = params.date || new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
   const formattedAmount = parseFloat((params.totalAmount ?? 0).toString()).toFixed(2);
+  const subtotalFormatted = parseFloat((params.subtotal ?? params.totalAmount ?? 0).toString()).toFixed(2);
+  const taxFormatted = parseFloat((params.taxAmount ?? 0).toString()).toFixed(2);
   const billNum = params.billNumber || 'RECEIPT';
   const custName = params.customerName || 'Valued Customer';
+  const count = params.itemsList?.length || params.itemsCount || 1;
 
-  // 1. Try sending Meta pre-approved order confirmation template
-  const templatePayload = {
-    type: 'template',
-    template: {
-      name: 'jaspers_market_order_confirmation_v1',
-      language: { code: 'en_US' },
-      components: [
-        {
-          type: 'body',
-          parameters: [
-            { type: 'text', text: custName },
-            { type: 'text', text: billNum },
-            { type: 'text', text: dateStr },
-          ],
-        },
-      ],
-    },
+  let itemsFormatted = '';
+  if (params.itemsList && params.itemsList.length > 0) {
+    itemsFormatted = params.itemsList
+      .map((it, idx) => `${idx + 1}. *${it.name}* (x${it.quantity}) - ₹${parseFloat((it.totalPrice ?? 0).toString()).toFixed(2)}`)
+      .join('\n');
+  }
+
+  // 1. Prepare Rich CFECC Store Receipt Text
+  const richReceiptText =
+`🧾 *CFECC STORES & EMPLOYEE COOPERATIVE*
+📍 Visakhapatnam, Andhra Pradesh
+GSTIN: 37AAAAA0000A1Z5
+━━━━━━━━━━━━━━━━━━━━━
+*TAX INVOICE / CASH MEMO*
+━━━━━━━━━━━━━━━━━━━━━
+*Bill No:* ${billNum}
+*Date:* ${dateStr}
+*Customer:* ${custName}
+*Payment Method:* ${params.paymentMode}
+━━━━━━━━━━━━━━━━━━━━━
+*ITEMS PURCHASED (${count}):*
+${itemsFormatted || `• Store Merchandise Items (x${count}) - ₹${formattedAmount}`}
+━━━━━━━━━━━━━━━━━━━━━
+*Subtotal:* ₹${subtotalFormatted}
+*GST (Tax):* ₹${taxFormatted}
+*GRAND TOTAL:* ₹${formattedAmount}
+━━━━━━━━━━━━━━━━━━━━━${params.currentOutstanding !== undefined ? `
+💳 *Store Credit Status:*
+• Outstanding Balance: ₹${parseFloat((params.currentOutstanding ?? 0).toString()).toFixed(2)}
+• Available Credit Limit: ₹${parseFloat((params.availableCredit ?? 0).toString()).toFixed(2)}
+━━━━━━━━━━━━━━━━━━━━━` : ''}
+Thank you for shopping at CFECC Stores!
+_Visakhapatnam • CFECC Stores Management Platform_`;
+
+  // Strategy A: Send full itemized text receipt first (works within 24-hr customer window)
+  const textPayload = {
+    type: 'text',
+    text: { preview_url: false, body: richReceiptText },
   };
 
-  let result = await sendMetaCloudMessage(params.phone, templatePayload);
+  let result = await sendMetaCloudMessage(params.phone, textPayload);
 
-  // 2. If template failed (e.g. not created or custom template needed), fallback to text message
+  // Strategy B: If 24-hr window not open or text rejected, try official CFECC POS receipt template
   if (!result.success && result.mode === 'LIVE') {
-    const textBody =
-`🧾 *CFECC STORES - SALE MEMO*
-━━━━━━━━━━━━━━━━━━━━
-*Bill No:* ${params.billNumber}
-*Date:* ${dateStr}
-*Customer:* ${params.customerName}
-*Items Purchased:* ${params.itemsCount}
-*Payment Method:* ${params.paymentMode}
-━━━━━━━━━━━━━━━━━━━━
-*TOTAL AMOUNT:* ₹${formattedAmount}
-━━━━━━━━━━━━━━━━━━━━
-Thank you for visiting CFECC Stores, Visakhapatnam!
-_For balance queries, visit the CFECC Stores counter._`;
-
-    const textPayload = {
-      type: 'text',
-      text: { preview_url: false, body: textBody },
+    const cfeccTemplatePayload = {
+      type: 'template',
+      template: {
+        name: 'cfecc_pos_receipt_v1',
+        language: { code: 'en_US' },
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: custName },
+              { type: 'text', text: billNum },
+              { type: 'text', text: dateStr },
+              { type: 'text', text: params.paymentMode },
+              { type: 'text', text: formattedAmount },
+            ],
+          },
+        ],
+      },
     };
 
-    const textResult = await sendMetaCloudMessage(params.phone, textPayload);
-    if (textResult.success) {
-      result = textResult;
+    const templateResult = await sendMetaCloudMessage(params.phone, cfeccTemplatePayload);
+    if (templateResult.success) {
+      result = templateResult;
+    } else {
+      // Strategy C: Fallback to pre-approved Jasper's template if CFECC template is still under review
+      const fallbackPayload = {
+        type: 'template',
+        template: {
+          name: 'jaspers_market_order_confirmation_v1',
+          language: { code: 'en_US' },
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: custName },
+                { type: 'text', text: billNum },
+                { type: 'text', text: dateStr },
+              ],
+            },
+          ],
+        },
+      };
+
+      const fallbackResult = await sendMetaCloudMessage(params.phone, fallbackPayload);
+      if (fallbackResult.success) {
+        result = fallbackResult;
+      }
     }
   }
 
@@ -311,9 +365,9 @@ _For balance queries, visit the CFECC Stores counter._`;
       recipient_phone, recipient_name, message_type, reference_type, reference_id,
       template_name, payload, status, provider_message_id, error_message, sent_at
     ) VALUES (
-      '${params.phone}', '${params.customerName.replace(/'/g, "''")}',
-      'POS_RECEIPT', 'SALE', '${params.billNumber}',
-      'jaspers_market_order_confirmation_v1', '${JSON.stringify({ billNumber: params.billNumber, total: formattedAmount }).replace(/'/g, "''")}',
+      '${params.phone}', '${custName.replace(/'/g, "''")}',
+      'POS_RECEIPT', 'SALE', '${billNum}',
+      'cfecc_receipt', '${JSON.stringify({ billNumber: billNum, total: formattedAmount }).replace(/'/g, "''")}',
       '${result.status}', ${result.messageId ? `'${result.messageId}'` : 'NULL'},
       ${result.errorMessage ? `'${result.errorMessage.replace(/'/g, "''")}'` : 'NULL'},
       NOW()

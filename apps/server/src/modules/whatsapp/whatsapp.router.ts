@@ -310,6 +310,7 @@ whatsappRouter.post('/send-receipt', authenticateToken, async (req: Request, res
       SELECT 
         s.*,
         e.first_name, e.last_name, e.mobile AS employee_mobile,
+        e.current_outstanding, e.available_credit,
         (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS items_count
       FROM sales s
       LEFT JOIN employees e ON s.employee_id = e.id
@@ -330,6 +331,24 @@ whatsappRouter.post('/send-receipt', authenticateToken, async (req: Request, res
       });
     }
 
+    // Fetch itemized cart lines for this sale
+    const itemsRes = await executeRawSql(`
+      SELECT 
+        si.quantity, si.unit_price, si.discount_amount, si.tax_amount, si.total_price,
+        i.name AS item_name, i.item_code
+      FROM sale_items si
+      JOIN items i ON si.item_id = i.id
+      WHERE si.sale_id = ${parseInt(saleId, 10)}
+      ORDER BY si.id ASC;
+    `);
+
+    const itemsList = (itemsRes.rows || []).map((it: any) => ({
+      name: it.item_name,
+      quantity: parseFloat(it.quantity.toString()),
+      unitPrice: it.unit_price,
+      totalPrice: it.total_price,
+    }));
+
     const customerName = sale.first_name ? `${sale.first_name} ${sale.last_name}` : sale.customer_name || 'Valued Customer';
     const billNumber = sale.invoice_number || sale.bill_number || `BILL-${sale.id}`;
     const totalAmount = sale.total_amount ?? sale.final_amount ?? 0;
@@ -340,8 +359,13 @@ whatsappRouter.post('/send-receipt', authenticateToken, async (req: Request, res
       customerName,
       billNumber,
       totalAmount,
+      subtotal: sale.subtotal,
+      taxAmount: sale.tax_amount,
       paymentMode: sale.payment_mode || 'CASH',
       itemsCount: parseInt(sale.items_count || '1', 10),
+      itemsList,
+      currentOutstanding: sale.payment_mode === 'EMPLOYEE_CREDIT' ? sale.current_outstanding : undefined,
+      availableCredit: sale.payment_mode === 'EMPLOYEE_CREDIT' ? sale.available_credit : undefined,
       date: saleDate,
       saleId: sale.id,
     });
