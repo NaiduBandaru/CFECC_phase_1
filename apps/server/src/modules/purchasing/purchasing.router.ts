@@ -239,6 +239,59 @@ purchasingRouter.get('/receipts', authenticateToken, async (req: Request, res: R
   }
 });
 
+// 5b. Get Single Goods Receipt (GRN) Details with Line Items
+purchasingRouter.get('/receipts/:id', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const grnId = parseInt(req.params.id as string, 10);
+    const grnRes = await executeRawSql(`
+      SELECT 
+        gr.*,
+        v.name as vendor_name,
+        v.vendor_code,
+        v.phone as vendor_phone,
+        v.gstin as vendor_gstin,
+        po.po_number,
+        po.order_date as po_date,
+        u.full_name as receiver_name,
+        pi.system_bill_number,
+        pi.total_amount as invoice_amount
+      FROM goods_receipts gr
+      JOIN vendors v ON gr.vendor_id = v.id
+      LEFT JOIN purchase_orders po ON gr.po_id = po.id
+      LEFT JOIN users u ON gr.created_by = u.id
+      LEFT JOIN purchase_invoices pi ON pi.grn_id = gr.id
+      WHERE gr.id = ${grnId};
+    `);
+
+    if (!grnRes.rows || grnRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Goods Receipt Note not found' });
+    }
+
+    const itemsRes = await executeRawSql(`
+      SELECT 
+        gri.*,
+        i.name as item_name,
+        i.item_code,
+        u.code as unit_code,
+        (gri.accepted_qty * gri.unit_cost) as total_accepted_cost
+      FROM goods_receipt_items gri
+      JOIN items i ON gri.item_id = i.id
+      LEFT JOIN units u ON i.unit_id = u.id
+      WHERE gri.grn_id = ${grnId};
+    `);
+
+    return res.json({
+      success: true,
+      data: {
+        ...grnRes.rows[0],
+        items: itemsRes.rows,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 6. Record Goods Receipt Note (GRN) & update inventory & calculate matching
 purchasingRouter.post('/receipts', authenticateToken, async (req: Request, res: Response, next) => {
   try {

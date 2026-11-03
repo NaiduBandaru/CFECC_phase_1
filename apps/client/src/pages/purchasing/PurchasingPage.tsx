@@ -15,6 +15,7 @@ import {
   Clock,
   Trash2,
   Search,
+  Printer,
 } from 'lucide-react';
 
 export const PurchasingPage: React.FC = () => {
@@ -58,6 +59,7 @@ export const PurchasingPage: React.FC = () => {
   // GRN Modal
   const [isGrnModalOpen, setIsGrnModalOpen] = useState(false);
   const [activePoForGrn, setActivePoForGrn] = useState<any | null>(null);
+  const [directGrnVendorId, setDirectGrnVendorId] = useState('');
   const [grnChallan, setGrnChallan] = useState('');
   const [grnVehicle, setGrnVehicle] = useState('');
   const [grnDate, setGrnDate] = useState(new Date().toISOString().split('T')[0]);
@@ -72,6 +74,13 @@ export const PurchasingPage: React.FC = () => {
     unitCost: number;
     rejectionReason: string;
   }>>([]);
+  const [grnAddItemId, setGrnAddItemId] = useState('');
+  const [grnAddQty, setGrnAddQty] = useState<number>(10);
+  const [grnAddCost, setGrnAddCost] = useState<number>(0);
+
+  // View GRN Slip Modal
+  const [isViewGrnModalOpen, setIsViewGrnModalOpen] = useState(false);
+  const [selectedGrnDetails, setSelectedGrnDetails] = useState<any | null>(null);
 
   // Vendor Payment Modal
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -264,6 +273,7 @@ export const PurchasingPage: React.FC = () => {
       if (res.data.success) {
         const poDetails = res.data.data;
         setActivePoForGrn(poDetails);
+        setDirectGrnVendorId(poDetails.vendor_id.toString());
         setGrnChallan('');
         setGrnVehicle('');
         setGrnDate(new Date().toISOString().split('T')[0]);
@@ -290,19 +300,85 @@ export const PurchasingPage: React.FC = () => {
     }
   };
 
+  const handleOpenDirectGrn = () => {
+    setActivePoForGrn(null);
+    setDirectGrnVendorId(vendors[0]?.id?.toString() || '');
+    setGrnChallan('');
+    setGrnVehicle('');
+    setGrnDate(new Date().toISOString().split('T')[0]);
+    setGrnLines([]);
+    if (items.length > 0) {
+      setGrnAddItemId(items[0].id.toString());
+      setGrnAddQty(10);
+      setGrnAddCost(parseFloat(items[0].purchase_price.toString()));
+    }
+    setIsGrnModalOpen(true);
+  };
+
+  const handleAddDirectGrnLine = () => {
+    if (!grnAddItemId) return;
+    const itm = items.find((i) => i.id === parseInt(grnAddItemId, 10));
+    if (!itm) return;
+
+    if (grnLines.some((l) => l.itemId === itm.id)) {
+      alert('This item is already added to the received lines.');
+      return;
+    }
+
+    setGrnLines([
+      ...grnLines,
+      {
+        itemId: itm.id,
+        itemName: itm.name,
+        itemCode: itm.item_code,
+        orderedQty: 0,
+        receivedQty: grnAddQty,
+        acceptedQty: grnAddQty,
+        rejectedQty: 0,
+        unitCost: grnAddCost > 0 ? grnAddCost : parseFloat(itm.purchase_price.toString()),
+        rejectionReason: '',
+      },
+    ]);
+  };
+
+  const handleRemoveGrnLine = (index: number) => {
+    setGrnLines(grnLines.filter((_, idx) => idx !== index));
+  };
+
+  const handleViewGrn = async (grnId: number) => {
+    try {
+      const res = await api.get(`/purchasing/receipts/${grnId}`);
+      if (res.data.success) {
+        setSelectedGrnDetails(res.data.data);
+        setIsViewGrnModalOpen(true);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to load GRN details');
+    }
+  };
+
   const handleReceiveGoods = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activePoForGrn) return;
+    const vendorId = activePoForGrn ? activePoForGrn.vendor_id : parseInt(directGrnVendorId, 10);
+    if (!vendorId) {
+      alert('Please select a vendor.');
+      return;
+    }
+
+    if (grnLines.length === 0) {
+      alert('Please add at least one received item line.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       const res = await api.post('/purchasing/receipts', {
-        poId: activePoForGrn.id,
-        vendorId: activePoForGrn.vendor_id,
+        poId: activePoForGrn ? activePoForGrn.id : null,
+        vendorId,
         receiptDate: grnDate,
         deliveryChallanNumber: grnChallan || `DC-${Date.now().toString().slice(-6)}`,
         vehicleNumber: grnVehicle || 'AP 31 TT 9999',
-        notes: `Received against ${activePoForGrn.po_number}`,
+        notes: activePoForGrn ? `Received against ${activePoForGrn.po_number}` : 'Direct Stock Inward',
         items: grnLines.map((l) => ({
           itemId: l.itemId,
           receivedQty: l.receivedQty,
@@ -631,6 +707,19 @@ export const PurchasingPage: React.FC = () => {
       {/* Tab 2: Goods Receipts (GRN) */}
       {activeTab === 'GRN' && (
         <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-xs text-textSecondary font-medium">
+              Recorded commodity receipts, warehouse inward challans and 3-way matching logs
+            </div>
+            <button
+              onClick={handleOpenDirectGrn}
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-subtle"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Direct Goods Inward</span>
+            </button>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -643,12 +732,13 @@ export const PurchasingPage: React.FC = () => {
                   <th className="py-3 px-4">Vehicle #</th>
                   <th className="py-3 px-4 text-center">Items Received</th>
                   <th className="py-3 px-4 text-center">Status</th>
+                  <th className="py-3 px-4 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-borderLine">
                 {receipts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-textSecondary">
+                    <td colSpan={9} className="py-8 text-center text-textSecondary">
                       <Truck className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                       <div>No goods receipts recorded yet.</div>
                     </td>
@@ -657,7 +747,7 @@ export const PurchasingPage: React.FC = () => {
                   receipts.map((gr) => (
                     <tr key={gr.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3 px-4 font-mono font-bold text-emerald-700">{gr.grn_number}</td>
-                      <td className="py-3 px-4 font-mono text-textSecondary">{gr.po_number || 'Direct GRN'}</td>
+                      <td className="py-3 px-4 font-mono text-textSecondary">{gr.po_number || 'Direct Inward'}</td>
                       <td className="py-3 px-4 font-semibold text-navy-800">{gr.vendor_name}</td>
                       <td className="py-3 px-4 text-textSecondary">{gr.receipt_date}</td>
                       <td className="py-3 px-4 font-mono text-textSecondary">{gr.delivery_challan_number || '-'}</td>
@@ -667,6 +757,16 @@ export const PurchasingPage: React.FC = () => {
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
                           {gr.status}
                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          title="View / Print Goods Inward Slip"
+                          onClick={() => handleViewGrn(gr.id)}
+                          className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-navy-800 text-[11px] font-semibold transition-colors inline-flex items-center space-x-1"
+                        >
+                          <Eye className="w-3 h-3 text-primary" />
+                          <span>View Slip</span>
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -976,25 +1076,58 @@ export const PurchasingPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Record GRN Modal (Interactive Inspection) */}
+      {/* Record GRN Modal (Interactive Inspection & Direct Inward) */}
       <Modal
         isOpen={isGrnModalOpen}
         onClose={() => setIsGrnModalOpen(false)}
-        title={`Record Goods Receipt Note (GRN)`}
-        subtitle={`Verify shipment receipt against Purchase Order ${activePoForGrn?.po_number || ''}`}
-        maxWidth="4xl"
+        title={activePoForGrn ? `Record Goods Receipt Note (GRN)` : 'Direct Commodity Inward (Without PO)'}
+        subtitle={
+          activePoForGrn
+            ? `Verify physical shipment receipt against Purchase Order ${activePoForGrn.po_number}`
+            : 'Record incoming supplier shipment directly into warehouse inventory'
+        }
+        maxWidth="6xl"
       >
         <form onSubmit={handleReceiveGoods} className="space-y-4 text-xs">
-          <div className="grid grid-cols-3 gap-3">
+          {/* Header Controls */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-borderLine">
+            {!activePoForGrn ? (
+              <div>
+                <label className="block font-semibold text-textSecondary uppercase mb-1">Supplier / Vendor *</label>
+                <select
+                  required
+                  value={directGrnVendorId}
+                  onChange={(e) => setDirectGrnVendorId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-borderLine rounded-lg bg-white font-medium focus:outline-none"
+                >
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} ({v.vendor_code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block font-semibold text-textSecondary uppercase mb-1">Purchase Order</label>
+                <input
+                  type="text"
+                  disabled
+                  value={`${activePoForGrn.po_number} - ${activePoForGrn.vendor_name}`}
+                  className="w-full px-2.5 py-1.5 border border-borderLine rounded-lg bg-slate-100 font-mono text-slate-700 cursor-not-allowed"
+                />
+              </div>
+            )}
+
             <div>
-              <label className="block font-semibold text-textSecondary uppercase mb-1">Delivery Challan / Invoice # *</label>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Delivery Challan / Bill # *</label>
               <input
                 type="text"
                 required
                 placeholder="e.g. DC-78901"
                 value={grnChallan}
                 onChange={(e) => setGrnChallan(e.target.value)}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+                className="w-full px-2.5 py-1.5 border border-borderLine rounded-lg bg-white focus:outline-none"
               />
             </div>
 
@@ -1005,7 +1138,7 @@ export const PurchasingPage: React.FC = () => {
                 placeholder="e.g. AP 31 TT 9999"
                 value={grnVehicle}
                 onChange={(e) => setGrnVehicle(e.target.value)}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+                className="w-full px-2.5 py-1.5 border border-borderLine rounded-lg bg-white focus:outline-none"
               />
             </div>
 
@@ -1016,96 +1149,198 @@ export const PurchasingPage: React.FC = () => {
                 required
                 value={grnDate}
                 onChange={(e) => setGrnDate(e.target.value)}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+                className="w-full px-2.5 py-1.5 border border-borderLine rounded-lg bg-white focus:outline-none"
               />
             </div>
           </div>
 
+          {/* Quick Item Picker for Direct GRN */}
+          {!activePoForGrn && (
+            <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-200 space-y-2">
+              <div className="text-[11px] font-bold text-navy-800 uppercase">Add Received Commodity to Inward:</div>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                <div className="sm:col-span-6">
+                  <label className="block text-[10px] font-semibold text-textSecondary uppercase mb-0.5">Select Store Item</label>
+                  <select
+                    value={grnAddItemId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setGrnAddItemId(id);
+                      const sel = items.find((i) => i.id === parseInt(id, 10));
+                      if (sel) setGrnAddCost(parseFloat(sel.purchase_price.toString()));
+                    }}
+                    className="w-full px-2.5 py-1.5 border border-borderLine rounded-lg bg-white text-xs focus:outline-none"
+                  >
+                    {items.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name} ({i.item_code}) - Current: {i.current_stock}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-semibold text-textSecondary uppercase mb-0.5">Inward Qty</label>
+                  <input
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    value={grnAddQty}
+                    onChange={(e) => setGrnAddQty(parseFloat(e.target.value) || 0)}
+                    className="w-full px-2 py-1.5 border border-borderLine rounded-lg bg-white text-xs text-right font-bold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-semibold text-textSecondary uppercase mb-0.5">Unit Cost (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={grnAddCost}
+                    onChange={(e) => setGrnAddCost(parseFloat(e.target.value) || 0)}
+                    className="w-full px-2 py-1.5 border border-borderLine rounded-lg bg-white text-xs text-right font-bold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <button
+                    type="button"
+                    onClick={handleAddDirectGrnLine}
+                    className="w-full py-1.5 px-3 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-semibold shadow-subtle transition-colors flex items-center justify-center space-x-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Item</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Received Items Inspection Table */}
           <div className="border border-borderLine rounded-lg overflow-hidden">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100 text-[10px] font-bold text-textSecondary uppercase">
                   <th className="py-2.5 px-3">Item Details</th>
-                  <th className="py-2.5 px-3 text-right">Ordered</th>
+                  {activePoForGrn && <th className="py-2.5 px-3 text-right">Ordered</th>}
+                  <th className="py-2.5 px-3 text-right">Unit Cost (₹)</th>
                   <th className="py-2.5 px-3 text-right">Received Qty</th>
                   <th className="py-2.5 px-3 text-right">Accepted Qty</th>
                   <th className="py-2.5 px-3 text-right">Rejected Qty</th>
                   <th className="py-2.5 px-3">Rejection Reason</th>
+                  {!activePoForGrn && <th className="py-2.5 px-3 text-center">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-borderLine">
-                {grnLines.map((line, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
-                    <td className="py-2 px-3">
-                      <div className="font-bold text-navy-800">{line.itemName}</div>
-                      <div className="text-[10px] font-mono text-textSecondary">{line.itemCode}</div>
-                    </td>
-                    <td className="py-2 px-3 text-right font-medium tabular-nums text-textSecondary">
-                      {line.orderedQty}
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.receivedQty}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0;
-                          const updated = [...grnLines];
-                          updated[idx].receivedQty = val;
-                          updated[idx].acceptedQty = Math.max(0, val - updated[idx].rejectedQty);
-                          setGrnLines(updated);
-                        }}
-                        className="w-20 px-2 py-1 text-right border border-borderLine rounded bg-white tabular-nums font-semibold"
-                      />
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.acceptedQty}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0;
-                          const updated = [...grnLines];
-                          updated[idx].acceptedQty = val;
-                          updated[idx].rejectedQty = Math.max(0, updated[idx].receivedQty - val);
-                          setGrnLines(updated);
-                        }}
-                        className="w-20 px-2 py-1 text-right border border-emerald-300 rounded bg-emerald-50 text-emerald-800 tabular-nums font-bold"
-                      />
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.rejectedQty}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0;
-                          const updated = [...grnLines];
-                          updated[idx].rejectedQty = val;
-                          updated[idx].acceptedQty = Math.max(0, updated[idx].receivedQty - val);
-                          setGrnLines(updated);
-                        }}
-                        className="w-20 px-2 py-1 text-right border border-rose-300 rounded bg-rose-50 text-rose-800 tabular-nums font-bold"
-                      />
-                    </td>
-                    <td className="py-2 px-3">
-                      <input
-                        type="text"
-                        placeholder="Damage, leak, expiry..."
-                        value={line.rejectionReason}
-                        onChange={(e) => {
-                          const updated = [...grnLines];
-                          updated[idx].rejectionReason = e.target.value;
-                          setGrnLines(updated);
-                        }}
-                        className="w-full px-2 py-1 border border-borderLine rounded bg-white text-[11px]"
-                      />
+                {grnLines.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-6 text-center text-textSecondary">
+                      No items added yet. Select items above to record delivery.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  grnLines.map((line, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50">
+                      <td className="py-2 px-3">
+                        <div className="font-bold text-navy-800">{line.itemName}</div>
+                        <div className="text-[10px] font-mono text-textSecondary">{line.itemCode}</div>
+                      </td>
+                      {activePoForGrn && (
+                        <td className="py-2 px-3 text-right font-medium tabular-nums text-textSecondary">
+                          {line.orderedQty}
+                        </td>
+                      )}
+                      <td className="py-2 px-3 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={line.unitCost}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const updated = [...grnLines];
+                            updated[idx].unitCost = val;
+                            setGrnLines(updated);
+                          }}
+                          className="w-20 px-2 py-1 text-right border border-borderLine rounded bg-white tabular-nums font-semibold"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={line.receivedQty}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const updated = [...grnLines];
+                            updated[idx].receivedQty = val;
+                            updated[idx].acceptedQty = Math.max(0, val - updated[idx].rejectedQty);
+                            setGrnLines(updated);
+                          }}
+                          className="w-20 px-2 py-1 text-right border border-borderLine rounded bg-white tabular-nums font-semibold"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={line.acceptedQty}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const updated = [...grnLines];
+                            updated[idx].acceptedQty = val;
+                            updated[idx].rejectedQty = Math.max(0, updated[idx].receivedQty - val);
+                            setGrnLines(updated);
+                          }}
+                          className="w-20 px-2 py-1 text-right border border-emerald-300 rounded bg-emerald-50 text-emerald-800 tabular-nums font-bold"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={line.rejectedQty}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const updated = [...grnLines];
+                            updated[idx].rejectedQty = val;
+                            updated[idx].acceptedQty = Math.max(0, updated[idx].receivedQty - val);
+                            setGrnLines(updated);
+                          }}
+                          className="w-20 px-2 py-1 text-right border border-rose-300 rounded bg-rose-50 text-rose-800 tabular-nums font-bold"
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <input
+                          type="text"
+                          placeholder="Damage, leak, expiry..."
+                          value={line.rejectionReason}
+                          onChange={(e) => {
+                            const updated = [...grnLines];
+                            updated[idx].rejectionReason = e.target.value;
+                            setGrnLines(updated);
+                          }}
+                          className="w-full px-2 py-1 border border-borderLine rounded bg-white text-[11px]"
+                        />
+                      </td>
+                      {!activePoForGrn && (
+                        <td className="py-2 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveGrnLine(idx)}
+                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -1127,13 +1362,159 @@ export const PurchasingPage: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || grnLines.length === 0}
               className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-subtle disabled:opacity-50"
             >
               {isSubmitting ? 'Processing Receipt...' : 'Confirm Goods Receipt & Update Stock'}
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* View GRN Slip Modal */}
+      <Modal
+        isOpen={isViewGrnModalOpen}
+        onClose={() => setIsViewGrnModalOpen(false)}
+        title={`Goods Receipt Note: ${selectedGrnDetails?.grn_number || ''}`}
+        subtitle="Official inward warehouse receipt and 3-way matching document"
+        maxWidth="4xl"
+      >
+        {selectedGrnDetails && (
+          <div className="space-y-4 text-xs">
+            {/* Printable Slip Container */}
+            <div id="printable-grn-slip" className="p-5 border border-borderLine rounded-lg bg-white space-y-4 shadow-sm">
+              <div className="text-center pb-3 border-b border-dashed border-slate-300">
+                <h3 className="font-black text-base tracking-wide text-navy-800 uppercase">
+                  CFECC EMPLOYEES CONSUMER COOPERATIVE SOCIETY LTD.
+                </h3>
+                <p className="text-[11px] text-textSecondary">Visakhapatnam, Andhra Pradesh &bull; GSTIN: 37AAAAA0000A1Z5</p>
+                <div className="inline-block mt-2 px-3 py-1 bg-slate-100 border border-slate-300 rounded font-black text-xs text-navy-800 uppercase tracking-widest">
+                  GOODS RECEIPT NOTE (GRN) / INWARD CHALLAN
+                </div>
+              </div>
+
+              {/* Metadata */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg border border-borderLine text-[11px]">
+                <div>
+                  <span className="text-textSecondary block uppercase text-[10px] font-bold">GRN Number:</span>
+                  <span className="font-mono font-bold text-emerald-700 text-xs">{selectedGrnDetails.grn_number}</span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block uppercase text-[10px] font-bold">Receipt Date:</span>
+                  <span className="font-bold text-navy-800">{selectedGrnDetails.receipt_date}</span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block uppercase text-[10px] font-bold">PO Reference:</span>
+                  <span className="font-mono font-bold text-slate-800">{selectedGrnDetails.po_number || 'Direct Inward'}</span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block uppercase text-[10px] font-bold">Vendor Name:</span>
+                  <span className="font-bold text-navy-800">{selectedGrnDetails.vendor_name} ({selectedGrnDetails.vendor_code})</span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block uppercase text-[10px] font-bold">Challan / Bill No:</span>
+                  <span className="font-mono font-bold text-slate-800">{selectedGrnDetails.delivery_challan_number || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block uppercase text-[10px] font-bold">Vehicle Number:</span>
+                  <span className="font-mono font-bold text-slate-800">{selectedGrnDetails.vehicle_number || '-'}</span>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="border border-borderLine rounded-lg overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-[10px] font-bold text-textSecondary uppercase">
+                      <th className="py-2.5 px-3">Item Details</th>
+                      <th className="py-2.5 px-3 text-right">Rec Qty</th>
+                      <th className="py-2.5 px-3 text-right">Accepted</th>
+                      <th className="py-2.5 px-3 text-right">Rejected</th>
+                      <th className="py-2.5 px-3 text-right">Unit Rate (₹)</th>
+                      <th className="py-2.5 px-3 text-right">Total Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-borderLine">
+                    {selectedGrnDetails.items?.map((item: any) => (
+                      <tr key={item.id}>
+                        <td className="py-2 px-3">
+                          <div className="font-bold text-navy-800">{item.item_name}</div>
+                          <div className="text-[10px] font-mono text-textSecondary">{item.item_code}</div>
+                          {item.rejection_reason && (
+                            <div className="text-[10px] text-rose-600 font-medium">Reason: {item.rejection_reason}</div>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums font-medium text-slate-700">
+                          {parseFloat(item.received_qty).toFixed(2)} {item.unit_code}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums font-bold text-emerald-700">
+                          {parseFloat(item.accepted_qty).toFixed(2)} {item.unit_code}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums font-bold text-rose-600">
+                          {parseFloat(item.rejected_qty).toFixed(2)}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums text-slate-700 font-medium">
+                          ₹{parseFloat(item.unit_cost).toFixed(2)}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums font-bold text-navy-800">
+                          ₹{parseFloat(item.total_accepted_cost).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Invoiced Accounting Box */}
+              {selectedGrnDetails.system_bill_number && (
+                <div className="p-3 bg-slate-50 border border-borderLine rounded-lg flex items-center justify-between">
+                  <div className="text-[11px] text-textSecondary">
+                    Generated System Purchase Bill: <strong className="font-mono text-navy-800">{selectedGrnDetails.system_bill_number}</strong>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-textSecondary block">Total Invoiced:</span>
+                    <span className="font-black text-sm text-navy-800 font-mono">
+                      ₹{parseFloat(selectedGrnDetails.invoice_amount || '0').toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Signatures */}
+              <div className="pt-6 pb-2 border-t border-dashed border-slate-300 grid grid-cols-2 text-center text-xs text-textSecondary">
+                <div>
+                  <div className="border-b border-slate-400 w-44 mx-auto mb-1"></div>
+                  <div className="font-semibold text-navy-800">Storekeeper Signature</div>
+                  <div className="text-[10px]">CFECC Warehouse Division</div>
+                </div>
+                <div>
+                  <div className="border-b border-slate-400 w-44 mx-auto mb-1"></div>
+                  <div className="font-semibold text-navy-800">Supervisor / Manager Signature</div>
+                  <div className="text-[10px]">CFECC Purchasing Authority</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-end space-x-2 pt-2 border-t border-borderLine">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center space-x-1.5 px-4 py-2 bg-navy-800 hover:bg-navy-900 text-white font-semibold rounded-lg shadow-subtle transition-colors"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Inward Slip</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsViewGrnModalOpen(false)}
+                className="px-4 py-2 border border-borderLine rounded-lg font-semibold text-textSecondary hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* PO View Details Modal */}

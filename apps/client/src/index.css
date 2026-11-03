@@ -70,6 +70,18 @@
     padding: 8mm;
     background: #fff;
   }
+  #printable-grn-slip, #printable-grn-slip * {
+    visibility: visible;
+  }
+  #printable-grn-slip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 10mm;
+    background: #fff;
+  }
   @page {
     margin: 0;
   }
