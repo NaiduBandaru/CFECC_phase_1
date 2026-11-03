@@ -593,9 +593,9 @@ export const POSTerminalPage: React.FC = () => {
       </header>
 
       {/* 2. MAIN POS WORKSPACE: FULL-HEIGHT DUAL PANE */}
-      <div className="flex-1 grid grid-cols-12 gap-3 p-3 overflow-hidden">
+      <div className="flex-1 grid grid-cols-12 gap-3 p-3 overflow-hidden min-h-0">
         {/* LEFT PANE: PRODUCT DISCOVERY, BARCODE SCANNER & CATALOG GRID (7 COLS / 8 COLS ON XL) */}
-        <div className="col-span-12 lg:col-span-7 xl:col-span-8 bg-white rounded-xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden">
+        <div className="col-span-12 lg:col-span-7 xl:col-span-8 bg-white rounded-xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden min-h-0">
           {/* Barcode & Search Controls */}
           <div className="p-3 bg-slate-50 border-b border-slate-200 space-y-2.5 shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -778,7 +778,7 @@ export const POSTerminalPage: React.FC = () => {
         </div>
 
         {/* RIGHT PANE: ORDER CART & CASHIER CHECKOUT DESK (5 COLS / 4 COLS ON XL) */}
-        <div className="col-span-12 lg:col-span-5 xl:col-span-4 bg-white rounded-xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden">
+        <div className="col-span-12 lg:col-span-5 xl:col-span-4 bg-white rounded-xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden min-h-0">
           {/* Top: Customer Account Selector */}
           <div className="p-3 bg-slate-50 border-b border-slate-200 shrink-0 space-y-2">
             <div className="flex items-center justify-between">
@@ -886,87 +886,123 @@ export const POSTerminalPage: React.FC = () => {
             )}
           </div>
 
-          {/* Middle: Cart Items List (Scrollable Area) */}
-          <div className="flex-1 overflow-y-auto p-3 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
-                <span className="text-[11px] font-bold text-navy-800 uppercase tracking-wider flex items-center space-x-1.5">
-                  <ShoppingCart className="w-3.5 h-3.5 text-primary" />
-                  <span>Order Items ({totalItemsCount})</span>
-                </span>
-                {cart.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setCart([])}
-                    className="text-[11px] text-rose-600 font-semibold hover:underline flex items-center space-x-1"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    <span>Clear</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="divide-y divide-slate-100 max-h-56 overflow-y-auto pr-1 mt-1">
-                {cart.length === 0 ? (
-                  <div className="py-10 text-center text-slate-400 space-y-1">
-                    <Package className="w-9 h-9 mx-auto text-slate-300" />
-                    <div className="font-bold text-slate-700 text-xs">Cart is currently empty</div>
-                    <div className="text-[11px]">Scan barcode or tap any product to add</div>
-                  </div>
-                ) : (
-                  cart.map((item) => (
-                    <div key={item.itemId} className="py-2 flex items-center justify-between text-xs group">
-                      <div className="max-w-[150px]">
-                        <div className="font-bold text-navy-800 truncate">{item.name}</div>
-                        <div className="text-[10px] text-slate-500 font-mono flex items-center space-x-1">
-                          <span>₹{item.unitPrice.toFixed(2)} / {item.unitCode}</span>
-                          {selectedEmployee && (
-                            <span className="text-[9px] text-emerald-700 font-bold bg-emerald-50 px-1 rounded">
-                              Staff
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Quantity Stepper */}
-                      <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.itemId, -1)}
-                          className="p-1 rounded bg-white hover:bg-slate-200 text-slate-700 shadow-2xs transition-colors"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="font-bold font-mono tabular-nums w-6 text-center text-navy-800 text-xs">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.itemId, 1)}
-                          className="p-1 rounded bg-white hover:bg-slate-200 text-slate-700 shadow-2xs transition-colors"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
-
-                      {/* Total & Remove */}
-                      <div className="text-right">
-                        <div className="font-bold font-mono text-navy-800">
-                          ₹{(item.unitPrice * item.quantity).toFixed(2)}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeItem(item.itemId)}
-                          className="text-[10px] text-slate-400 hover:text-rose-600 transition-colors"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+          {/* Middle: Order Items Header (Fixed Bar) */}
+          <div className="px-3.5 py-2.5 bg-slate-50/80 border-b border-slate-200 shrink-0 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-navy-800 uppercase tracking-wider flex items-center space-x-1.5">
+                <ShoppingCart className="w-3.5 h-3.5 text-primary" />
+                <span>Order Items</span>
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary font-mono">
+                {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'}
+              </span>
             </div>
+
+            {cart.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (cart.length > 1) {
+                    if (window.confirm(`Clear all ${totalItemsCount} items from the order?`)) {
+                      setCart([]);
+                    }
+                  } else {
+                    setCart([]);
+                  }
+                }}
+                className="text-xs text-rose-600 hover:text-rose-700 font-semibold hover:bg-rose-50 px-2 py-1 rounded transition-colors flex items-center space-x-1"
+                title="Clear all items in cart"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear All</span>
+              </button>
+            )}
+          </div>
+
+          {/* Cart Items List - Full Dynamic Height with Smooth Scrolling */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-3.5 divide-y divide-slate-100">
+            {cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center py-12 text-center text-slate-400 space-y-2">
+                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                  <Package className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-700 text-xs">Cart is currently empty</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Scan barcode [F2] or click any product to add</div>
+                </div>
+              </div>
+            ) : (
+              cart.map((item) => (
+                <div
+                  key={item.itemId}
+                  className="py-3 flex items-center justify-between gap-2.5 text-xs group hover:bg-slate-50/70 -mx-1.5 px-1.5 rounded-lg transition-colors"
+                >
+                  {/* Item Details: Full Unclipped Name & Unit Price */}
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className="font-bold text-navy-900 leading-snug line-clamp-2 text-xs"
+                      title={item.name}
+                    >
+                      {item.name}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono flex items-center flex-wrap gap-1.5 mt-0.5">
+                      <span>₹{item.unitPrice.toFixed(2)} / {item.unitCode}</span>
+                      {selectedEmployee && (
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.2 rounded flex items-center space-x-0.5">
+                          <Sparkles className="w-2.5 h-2.5" />
+                          <span>Staff Subsidy</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Ergonomic Stepper */}
+                  <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.itemId, -1)}
+                      className="w-6 h-6 flex items-center justify-center rounded bg-white hover:bg-slate-200 text-slate-700 shadow-2xs transition-colors active:scale-95"
+                      title="Decrease quantity"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </button>
+                    <span className="font-bold font-mono tabular-nums w-6 text-center text-navy-900 text-xs">
+                      {item.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.itemId, 1)}
+                      className="w-6 h-6 flex items-center justify-center rounded bg-white hover:bg-slate-200 text-slate-700 shadow-2xs transition-colors active:scale-95"
+                      title="Increase quantity"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  {/* Line Total & Remove Button */}
+                  <div className="flex items-center space-x-1.5 shrink-0">
+                    <div className="text-right min-w-[68px]">
+                      <div className="font-bold font-mono text-navy-900 text-xs">
+                        ₹{(item.unitPrice * item.quantity).toFixed(2)}
+                      </div>
+                      {item.quantity > 1 && (
+                        <div className="text-[9px] text-slate-400 font-mono">
+                          {item.quantity} &times; ₹{item.unitPrice.toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.itemId)}
+                      className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      title="Remove item from order"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           {/* Bottom: Tender Selection, Change Calculator & Checkout Action */}
