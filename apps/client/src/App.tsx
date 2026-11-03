@@ -45,7 +45,17 @@ export function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Protected Application Routes */}
+          {/* Dedicated Fullscreen POS Terminal Route (No distracting sidebars or ERP headers) */}
+          <Route
+            path="/pos"
+            element={
+              <ProtectedRoute>
+                <POSTerminalPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Application Routes inside Back-Office Shell */}
           <Route
             path="/"
             element={
@@ -61,7 +71,6 @@ export function App() {
             <Route path="items" element={<ItemsMasterPage />} />
             <Route path="pricing" element={<ItemPricingPage />} />
             <Route path="vendors" element={<VendorsPage />} />
-            <Route path="pos" element={<POSTerminalPage />} />
             <Route path="sales" element={<SalesRegisterPage />} />
             <Route path="purchasing" element={<PurchasingPage />} />
             <Route path="purchase-invoices" element={<PurchaseInvoicesPage />} />
