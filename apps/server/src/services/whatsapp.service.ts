@@ -299,64 +299,45 @@ ${itemsFormatted || `• Store Merchandise Items (x${count}) - ₹${formattedAmo
 Thank you for shopping at CFECC Stores!
 _Visakhapatnam • CFECC Stores Management Platform_`;
 
-  // Strategy A: Send full itemized text receipt first (works within 24-hr customer window)
-  const textPayload = {
-    type: 'text',
-    text: { preview_url: false, body: richReceiptText },
-  };
-
-  let result = await sendMetaCloudMessage(params.phone, textPayload);
-
-  // Strategy B: If 24-hr window not open or text rejected, try official CFECC POS receipt template
-  if (!result.success && result.mode === 'LIVE') {
-    const cfeccTemplatePayload = {
-      type: 'template',
-      template: {
-        name: 'cfecc_pos_receipt_v1',
-        language: { code: 'en_US' },
-        components: [
-          {
-            type: 'body',
-            parameters: [
-              { type: 'text', text: custName },
-              { type: 'text', text: billNum },
-              { type: 'text', text: dateStr },
-              { type: 'text', text: params.paymentMode },
-              { type: 'text', text: formattedAmount },
-            ],
-          },
-        ],
-      },
-    };
-
-    const templateResult = await sendMetaCloudMessage(params.phone, cfeccTemplatePayload);
-    if (templateResult.success) {
-      result = templateResult;
-    } else {
-      // Strategy C: Fallback to pre-approved Jasper's template if CFECC template is still under review
-      const fallbackPayload = {
-        type: 'template',
-        template: {
-          name: 'jaspers_market_order_confirmation_v1',
-          language: { code: 'en_US' },
-          components: [
-            {
-              type: 'body',
-              parameters: [
-                { type: 'text', text: custName },
-                { type: 'text', text: billNum },
-                { type: 'text', text: dateStr },
-              ],
-            },
+  // Strategy 1: Send the approved Meta Template FIRST (guaranteed delivery outside 24-hr window)
+  const templateOrderRef = `${billNum} (Rs ${formattedAmount} | ${params.paymentMode})`;
+  const templatePayload = {
+    type: 'template',
+    template: {
+      name: 'jaspers_market_order_confirmation_v1',
+      language: { code: 'en_US' },
+      components: [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', text: custName },
+            { type: 'text', text: templateOrderRef },
+            { type: 'text', text: dateStr },
           ],
         },
-      };
+      ],
+    },
+  };
 
-      const fallbackResult = await sendMetaCloudMessage(params.phone, fallbackPayload);
-      if (fallbackResult.success) {
-        result = fallbackResult;
-      }
+  let result = await sendMetaCloudMessage(params.phone, templatePayload);
+
+  // Strategy 2: If template failed, try sending as direct text
+  if (!result.success && result.mode === 'LIVE') {
+    const textPayload = {
+      type: 'text',
+      text: { preview_url: false, body: richReceiptText },
+    };
+    const textResult = await sendMetaCloudMessage(params.phone, textPayload);
+    if (textResult.success) {
+      result = textResult;
     }
+  } else if (result.success && result.mode === 'LIVE') {
+    // If template was delivered, also send the full itemized text receipt
+    const textPayload = {
+      type: 'text',
+      text: { preview_url: false, body: richReceiptText },
+    };
+    sendMetaCloudMessage(params.phone, textPayload).catch(() => {});
   }
 
   // Record in whatsapp_logs
