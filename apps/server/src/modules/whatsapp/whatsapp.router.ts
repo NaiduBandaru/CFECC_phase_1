@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import {
   getWhatsAppCredentials,
   updateWhatsAppCredentials,
@@ -89,7 +89,7 @@ whatsappRouter.post('/webhook', async (req: Request, res: Response) => {
 /**
  * Get current WhatsApp Gateway Configuration status
  */
-whatsappRouter.get('/config', authenticateToken, async (_req: Request, res: Response, next) => {
+whatsappRouter.get('/config', authenticateToken, requireRole('SUPER_ADMIN'), async (_req: Request, res: Response, next) => {
   try {
     const creds = await getWhatsAppCredentials();
 
@@ -123,7 +123,7 @@ whatsappRouter.get('/config', authenticateToken, async (_req: Request, res: Resp
 /**
  * Update Meta WhatsApp Cloud API credentials
  */
-whatsappRouter.post('/config', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/config', authenticateToken, requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next) => {
   try {
     const { phoneNumberId, accessToken, businessAccountId, webhookVerifyToken } = req.body;
 
@@ -150,7 +150,7 @@ whatsappRouter.post('/config', authenticateToken, async (req: Request, res: Resp
 /**
  * Send an API test ping to a recipient number to verify Meta Cloud API credentials
  */
-whatsappRouter.post('/send-test', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/send-test', authenticateToken, requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next) => {
   try {
     const { phoneNumber, customNote } = req.body;
 
@@ -179,7 +179,7 @@ whatsappRouter.post('/send-test', authenticateToken, async (req: Request, res: R
 /**
  * Dispatch monthly employee statement via WhatsApp
  */
-whatsappRouter.post('/send-statement', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/send-statement', authenticateToken, requireRole('SUPER_ADMIN', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { invoiceId } = req.body;
 
@@ -239,7 +239,7 @@ whatsappRouter.post('/send-statement', authenticateToken, async (req: Request, r
 /**
  * Bulk dispatch all employee statements for a billing period
  */
-whatsappRouter.post('/bulk-dispatch-statements', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/bulk-dispatch-statements', authenticateToken, requireRole('SUPER_ADMIN', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { billingPeriodId } = req.body;
 
@@ -302,7 +302,7 @@ whatsappRouter.post('/bulk-dispatch-statements', authenticateToken, async (req: 
 /**
  * Dispatch POS sale bill memo to customer/employee WhatsApp
  */
-whatsappRouter.post('/send-receipt', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/send-receipt', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER', 'CASHIER'), async (req: Request, res: Response, next) => {
   try {
     const { saleId, customPhone } = req.body;
 
@@ -389,7 +389,7 @@ whatsappRouter.post('/send-receipt', authenticateToken, async (req: Request, res
 /**
  * Fetch WhatsApp delivery audit logs
  */
-whatsappRouter.get('/logs', authenticateToken, async (_req: Request, res: Response, next) => {
+whatsappRouter.get('/logs', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER'), async (_req: Request, res: Response, next) => {
   try {
     const logs = await executeRawSql(`
       SELECT * FROM whatsapp_logs
@@ -405,7 +405,7 @@ whatsappRouter.get('/logs', authenticateToken, async (_req: Request, res: Respon
 /**
  * 4. Dispatch Live Credit Balance Alert to Employee
  */
-whatsappRouter.post('/send-employee-balance', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/send-employee-balance', authenticateToken, requireRole('SUPER_ADMIN', 'ACCOUNTS_OFFICER', 'CASHIER'), async (req: Request, res: Response, next) => {
   try {
     const { employeeId, customPhone } = req.body;
     if (!employeeId) {
@@ -454,7 +454,7 @@ whatsappRouter.post('/send-employee-balance', authenticateToken, async (req: Req
 /**
  * 5. Dispatch Purchase Order notice to Vendor
  */
-whatsappRouter.post('/send-vendor-po', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/send-vendor-po', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const { poId, customPhone } = req.body;
     if (!poId) {
@@ -508,7 +508,7 @@ whatsappRouter.post('/send-vendor-po', authenticateToken, async (req: Request, r
 /**
  * 6. Dispatch Vendor Payment Advice
  */
-whatsappRouter.post('/send-vendor-payment', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/send-vendor-payment', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { paymentId, customPhone } = req.body;
     if (!paymentId) {
@@ -561,7 +561,7 @@ whatsappRouter.post('/send-vendor-payment', authenticateToken, async (req: Reque
 /**
  * 7. Dispatch Salary Store Recovery Advice
  */
-whatsappRouter.post('/send-payroll-advice', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/send-payroll-advice', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { payrollEntryId, customPhone } = req.body;
     if (!payrollEntryId) {
@@ -615,7 +615,7 @@ whatsappRouter.post('/send-payroll-advice', authenticateToken, async (req: Reque
 /**
  * 8. Bulk Dispatch Salary Store Recovery Advice for a Payroll Period
  */
-whatsappRouter.post('/bulk-payroll-advice', authenticateToken, async (req: Request, res: Response, next) => {
+whatsappRouter.post('/bulk-payroll-advice', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { payrollPeriodId } = req.body;
     if (!payrollPeriodId) {

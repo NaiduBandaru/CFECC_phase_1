@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { Search, ShoppingCart, LogOut, User as UserIcon, Bell } from 'lucide-react';
 
@@ -9,28 +9,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ collapsed }) => {
   const { user, logout } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
-
-  // Generate breadcrumb title
-  const getPageTitle = () => {
-    const path = location.pathname;
-    if (path.startsWith('/dashboard')) return { title: 'Executive Dashboard', category: 'Overview' };
-    if (path.startsWith('/employees')) return { title: 'Employee Master', category: 'Master Data' };
-    if (path.startsWith('/items')) return { title: 'Store Items Master', category: 'Master Data' };
-    if (path.startsWith('/vendors')) return { title: 'Vendor Master', category: 'Master Data' };
-    if (path.startsWith('/pos')) return { title: 'Point of Sale (POS)', category: 'Operations' };
-    if (path.startsWith('/sales')) return { title: 'Sales Register', category: 'Operations' };
-    if (path.startsWith('/purchasing')) return { title: 'Purchasing & GRN', category: 'Operations' };
-    if (path.startsWith('/inventory')) return { title: 'Inventory & Stock Valuation', category: 'Operations' };
-    if (path.startsWith('/billing')) return { title: 'Monthly Employee Billing', category: 'Finance' };
-    if (path.startsWith('/payroll')) return { title: 'Payroll Recovery & Payslips', category: 'Finance' };
-    if (path.startsWith('/reports')) return { title: 'Reports & Business Analytics', category: 'Insights' };
-    if (path.startsWith('/settings')) return { title: 'Administration & Audit Logs', category: 'Settings' };
-    return { title: 'CFECC Stores', category: 'System' };
-  };
-
-  const { title, category } = getPageTitle();
 
   return (
     <header
@@ -38,18 +17,8 @@ export const Header: React.FC<HeaderProps> = ({ collapsed }) => {
         collapsed ? 'left-20' : 'left-64'
       }`}
     >
-      {/* Breadcrumbs */}
-      <div>
-        <div className="flex items-center space-x-2 text-xs text-textSecondary">
-          <span>{category}</span>
-          <span>/</span>
-          <span className="font-semibold text-textPrimary">{title}</span>
-        </div>
-        <h1 className="text-base font-bold text-navy-800 leading-none mt-0.5">{title}</h1>
-      </div>
-
-      {/* Center Search */}
-      <div className="hidden md:flex items-center w-72 lg:w-96">
+      {/* Global Search Bar */}
+      <div className="flex items-center w-72 sm:w-80 lg:w-96">
         <div className="relative w-full">
           <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -85,11 +54,25 @@ export const Header: React.FC<HeaderProps> = ({ collapsed }) => {
             {user?.fullName?.charAt(0) || <UserIcon className="w-4 h-4" />}
           </div>
           <div className="hidden sm:block text-left">
-            <div className="text-xs font-bold text-navy-800 leading-tight truncate max-w-[120px]">
-              {user?.fullName || 'User'}
+            <div className="text-xs font-bold text-navy-800 leading-tight truncate max-w-[140px] flex items-center space-x-1.5">
+              <span>{user?.fullName || 'User'}</span>
             </div>
-            <div className="text-[10px] text-textSecondary leading-tight font-medium">
-              {user?.roleName || user?.roleCode || 'Operator'}
+            <div className="text-[10px] leading-tight font-medium mt-0.5">
+              {user?.roleCode === 'SUPER_ADMIN' ? (
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200 font-mono">
+                  SUPER ADMIN
+                </span>
+              ) : user?.roleCode === 'STORE_MANAGER' ? (
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-primary border border-blue-200 font-mono">
+                  STORE MANAGER
+                </span>
+              ) : user?.roleCode === 'CASHIER' ? (
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 font-mono">
+                  POS CASHIER
+                </span>
+              ) : (
+                <span className="text-textSecondary font-mono">{user?.roleName || user?.roleCode}</span>
+              )}
             </div>
           </div>
         </div>

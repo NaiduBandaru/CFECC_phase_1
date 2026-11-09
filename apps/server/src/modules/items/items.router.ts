@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
 
 export const itemsRouter = Router();
@@ -149,7 +149,7 @@ itemsRouter.get('/categories', authenticateToken, async (req: Request, res: Resp
 });
 
 // 3. Create Category
-itemsRouter.post('/categories', authenticateToken, async (req: Request, res: Response, next) => {
+itemsRouter.post('/categories', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const body = categorySchema.parse(req.body);
     const existing = await executeRawSql(`SELECT id FROM item_categories WHERE LOWER(code) = '${body.code.replace(/'/g, "''").toLowerCase()}'`);
@@ -187,7 +187,7 @@ itemsRouter.post('/categories', authenticateToken, async (req: Request, res: Res
 });
 
 // 4. Create Unit
-itemsRouter.post('/units', authenticateToken, async (req: Request, res: Response, next) => {
+itemsRouter.post('/units', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const body = unitSchema.parse(req.body);
     const existing = await executeRawSql(`SELECT id FROM units WHERE LOWER(code) = '${body.code.replace(/'/g, "''").toLowerCase()}'`);
@@ -265,7 +265,7 @@ itemsRouter.get('/pricing/history', authenticateToken, async (req: Request, res:
 });
 
 // 4d. Bulk Category / Store Price Revision
-itemsRouter.post('/pricing/bulk-update', authenticateToken, async (req: Request, res: Response, next) => {
+itemsRouter.post('/pricing/bulk-update', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const { categoryId, percentageChange, targetField, reason } = req.body;
     const pct = parseFloat(percentageChange);
@@ -389,7 +389,7 @@ itemsRouter.get('/:id/price-history', authenticateToken, async (req: Request, re
 });
 
 // 7. Create Item
-itemsRouter.post('/', authenticateToken, async (req: Request, res: Response, next) => {
+itemsRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const body = itemSchema.parse(req.body);
 
@@ -447,7 +447,7 @@ itemsRouter.post('/', authenticateToken, async (req: Request, res: Response, nex
 });
 
 // 8. Update Item & Track Price History
-itemsRouter.put('/:id', authenticateToken, async (req: Request, res: Response, next) => {
+itemsRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const itemId = parseInt(req.params.id as string, 10);
     const body = req.body;
@@ -522,7 +522,7 @@ itemsRouter.put('/:id', authenticateToken, async (req: Request, res: Response, n
 });
 
 // 9. Bulk Actions (Activate, Deactivate, Delete)
-itemsRouter.post('/bulk-action', authenticateToken, async (req: Request, res: Response, next) => {
+itemsRouter.post('/bulk-action', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const { itemIds, action } = req.body;
     if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
@@ -561,7 +561,7 @@ itemsRouter.post('/bulk-action', authenticateToken, async (req: Request, res: Re
 });
 
 // 10. Bulk Import Items (CSV/JSON)
-itemsRouter.post('/import', authenticateToken, async (req: Request, res: Response, next) => {
+itemsRouter.post('/import', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const { items: importedItems } = req.body;
     if (!importedItems || !Array.isArray(importedItems) || importedItems.length === 0) {

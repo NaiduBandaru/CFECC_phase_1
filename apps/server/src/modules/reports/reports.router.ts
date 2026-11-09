@@ -1,11 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 
 export const reportsRouter = Router();
 
+// Enforce reports access control: Admins, Store Managers & Accounts Officers only
+reportsRouter.use(authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER'));
+
 // 1. Employee Outstanding Report
-reportsRouter.get('/employee-outstanding', authenticateToken, async (req: Request, res: Response, next) => {
+reportsRouter.get('/employee-outstanding', async (req: Request, res: Response, next) => {
   try {
     const { departmentId } = req.query;
     let whereClause = 'e.current_outstanding > 0';

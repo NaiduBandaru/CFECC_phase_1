@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
 
 export const purchasingRouter = Router();
@@ -129,7 +129,7 @@ purchasingRouter.get('/orders/:id', authenticateToken, async (req: Request, res:
 });
 
 // 3. Create Purchase Order
-purchasingRouter.post('/orders', authenticateToken, async (req: Request, res: Response, next) => {
+purchasingRouter.post('/orders', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const body = createPoSchema.parse(req.body);
 
@@ -201,7 +201,7 @@ purchasingRouter.post('/orders', authenticateToken, async (req: Request, res: Re
 });
 
 // 4. Update PO Status (Approve / Cancel)
-purchasingRouter.put('/orders/:id/status', authenticateToken, async (req: Request, res: Response, next) => {
+purchasingRouter.put('/orders/:id/status', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const poId = parseInt(req.params.id as string, 10);
     const { status } = req.body;
@@ -293,7 +293,7 @@ purchasingRouter.get('/receipts/:id', authenticateToken, async (req: Request, re
 });
 
 // 6. Record Goods Receipt Note (GRN) & update inventory & calculate matching
-purchasingRouter.post('/receipts', authenticateToken, async (req: Request, res: Response, next) => {
+purchasingRouter.post('/receipts', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const body = receiveGrnSchema.parse(req.body);
 
@@ -551,7 +551,7 @@ purchasingRouter.get('/invoices/:id', authenticateToken, async (req: Request, re
 });
 
 // 7c. Create Purchase Invoice (Manual / Direct Bill)
-purchasingRouter.post('/invoices', authenticateToken, async (req: Request, res: Response, next) => {
+purchasingRouter.post('/invoices', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const { vendorId, invoiceNumber, grnId, invoiceDate, dueDate, subtotal, taxAmount, totalAmount, notes } = req.body;
 
@@ -597,7 +597,7 @@ purchasingRouter.post('/invoices', authenticateToken, async (req: Request, res: 
 });
 
 // 8. Record Vendor Payment against Purchase Invoice
-purchasingRouter.post('/invoices/:id/payment', authenticateToken, async (req: Request, res: Response, next) => {
+purchasingRouter.post('/invoices/:id/payment', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const invoiceId = parseInt(req.params.id as string, 10);
     const body = vendorPaymentSchema.parse(req.body);
@@ -674,7 +674,7 @@ purchasingRouter.post('/invoices/:id/payment', authenticateToken, async (req: Re
 });
 
 // 9. Record Purchase Return
-purchasingRouter.post('/returns', authenticateToken, async (req: Request, res: Response, next) => {
+purchasingRouter.post('/returns', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const { vendorId, itemId, returnQty, unitPrice, reason } = req.body;
     const qty = parseFloat(returnQty);

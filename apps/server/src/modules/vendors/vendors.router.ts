@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
 
 export const vendorsRouter = Router();
@@ -187,7 +187,7 @@ vendorsRouter.get('/:id/profile', authenticateToken, async (req: Request, res: R
 });
 
 // 4. Create Vendor
-vendorsRouter.post('/', authenticateToken, async (req: Request, res: Response, next) => {
+vendorsRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const body = vendorSchema.parse(req.body);
 
@@ -238,7 +238,7 @@ vendorsRouter.post('/', authenticateToken, async (req: Request, res: Response, n
 });
 
 // 5. Update Vendor
-vendorsRouter.put('/:id', authenticateToken, async (req: Request, res: Response, next) => {
+vendorsRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const vendorId = parseInt(req.params.id as string, 10);
     const body = vendorSchema.partial().parse(req.body);

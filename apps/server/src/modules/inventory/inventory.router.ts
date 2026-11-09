@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
 
 export const inventoryRouter = Router();
@@ -79,7 +79,7 @@ inventoryRouter.get('/movements', authenticateToken, async (req: Request, res: R
 });
 
 // 3. Manual Stock Adjustment
-inventoryRouter.post('/adjust', authenticateToken, async (req: Request, res: Response, next) => {
+inventoryRouter.post('/adjust', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const { itemId, adjustmentType, quantity, reason } = req.body;
     // adjustmentType: 'ADJUSTMENT_IN' or 'ADJUSTMENT_OUT'

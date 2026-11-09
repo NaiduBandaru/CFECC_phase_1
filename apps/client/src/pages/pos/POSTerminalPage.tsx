@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
 import { Modal } from '../../components/ui/Modal.js';
 import { BarcodeSvg } from '../../components/ui/BarcodeSvg.js';
@@ -49,6 +50,7 @@ interface CartItem {
 
 export const POSTerminalPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   // Products catalog
   const [items, setItems] = useState<any[]>([]);
@@ -174,15 +176,21 @@ export const POSTerminalPage: React.FC = () => {
   };
 
   const handleExitPos = () => {
+    const isCashier = user?.roleCode === 'CASHIER';
     if (cart.length > 0) {
       const confirmExit = window.confirm(
         `Cart has ${cart.reduce((s, i) => s + i.quantity, 0)} item(s) worth ₹${grandTotal.toFixed(
           2
-        )}.\n\nAre you sure you want to exit the POS cashier terminal?`
+        )}.\n\nAre you sure you want to ${isCashier ? 'sign out of the cashier terminal' : 'exit the POS cashier terminal'}?`
       );
       if (!confirmExit) return;
     }
-    navigate('/dashboard');
+    if (isCashier) {
+      logout();
+      navigate('/login');
+    } else {
+      navigate('/dashboard');
+    }
   };
 
   const fetchActiveShift = async () => {
@@ -578,15 +586,15 @@ export const POSTerminalPage: React.FC = () => {
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
 
-          {/* Prominent EXIT POS Button */}
+          {/* Prominent EXIT POS / LOGOUT Button */}
           <button
             type="button"
             onClick={handleExitPos}
             className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition-all active:scale-95"
-            title="Exit POS Terminal and return to Back-Office Dashboard [Esc]"
+            title={user?.roleCode === 'CASHIER' ? 'Sign out of Cashier Terminal [Esc]' : 'Exit POS Terminal and return to Back-Office Dashboard [Esc]'}
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Exit POS</span>
+            <span>{user?.roleCode === 'CASHIER' ? 'Sign Out' : 'Exit POS'}</span>
             <span className="text-[10px] text-white/70 font-mono hidden sm:inline">[Esc]</span>
           </button>
         </div>

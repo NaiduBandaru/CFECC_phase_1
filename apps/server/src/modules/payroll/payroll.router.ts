@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
 
 export const payrollRouter = Router();
@@ -23,7 +23,7 @@ payrollRouter.get('/periods', authenticateToken, async (req: Request, res: Respo
 });
 
 // 2. Create Payroll Period
-payrollRouter.post('/periods', authenticateToken, async (req: Request, res: Response, next) => {
+payrollRouter.post('/periods', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { periodCode, monthYear, startDate, endDate, payoutDate } = req.body;
 
@@ -51,7 +51,7 @@ payrollRouter.post('/periods', authenticateToken, async (req: Request, res: Resp
 });
 
 // 3. Process Payroll & Calculate Store Recovery from Billing Statements
-payrollRouter.post('/calculate', authenticateToken, async (req: Request, res: Response, next) => {
+payrollRouter.post('/calculate', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { payrollPeriodId, billingPeriodId } = req.body;
 
@@ -189,7 +189,7 @@ payrollRouter.get('/entries', authenticateToken, async (req: Request, res: Respo
 });
 
 // 5. Disburse Payroll & Execute Store Recovery Settlements
-payrollRouter.post('/disburse', authenticateToken, async (req: Request, res: Response, next) => {
+payrollRouter.post('/disburse', authenticateToken, requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next) => {
   try {
     const { payrollPeriodId, billingPeriodId } = req.body;
     if (!payrollPeriodId) {

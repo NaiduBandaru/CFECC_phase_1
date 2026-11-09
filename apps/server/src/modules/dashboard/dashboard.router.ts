@@ -1,10 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 
 export const dashboardRouter = Router();
 
-dashboardRouter.get('/metrics', authenticateToken, async (req: Request, res: Response, next) => {
+// Only managerial and administrative roles have access to executive dashboard metrics
+dashboardRouter.use(authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER', 'HR_PAYROLL'));
+
+dashboardRouter.get('/metrics', async (req: Request, res: Response, next) => {
   try {
     const range = (req.query.range as string) || 'month';
 

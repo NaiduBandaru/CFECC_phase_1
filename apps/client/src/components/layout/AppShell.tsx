@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext.js';
 import { Sidebar } from './Sidebar.js';
 import { Header } from './Header.js';
 
 export const AppShell: React.FC = () => {
   const [collapsed, setCollapsed] = useState<boolean>(false);
+  const { user } = useAuth();
+
+  // Cashiers are restricted entirely to the Fullscreen POS Terminal - no back-office shell
+  if (user?.roleCode === 'CASHIER') {
+    return <Navigate to="/pos" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-appBg">

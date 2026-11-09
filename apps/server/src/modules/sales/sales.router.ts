@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
 
 export const salesRouter = Router();
@@ -187,7 +187,7 @@ salesRouter.get('/:id', authenticateToken, async (req: Request, res: Response, n
 });
 
 // 3. Cancel / Refund Sales Invoice & Reverse Inventory and Employee Credit
-salesRouter.post('/:id/cancel', authenticateToken, async (req: Request, res: Response, next) => {
+salesRouter.post('/:id/cancel', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAGER'), async (req: Request, res: Response, next) => {
   try {
     const saleId = parseInt(req.params.id as string, 10);
     const { reason = 'Customer return / order cancelled' } = req.body;

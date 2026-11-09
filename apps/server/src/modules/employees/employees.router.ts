@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
 
 export const employeesRouter = Router();
@@ -277,7 +277,7 @@ employeesRouter.get('/:id', authenticateToken, async (req: Request, res: Respons
 });
 
 // 4. Create Employee
-employeesRouter.post('/', authenticateToken, async (req: Request, res: Response, next) => {
+employeesRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL'), async (req: Request, res: Response, next) => {
   try {
     const body = createEmployeeSchema.parse(req.body);
 
@@ -370,7 +370,7 @@ employeesRouter.post('/', authenticateToken, async (req: Request, res: Response,
 });
 
 // 5. Update Employee
-employeesRouter.put('/:id', authenticateToken, async (req: Request, res: Response, next) => {
+employeesRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL'), async (req: Request, res: Response, next) => {
   try {
     const employeeId = parseInt(req.params.id as string, 10);
     const body = req.body;
@@ -407,7 +407,7 @@ employeesRouter.put('/:id', authenticateToken, async (req: Request, res: Respons
 });
 
 // 6. Update Store Credit Configuration
-employeesRouter.put('/:id/credit', authenticateToken, async (req: Request, res: Response, next) => {
+employeesRouter.put('/:id/credit', authenticateToken, requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next) => {
   try {
     const employeeId = parseInt(req.params.id as string, 10);
     const { creditEnabled, creditLimit } = req.body;
@@ -452,7 +452,7 @@ employeesRouter.put('/:id/credit', authenticateToken, async (req: Request, res: 
 });
 
 // 7. Update Employee Salary Structure
-employeesRouter.put('/:id/salary', authenticateToken, async (req: Request, res: Response, next) => {
+employeesRouter.put('/:id/salary', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL'), async (req: Request, res: Response, next) => {
   try {
     const employeeId = parseInt(req.params.id as string, 10);
     const { basicSalary, da, hra, otherAllowances, statutoryDeductions, effectiveDate } = req.body;
@@ -490,7 +490,7 @@ employeesRouter.put('/:id/salary', authenticateToken, async (req: Request, res: 
 });
 
 // 8. Update Employee Bank Details
-employeesRouter.put('/:id/bank', authenticateToken, async (req: Request, res: Response, next) => {
+employeesRouter.put('/:id/bank', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const employeeId = parseInt(req.params.id as string, 10);
     const { accountHolderName, bankName, accountNumber, ifscCode, branch } = req.body;
@@ -535,7 +535,7 @@ employeesRouter.put('/:id/bank', authenticateToken, async (req: Request, res: Re
 });
 
 // 9. Attach / Upload Document
-employeesRouter.post('/:id/documents', authenticateToken, async (req: Request, res: Response, next) => {
+employeesRouter.post('/:id/documents', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL'), async (req: Request, res: Response, next) => {
   try {
     const employeeId = parseInt(req.params.id as string, 10);
     const { documentType, documentName, documentUrl, fileSize, mimeType } = req.body;
@@ -569,7 +569,7 @@ employeesRouter.post('/:id/documents', authenticateToken, async (req: Request, r
 });
 
 // 10. Delete Document
-employeesRouter.delete('/:id/documents/:docId', authenticateToken, async (req: Request, res: Response, next) => {
+employeesRouter.delete('/:id/documents/:docId', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL'), async (req: Request, res: Response, next) => {
   try {
     const employeeId = parseInt(req.params.id as string, 10);
     const docId = parseInt(req.params.docId as string, 10);
@@ -583,7 +583,7 @@ employeesRouter.delete('/:id/documents/:docId', authenticateToken, async (req: R
 });
 
 // 11. Bulk Actions (Enable credit, Disable credit, Update employment status)
-employeesRouter.post('/bulk-action', authenticateToken, async (req: Request, res: Response, next) => {
+employeesRouter.post('/bulk-action', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL'), async (req: Request, res: Response, next) => {
   try {
     const { employeeIds, action, value } = req.body;
     // action: 'SET_CREDIT' (value: boolean) | 'SET_STATUS' (value: 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED')
@@ -630,7 +630,7 @@ employeesRouter.post('/bulk-action', authenticateToken, async (req: Request, res
 });
 
 // 12. Bulk Excel/CSV Import
-employeesRouter.post('/import', authenticateToken, async (req: Request, res: Response, next) => {
+employeesRouter.post('/import', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYROLL'), async (req: Request, res: Response, next) => {
   try {
     const { rows } = req.body; // array of { employeeCode, firstName, lastName, mobile, departmentId, designationId, creditLimit, basicSalary }
 

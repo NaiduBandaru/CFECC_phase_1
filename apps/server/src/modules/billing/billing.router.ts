@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
-import { authenticateToken } from '../../middleware/auth.js';
+import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
 
 export const billingRouter = Router();
@@ -22,7 +22,7 @@ billingRouter.get('/periods', authenticateToken, async (req: Request, res: Respo
 });
 
 // 2. Create New Billing Period
-billingRouter.post('/periods', authenticateToken, async (req: Request, res: Response, next) => {
+billingRouter.post('/periods', authenticateToken, requireRole('SUPER_ADMIN', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { periodCode, periodName, startDate, endDate, billingDate } = req.body;
 
@@ -50,7 +50,7 @@ billingRouter.post('/periods', authenticateToken, async (req: Request, res: Resp
 });
 
 // 3. Run Monthly Billing Engine for a Period
-billingRouter.post('/generate', authenticateToken, async (req: Request, res: Response, next) => {
+billingRouter.post('/generate', authenticateToken, requireRole('SUPER_ADMIN', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { periodId } = req.body;
 
@@ -228,7 +228,7 @@ billingRouter.get('/statements', authenticateToken, async (req: Request, res: Re
 });
 
 // 5. Finalize Billing Period
-billingRouter.post('/finalize', authenticateToken, async (req: Request, res: Response, next) => {
+billingRouter.post('/finalize', authenticateToken, requireRole('SUPER_ADMIN', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { periodId } = req.body;
 
@@ -262,7 +262,7 @@ billingRouter.post('/finalize', authenticateToken, async (req: Request, res: Res
 });
 
 // 6. Record Direct Employee Payment
-billingRouter.post('/payments', authenticateToken, async (req: Request, res: Response, next) => {
+billingRouter.post('/payments', authenticateToken, requireRole('SUPER_ADMIN', 'ACCOUNTS_OFFICER', 'CASHIER'), async (req: Request, res: Response, next) => {
   try {
     const { employeeId, paymentMode, amount, transactionReference, remarks } = req.body;
     const payAmount = parseFloat(amount);

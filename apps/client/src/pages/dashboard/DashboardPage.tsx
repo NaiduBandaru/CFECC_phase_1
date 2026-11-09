@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
 import { StatCard } from '../../components/ui/StatCard.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
@@ -19,6 +20,10 @@ import {
   Banknote,
   CheckCircle2,
   Clock,
+  ShieldCheck,
+  Tag,
+  Settings,
+  Briefcase,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -35,6 +40,7 @@ import {
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [metrics, setMetrics] = useState<any>(null);
   const [charts, setCharts] = useState<any>(null);
   const [activity, setActivity] = useState<any>(null);
@@ -122,6 +128,59 @@ export const DashboardPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Super Administrator Executive Management Console */}
+      {user?.roleCode === 'SUPER_ADMIN' && (
+        <div className="bg-gradient-to-r from-navy-900 to-navy-800 text-white p-4 rounded-xl border border-navy-700/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-bold flex items-center space-x-2">
+                <span>Super Administrator Management Console</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
+                  ALL MANAGING CONTROLS ACTIVE
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-300 mt-0.5">
+                Full authority over staff KYC, pricing revisions, billing settlements, audit trails, and WhatsApp API.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center flex-wrap gap-2 w-full md:w-auto shrink-0">
+            <button
+              onClick={() => navigate('/employees')}
+              className="px-2.5 py-1.5 rounded-lg bg-navy-800 hover:bg-navy-700 text-slate-200 hover:text-white border border-navy-700 text-xs font-semibold transition-colors flex items-center space-x-1.5"
+            >
+              <Users className="w-3.5 h-3.5 text-blue-400" />
+              <span>Employees</span>
+            </button>
+            <button
+              onClick={() => navigate('/pricing')}
+              className="px-2.5 py-1.5 rounded-lg bg-navy-800 hover:bg-navy-700 text-slate-200 hover:text-white border border-navy-700 text-xs font-semibold transition-colors flex items-center space-x-1.5"
+            >
+              <Tag className="w-3.5 h-3.5 text-amber-400" />
+              <span>Pricing Rules</span>
+            </button>
+            <button
+              onClick={() => navigate('/billing')}
+              className="px-2.5 py-1.5 rounded-lg bg-navy-800 hover:bg-navy-700 text-slate-200 hover:text-white border border-navy-700 text-xs font-semibold transition-colors flex items-center space-x-1.5"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Billing & Recovery</span>
+            </button>
+            <button
+              onClick={() => navigate('/settings')}
+              className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-bold transition-colors shadow-xs flex items-center space-x-1.5"
+            >
+              <Settings className="w-3.5 h-3.5 text-amber-300" />
+              <span>System Settings</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Operational Quick Actions Launcher */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

@@ -38,6 +38,42 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// Role-Based Route Guard (Super Admin has universal access to ALL managing things)
+const RoleRoute: React.FC<{
+  allowedRoles: string[];
+  children: React.ReactNode;
+}> = ({ allowedRoles, children }) => {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Super Admin has universal access
+  if (user.roleCode === 'SUPER_ADMIN') {
+    return <>{children}</>;
+  }
+
+  if (!allowedRoles.includes(user.roleCode)) {
+    // If cashier, send to POS Terminal; otherwise Dashboard
+    if (user.roleCode === 'CASHIER') {
+      return <Navigate to="/pos" replace />;
+    }
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Root Redirector based on user role
+const RootRedirect: React.FC = () => {
+  const { user } = useAuth();
+  if (user?.roleCode === 'CASHIER') {
+    return <Navigate to="/pos" replace />;
+  }
+  return <Navigate to="/dashboard" replace />;
+};
+
 export function App() {
   return (
     <AuthProvider>
@@ -64,22 +100,127 @@ export function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="employees" element={<EmployeeDirectoryPage />} />
-            <Route path="employees/:id" element={<EmployeeProfilePage />} />
-            <Route path="items" element={<ItemsMasterPage />} />
-            <Route path="pricing" element={<ItemPricingPage />} />
-            <Route path="vendors" element={<VendorsPage />} />
-            <Route path="sales" element={<SalesRegisterPage />} />
-            <Route path="purchasing" element={<PurchasingPage />} />
-            <Route path="purchase-invoices" element={<PurchaseInvoicesPage />} />
-            <Route path="inventory" element={<InventoryPage />} />
-            <Route path="billing" element={<BillingPage />} />
-            <Route path="payroll" element={<PayrollPage initialTab="PAYROLL" />} />
-            <Route path="recovery-records" element={<PayrollPage initialTab="RECOVERY" />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route index element={<RootRedirect />} />
+            <Route
+              path="dashboard"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER', 'HR_PAYROLL']}>
+                  <DashboardPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="employees"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'HR_PAYROLL']}>
+                  <EmployeeDirectoryPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="employees/:id"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'HR_PAYROLL']}>
+                  <EmployeeProfilePage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="items"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
+                  <ItemsMasterPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="pricing"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
+                  <ItemPricingPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="vendors"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
+                  <VendorsPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="sales"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER']}>
+                  <SalesRegisterPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="purchasing"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
+                  <PurchasingPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="purchase-invoices"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
+                  <PurchaseInvoicesPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="inventory"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
+                  <InventoryPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="billing"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'ACCOUNTS_OFFICER']}>
+                  <BillingPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="payroll"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'ACCOUNTS_OFFICER', 'HR_PAYROLL']}>
+                  <PayrollPage initialTab="PAYROLL" />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="recovery-records"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'ACCOUNTS_OFFICER', 'HR_PAYROLL']}>
+                  <PayrollPage initialTab="RECOVERY" />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="reports"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER']}>
+                  <ReportsPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN']}>
+                  <SettingsPage />
+                </RoleRoute>
+              }
+            />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

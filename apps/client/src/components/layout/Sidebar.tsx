@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext.js';
 import {
   LayoutDashboard,
   Users,
@@ -18,6 +19,10 @@ import {
   Store,
   FileText,
   Tag,
+  ShieldCheck,
+  Shield,
+  Briefcase,
+  BadgeDollarSign,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -26,57 +31,85 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
+interface NavItem {
+  name: string;
+  path: string;
+  icon: any;
+  highlight?: boolean;
+  roles?: string[]; // If omitted or contains user.roleCode or user is SUPER_ADMIN, it is visible
+}
+
+interface NavGroup {
+  group: string;
+  items: NavItem[];
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const location = useLocation();
+  const { user } = useAuth();
+  const userRole = user?.roleCode || 'CASHIER';
+  const isSuperAdmin = userRole === 'SUPER_ADMIN';
 
-  const navigationGroups = [
+  const rawNavigationGroups: NavGroup[] = [
     {
       group: 'WORKSPACE',
       items: [
-        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER', 'HR_PAYROLL'] },
       ],
     },
     {
       group: 'MASTER DATA',
       items: [
-        { name: 'Employees', path: '/employees', icon: Users },
-        { name: 'Store Items', path: '/items', icon: Package },
-        { name: 'Item Pricing', path: '/pricing', icon: Tag },
-        { name: 'Vendors', path: '/vendors', icon: Truck },
+        { name: 'Employees', path: '/employees', icon: Users, roles: ['SUPER_ADMIN', 'HR_PAYROLL'] },
+        { name: 'Store Items', path: '/items', icon: Package, roles: ['SUPER_ADMIN', 'STORE_MANAGER'] },
+        { name: 'Item Pricing', path: '/pricing', icon: Tag, roles: ['SUPER_ADMIN', 'STORE_MANAGER'] },
+        { name: 'Vendors', path: '/vendors', icon: Truck, roles: ['SUPER_ADMIN', 'STORE_MANAGER'] },
       ],
     },
     {
       group: 'OPERATIONS',
       items: [
         { name: 'Point of Sale', path: '/pos', icon: ShoppingCart, highlight: true },
-        { name: 'Sales Register', path: '/sales', icon: Receipt },
-        { name: 'Purchasing & GRN', path: '/purchasing', icon: FileSpreadsheet },
-        { name: 'Purchase Invoices', path: '/purchase-invoices', icon: FileText },
-        { name: 'Inventory & Stock', path: '/inventory', icon: Boxes },
+        { name: 'Sales Register', path: '/sales', icon: Receipt, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER'] },
+        { name: 'Purchasing & GRN', path: '/purchasing', icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'STORE_MANAGER'] },
+        { name: 'Purchase Invoices', path: '/purchase-invoices', icon: FileText, roles: ['SUPER_ADMIN', 'STORE_MANAGER'] },
+        { name: 'Inventory & Stock', path: '/inventory', icon: Boxes, roles: ['SUPER_ADMIN', 'STORE_MANAGER'] },
       ],
     },
     {
-      group: 'FINANCE',
+      group: 'FINANCE & PAYROLL',
       items: [
-        { name: 'Employee Billing', path: '/billing', icon: CreditCard },
-        { name: 'Payroll Processing', path: '/payroll', icon: Banknote },
-        { name: 'Recovery Records', path: '/recovery-records', icon: Receipt },
+        { name: 'Employee Billing', path: '/billing', icon: CreditCard, roles: ['SUPER_ADMIN', 'ACCOUNTS_OFFICER'] },
+        { name: 'Payroll Processing', path: '/payroll', icon: Banknote, roles: ['SUPER_ADMIN', 'ACCOUNTS_OFFICER', 'HR_PAYROLL'] },
+        { name: 'Recovery Records', path: '/recovery-records', icon: Receipt, roles: ['SUPER_ADMIN', 'ACCOUNTS_OFFICER', 'HR_PAYROLL'] },
       ],
     },
     {
-      group: 'INSIGHTS',
+      group: 'INSIGHTS & REPORTS',
       items: [
-        { name: 'Reports Center', path: '/reports', icon: BarChart3 },
-        { name: 'Purchase Reports', path: '/reports?tab=purchases', icon: FileSpreadsheet },
+        { name: 'Reports Center', path: '/reports', icon: BarChart3, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'ACCOUNTS_OFFICER'] },
+        { name: 'Purchase Reports', path: '/reports?tab=purchases', icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'STORE_MANAGER'] },
       ],
     },
     {
       group: 'ADMINISTRATION',
       items: [
-        { name: 'System Settings', path: '/settings', icon: Settings },
+        { name: 'System Settings', path: '/settings', icon: Settings, roles: ['SUPER_ADMIN'] },
       ],
     },
   ];
+
+  // Filter groups and items based on role
+  const navigationGroups = rawNavigationGroups
+    .map((grp) => {
+      const allowedItems = grp.items.filter((item) => {
+        if (isSuperAdmin) return true; // Super Admin has universal access to ALL managing things
+        if (!item.roles) return true;
+        return item.roles.includes(userRole);
+      });
+      return { ...grp, items: allowedItems };
+    })
+    .filter((grp) => grp.items.length > 0);
 
   return (
     <aside
@@ -106,6 +139,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
       </div>
+
+      {/* Role Context Strip */}
+      {!collapsed && (
+        <div className="px-3 pt-3 pb-1">
+          <div className="p-2.5 rounded-lg bg-navy-900/70 border border-navy-700/60 flex items-center justify-between">
+            <div className="flex items-center space-x-2 truncate">
+              {isSuperAdmin ? (
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : userRole === 'STORE_MANAGER' ? (
+                <Briefcase className="w-4 h-4 text-blue-400 shrink-0" />
+              ) : (
+                <BadgeDollarSign className="w-4 h-4 text-amber-400 shrink-0" />
+              )}
+              <div className="truncate text-left">
+                <div className="text-[11px] font-bold text-white leading-tight truncate">
+                  {user?.fullName || 'Operator'}
+                </div>
+                <div className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">
+                  {user?.roleName || userRole}
+                </div>
+              </div>
+            </div>
+            {isSuperAdmin && (
+              <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                ALL PERMS
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Navigation Links */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
