@@ -86,8 +86,6 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  const activeShift = activity?.activeShift || metrics?.activeShift;
-
   return (
     <div className="space-y-6">
       {/* Top Banner & Date Filter */}
@@ -179,119 +177,6 @@ export const DashboardPage: React.FC = () => {
               <span>System Settings</span>
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Operational Quick Actions Launcher */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <button
-          onClick={() => navigate('/pos')}
-          className="flex items-center space-x-2.5 p-3 rounded-cfecc bg-primary hover:bg-primary-hover text-white shadow-subtle transition-all group text-left"
-        >
-          <div className="p-2 rounded-lg bg-white/15 group-hover:bg-white/20">
-            <ShoppingCart className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <div className="text-xs font-bold leading-tight">POS Terminal</div>
-            <div className="text-[10px] text-white/80">New Counter Sale</div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => navigate('/purchasing')}
-          className="flex items-center space-x-2.5 p-3 rounded-cfecc bg-surface hover:bg-slate-50 border border-borderLine shadow-subtle transition-all text-left group"
-        >
-          <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100">
-            <Layers className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-navy-800 leading-tight">Goods Inward</div>
-            <div className="text-[10px] text-textSecondary">GRN & Challans</div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => navigate('/billing')}
-          className="flex items-center space-x-2.5 p-3 rounded-cfecc bg-surface hover:bg-slate-50 border border-borderLine shadow-subtle transition-all text-left group"
-        >
-          <div className="p-2 rounded-lg bg-amber-50 text-amber-700 group-hover:bg-amber-100">
-            <CreditCard className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-navy-800 leading-tight">Store Billing</div>
-            <div className="text-[10px] text-textSecondary">Monthly Invoices</div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => navigate('/payroll')}
-          className="flex items-center space-x-2.5 p-3 rounded-cfecc bg-surface hover:bg-slate-50 border border-borderLine shadow-subtle transition-all text-left group"
-        >
-          <div className="p-2 rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-100">
-            <Banknote className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-navy-800 leading-tight">Payroll Recovery</div>
-            <div className="text-[10px] text-textSecondary">Salary Deductions</div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => navigate('/reports')}
-          className="flex items-center space-x-2.5 p-3 rounded-cfecc bg-surface hover:bg-slate-50 border border-borderLine shadow-subtle transition-all text-left group col-span-2 sm:col-span-1"
-        >
-          <div className="p-2 rounded-lg bg-purple-50 text-purple-600 group-hover:bg-purple-100">
-            <TrendingUp className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-navy-800 leading-tight">Audit Reports</div>
-            <div className="text-[10px] text-textSecondary">Ledger & P&L</div>
-          </div>
-        </button>
-      </div>
-
-      {/* Live Register & Active Shift Status Widget */}
-      {activeShift ? (
-        <div className="bg-emerald-50/70 border border-emerald-300 rounded-cfecc p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-subtle">
-          <div className="flex items-center space-x-3">
-            <div className="relative flex items-center justify-center">
-              <span className="w-3 h-3 bg-emerald-500 rounded-full animate-ping absolute" />
-              <span className="w-3 h-3 bg-emerald-600 rounded-full relative" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-xs font-bold text-emerald-900">
-                  POS Register #{activeShift.terminal_id} &bull; Shift {activeShift.shift_number} Active
-                </span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-200 text-emerald-800">
-                  OPEN
-                </span>
-              </div>
-              <div className="text-[11px] text-emerald-800 mt-0.5">
-                Cashier: <span className="font-semibold">{activeShift.cashier_name || 'Rajesh Varma'}</span> &bull; Float: ₹{parseFloat(activeShift.opening_float || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} &bull; Shift Sales: ₹{parseFloat(activeShift.total_sales || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ({activeShift.total_transactions || 0} bills)
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => navigate('/pos')}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-xs transition-colors"
-          >
-            <span>Open Cashier Register</span>
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ) : (
-        <div className="bg-amber-50/60 border border-amber-300 rounded-cfecc p-3 flex items-center justify-between shadow-subtle">
-          <div className="flex items-center space-x-2 text-xs text-amber-900">
-            <Clock className="w-4 h-4 text-amber-600" />
-            <span>Cash register drawer is currently closed for the day.</span>
-          </div>
-          <button
-            onClick={() => navigate('/pos')}
-            className="text-xs font-bold text-amber-800 hover:text-amber-950 underline"
-          >
-            Start New POS Shift &rarr;
-          </button>
         </div>
       )}
 

@@ -25,7 +25,11 @@ import {
   Printer,
 } from 'lucide-react';
 
-export const ItemsMasterPage: React.FC = () => {
+interface ItemsMasterPageProps {
+  hideHeader?: boolean;
+}
+
+export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = false }) => {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -494,12 +498,20 @@ export const ItemsMasterPage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-navy-800">Store Items Master</h2>
-          <p className="text-xs text-textSecondary mt-0.5">
-            Commodity catalog, dual pricing (Regular vs Subsidized Employee Price) and inventory control thresholds
-          </p>
-        </div>
+        {!hideHeader ? (
+          <div>
+            <h2 className="text-xl font-bold text-navy-800">Store Items Master</h2>
+            <p className="text-xs text-textSecondary mt-0.5">
+              Commodity catalog, dual pricing (Regular vs Subsidized Employee Price) and inventory control thresholds
+            </p>
+          </div>
+        ) : (
+          <div className="text-xs font-semibold text-textSecondary flex items-center space-x-1.5">
+            <span className="font-bold text-navy-800">Commodity Master Catalog</span>
+            <span>&bull;</span>
+            <span>{items.length} Registered Products</span>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <button

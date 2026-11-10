@@ -10,11 +10,27 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
-export const InventoryPage: React.FC = () => {
+interface InventoryPageProps {
+  hideHeader?: boolean;
+  hideTabs?: boolean;
+  initialTab?: 'stock' | 'movements';
+}
+
+export const InventoryPage: React.FC<InventoryPageProps> = ({
+  hideHeader = false,
+  hideTabs = false,
+  initialTab = 'stock',
+}) => {
   const [stock, setStock] = useState<any[]>([]);
   const [movements, setMovements] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'stock' | 'movements'>('stock');
+  const [activeTab, setActiveTab] = useState<'stock' | 'movements'>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Adjustment Modal
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
@@ -79,12 +95,20 @@ export const InventoryPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-navy-800">Inventory & Stock Ledger</h2>
-          <p className="text-xs text-textSecondary mt-0.5">
-            Real-time commodity balances, weighted valuation & auditable stock movement trail
-          </p>
-        </div>
+        {!hideHeader ? (
+          <div>
+            <h2 className="text-xl font-bold text-navy-800">Inventory & Stock Ledger</h2>
+            <p className="text-xs text-textSecondary mt-0.5">
+              Real-time commodity balances, weighted valuation & auditable stock movement trail
+            </p>
+          </div>
+        ) : (
+          <div className="text-xs font-semibold text-textSecondary flex items-center space-x-1.5">
+            <span className="font-bold text-navy-800">Inventory & Stock Ledger</span>
+            <span>&bull;</span>
+            <span>Live Balances (₹{Math.round(totalValuation).toLocaleString('en-IN')})</span>
+          </div>
+        )}
 
         <button
           onClick={() => setIsAdjustModalOpen(true)}
@@ -96,31 +120,33 @@ export const InventoryPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-2 border-b border-borderLine pb-2">
-        <button
-          onClick={() => setActiveTab('stock')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-            activeTab === 'stock'
-              ? 'bg-navy-800 text-white shadow-sm'
-              : 'text-textSecondary hover:text-navy-800 hover:bg-slate-100'
-          }`}
-        >
-          <Boxes className="w-4 h-4" />
-          <span>Live Stock Balances (Valuation: ₹{Math.round(totalValuation).toLocaleString('en-IN')})</span>
-        </button>
+      {!hideTabs && (
+        <div className="flex space-x-2 border-b border-borderLine pb-2">
+          <button
+            onClick={() => setActiveTab('stock')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+              activeTab === 'stock'
+                ? 'bg-navy-800 text-white shadow-sm'
+                : 'text-textSecondary hover:text-navy-800 hover:bg-slate-100'
+            }`}
+          >
+            <Boxes className="w-4 h-4" />
+            <span>Live Stock Balances (Valuation: ₹{Math.round(totalValuation).toLocaleString('en-IN')})</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('movements')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-            activeTab === 'movements'
-              ? 'bg-navy-800 text-white shadow-sm'
-              : 'text-textSecondary hover:text-navy-800 hover:bg-slate-100'
-          }`}
-        >
-          <History className="w-4 h-4" />
-          <span>Stock Movement Audit Trail</span>
-        </button>
-      </div>
+          <button
+            onClick={() => setActiveTab('movements')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+              activeTab === 'movements'
+                ? 'bg-navy-800 text-white shadow-sm'
+                : 'text-textSecondary hover:text-navy-800 hover:bg-slate-100'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>Stock Movement Audit Trail</span>
+          </button>
+        </div>
+      )}
 
       {/* Tab 1: Live Stock Table with Standard Format and Auto Screen Adjust */}
       {activeTab === 'stock' && (

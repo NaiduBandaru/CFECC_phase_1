@@ -15,8 +15,11 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-export const ItemPricingPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'PRICING' | 'AUDIT_LOG'>('PRICING');
+interface ItemPricingPageProps {
+  hideHeader?: boolean;
+}
+
+export const ItemPricingPage: React.FC<ItemPricingPageProps> = ({ hideHeader = false }) => {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -26,18 +29,6 @@ export const ItemPricingPage: React.FC = () => {
   const [categoryId, setCategoryId] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<string>('name');
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
-
-  // Overview Metrics
-  const [overview, setOverview] = useState({
-    total_items: 0,
-    avg_retail_markup_pct: '0.00',
-    avg_subsidy_discount_pct: '0.00',
-    total_revisions_count: 0,
-  });
-
-  // Global Price History
-  const [globalHistory, setGlobalHistory] = useState<any[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
 
   // Single Item Price Revision Modal
   const [isReviseModalOpen, setIsReviseModalOpen] = useState<boolean>(false);
@@ -70,20 +61,10 @@ export const ItemPricingPage: React.FC = () => {
     fetchItems();
   }, [search, categoryId, sortBy, sortOrder]);
 
-  useEffect(() => {
-    if (activeTab === 'AUDIT_LOG') {
-      fetchGlobalHistory();
-    }
-  }, [activeTab]);
-
   const fetchInitialData = async () => {
     try {
-      const [catRes, overRes] = await Promise.all([
-        api.get('/items/categories'),
-        api.get('/items/pricing/overview'),
-      ]);
+      const catRes = await api.get('/items/categories');
       if (catRes.data.success) setCategories(catRes.data.categories);
-      if (overRes.data.success) setOverview(overRes.data.data);
     } catch (err) {
       console.error(err);
     }
@@ -107,20 +88,6 @@ export const ItemPricingPage: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchGlobalHistory = async () => {
-    try {
-      setLoadingHistory(true);
-      const res = await api.get('/items/pricing/history?limit=100');
-      if (res.data.success) {
-        setGlobalHistory(res.data.data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingHistory(false);
     }
   };
 
@@ -274,12 +241,20 @@ export const ItemPricingPage: React.FC = () => {
     <div className="space-y-6">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-navy-800">Item Pricing & Margin Control</h2>
-          <p className="text-xs text-textSecondary mt-0.5">
-            Dual-tier price governance: Standard retail vs Subsidized staff pricing, gross profit margins and audit logs
-          </p>
-        </div>
+        {!hideHeader ? (
+          <div>
+            <h2 className="text-xl font-bold text-navy-800">Item Pricing & Margin Control</h2>
+            <p className="text-xs text-textSecondary mt-0.5">
+              Dual-tier price governance: Standard retail vs Subsidized staff pricing, gross profit margins and audit logs
+            </p>
+          </div>
+        ) : (
+          <div className="text-xs font-semibold text-textSecondary flex items-center space-x-1.5">
+            <span className="font-bold text-navy-800">Dual-Tier Price Governance</span>
+            <span>&bull;</span>
+            <span>Retail MRP vs Subsidized Staff Pricing & Gross Margin</span>
+          </div>
+        )}
 
         <div className="flex items-center space-x-2">
           <button
@@ -300,77 +275,8 @@ export const ItemPricingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Overview Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-textSecondary uppercase">Priced Commodities</span>
-            <Tag className="w-4 h-4 text-primary" />
-          </div>
-          <div className="text-xl font-bold text-navy-800 mt-2 tabular-nums">{overview.total_items}</div>
-          <div className="text-[11px] text-textSecondary mt-1">Active inventory catalog</div>
-        </div>
-
-        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-700 uppercase">Avg Retail Markup</span>
-            <TrendingUp className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="text-xl font-bold text-emerald-700 mt-2 tabular-nums">
-            +{parseFloat(overview.avg_retail_markup_pct).toFixed(1)}%
-          </div>
-          <div className="text-[11px] text-textSecondary mt-1">Average margin over purchase cost</div>
-        </div>
-
-        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-primary uppercase">Avg Staff Subsidy</span>
-            <Percent className="w-4 h-4 text-primary" />
-          </div>
-          <div className="text-xl font-bold text-primary mt-2 tabular-nums">
-            {parseFloat(overview.avg_subsidy_discount_pct).toFixed(1)}% OFF
-          </div>
-          <div className="text-[11px] text-textSecondary mt-1">Subsidized employee discount</div>
-        </div>
-
-        <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-navy-800 uppercase">Historical Revisions</span>
-            <History className="w-4 h-4 text-slate-500" />
-          </div>
-          <div className="text-xl font-bold text-navy-800 mt-2 tabular-nums">
-            {overview.total_revisions_count}
-          </div>
-          <div className="text-[11px] text-textSecondary mt-1">Audited price changes on record</div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex space-x-2 border-b border-borderLine">
-        <button
-          onClick={() => setActiveTab('PRICING')}
-          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${
-            activeTab === 'PRICING' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
-          }`}
-        >
-          <Tag className="w-3.5 h-3.5" />
-          <span>Commodity Pricing & Margins</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('AUDIT_LOG')}
-          className={`pb-2.5 px-4 text-xs font-bold transition-colors flex items-center space-x-1.5 ${
-            activeTab === 'AUDIT_LOG' ? 'border-b-2 border-primary text-primary' : 'text-textSecondary hover:text-navy-800'
-          }`}
-        >
-          <History className="w-3.5 h-3.5" />
-          <span>Global Price Revision Audit Log</span>
-        </button>
-      </div>
-
-      {/* Tab 1: Pricing Table */}
-      {activeTab === 'PRICING' && (
-        <div className="space-y-4">
+      {/* Pricing Table */}
+      <div className="space-y-4">
           {/* Search & Category Filter */}
           <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle space-y-3">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -574,90 +480,6 @@ export const ItemPricingPage: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Tab 2: Global Audit Log */}
-      {activeTab === 'AUDIT_LOG' && (
-        <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col">
-          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
-            <table className="w-full text-left text-xs border-collapse min-w-[1050px]">
-              <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
-                <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                  <th className="py-3 px-4">Date & Time</th>
-                  <th className="py-3 px-4">Commodity</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4 text-right">Purchase Cost Delta</th>
-                  <th className="py-3 px-4 text-right">Standard Selling Delta</th>
-                  <th className="py-3 px-4 text-right">Employee Price Delta</th>
-                  <th className="py-3 px-4">Reason for Change</th>
-                  <th className="py-3 px-4 text-right">Authorized By</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-borderLine">
-                {loadingHistory ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-textSecondary">
-                      <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
-                      <div>Loading price revision audit log...</div>
-                    </td>
-                  </tr>
-                ) : globalHistory.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-textSecondary">
-                      <History className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                      <div>No price revisions recorded in audit log yet.</div>
-                    </td>
-                  </tr>
-                ) : (
-                  globalHistory.map((h: any) => (
-                    <tr key={h.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-4 text-textSecondary font-mono">
-                        {new Date(h.created_at).toLocaleString('en-IN')}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-navy-800">{h.item_name}</div>
-                        <div className="text-[10px] text-textSecondary font-mono">{h.item_code}</div>
-                      </td>
-                      <td className="py-3 px-4 text-textSecondary">{h.category_name || 'General'}</td>
-                      <td className="py-3 px-4 text-right font-mono text-[11px]">
-                        <span className="text-slate-400 line-through">₹{parseFloat(h.old_purchase_price).toFixed(2)}</span>
-                        <span className="mx-1 text-slate-400">&rarr;</span>
-                        <span className="font-bold text-navy-800">₹{parseFloat(h.new_purchase_price).toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-[11px]">
-                        <span className="text-slate-400 line-through">₹{parseFloat(h.old_selling_price).toFixed(2)}</span>
-                        <span className="mx-1 text-slate-400">&rarr;</span>
-                        <span className="font-bold text-navy-800">₹{parseFloat(h.new_selling_price).toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-[11px]">
-                        <span className="text-blue-300 line-through">₹{parseFloat(h.old_employee_price).toFixed(2)}</span>
-                        <span className="mx-1 text-slate-400">&rarr;</span>
-                        <span className="font-bold text-primary">₹{parseFloat(h.new_employee_price).toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-navy-800">{h.reason || 'Price adjustment'}</span>
-                      </td>
-                      <td className="py-3 px-4 text-right text-textSecondary">
-                        {h.changed_by_name || 'Admin'}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Standard Floating Audit Summary Footer */}
-          <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
-            <div>
-              Showing <span className="font-bold text-navy-800 font-mono">{globalHistory.length}</span> recorded price adjustment log events
-            </div>
-            <div className="text-[11px] text-slate-500 font-medium">
-              Immutable ERP Audit Trail Active
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Revise Price Rates Modal */}
       <Modal

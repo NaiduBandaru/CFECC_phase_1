@@ -6,14 +6,12 @@ import { LoginPage } from './pages/auth/LoginPage.js';
 import { DashboardPage } from './pages/dashboard/DashboardPage.js';
 import { EmployeeDirectoryPage } from './pages/employees/EmployeeDirectoryPage.js';
 import { EmployeeProfilePage } from './pages/employees/EmployeeProfilePage.js';
-import { ItemsMasterPage } from './pages/items/ItemsMasterPage.js';
-import { ItemPricingPage } from './pages/items/ItemPricingPage.js';
+import { ItemsInventoryHubPage } from './pages/items/ItemsInventoryHubPage.js';
 import { VendorsPage } from './pages/vendors/VendorsPage.js';
 import { POSTerminalPage } from './pages/pos/POSTerminalPage.js';
 import { SalesRegisterPage } from './pages/sales/SalesRegisterPage.js';
 import { PurchasingPage } from './pages/purchasing/PurchasingPage.js';
 import { PurchaseInvoicesPage } from './pages/purchasing/PurchaseInvoicesPage.js';
-import { InventoryPage } from './pages/inventory/InventoryPage.js';
 import { BillingPage } from './pages/billing/BillingPage.js';
 import { PayrollPage } from './pages/payroll/PayrollPage.js';
 import { ReportsPage } from './pages/reports/ReportsPage.js';
@@ -129,7 +127,7 @@ export function App() {
               path="items"
               element={
                 <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
-                  <ItemsMasterPage />
+                  <ItemsInventoryHubPage defaultTab="catalog" />
                 </RoleRoute>
               }
             />
@@ -137,7 +135,7 @@ export function App() {
               path="pricing"
               element={
                 <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
-                  <ItemPricingPage />
+                  <ItemsInventoryHubPage defaultTab="pricing" />
                 </RoleRoute>
               }
             />
@@ -177,7 +175,7 @@ export function App() {
               path="inventory"
               element={
                 <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
-                  <InventoryPage />
+                  <ItemsInventoryHubPage defaultTab="stock" />
                 </RoleRoute>
               }
             />
