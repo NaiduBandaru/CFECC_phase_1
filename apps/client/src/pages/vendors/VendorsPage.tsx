@@ -243,11 +243,11 @@ export const VendorsPage: React.FC = () => {
 
   // Metrics
   const totalOutstanding = useMemo(
-    () => vendors.reduce((sum, v) => sum + parseFloat(v.current_outstanding.toString()), 0),
+    () => vendors.reduce((sum, v) => sum + (parseFloat(String(v.current_outstanding || 0)) || 0), 0),
     [vendors]
   );
   const totalPos = useMemo(
-    () => vendors.reduce((sum, v) => sum + (v.po_count || 0), 0),
+    () => vendors.reduce((sum, v) => sum + (parseInt(String(v.po_count || 0), 10) || 0), 0),
     [vendors]
   );
 

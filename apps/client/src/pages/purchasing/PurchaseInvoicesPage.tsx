@@ -13,6 +13,22 @@ import {
   CheckCircle,
 } from 'lucide-react';
 
+const formatDate = (dateStr?: string | null) => {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+};
+
+const formatCurrency = (val: number | string | undefined | null) => {
+  const num = parseFloat((val ?? 0).toString());
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 export const PurchaseInvoicesPage: React.FC = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -415,11 +431,11 @@ export const PurchaseInvoicesPage: React.FC = () => {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-textSecondary">{inv.invoice_date}</td>
+                      <td className="py-3 px-4 text-textSecondary whitespace-nowrap">{formatDate(inv.invoice_date)}</td>
 
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         <span className={inv.is_overdue ? 'text-rose-600 font-bold' : 'text-textSecondary'}>
-                          {inv.due_date || '-'}
+                          {formatDate(inv.due_date)}
                         </span>
                         {inv.is_overdue && (
                           <span className="block text-[9px] font-bold text-rose-600 uppercase">OVERDUE</span>
@@ -427,16 +443,16 @@ export const PurchaseInvoicesPage: React.FC = () => {
                       </td>
 
                       <td className="py-3 px-4 text-right font-bold text-navy-800 tabular-nums">
-                        ₹{parseFloat(inv.total_amount.toString()).toFixed(2)}
+                        {formatCurrency(inv.total_amount)}
                       </td>
 
                       <td className="py-3 px-4 text-right font-medium text-emerald-700 tabular-nums">
-                        ₹{parseFloat(inv.paid_amount.toString()).toFixed(2)}
+                        {formatCurrency(inv.paid_amount)}
                       </td>
 
                       <td className="py-3 px-4 text-right font-bold tabular-nums">
                         <span className={balance > 0 ? 'text-rose-600' : 'text-emerald-700'}>
-                          ₹{balance.toFixed(2)}
+                          {formatCurrency(balance)}
                         </span>
                       </td>
 
@@ -673,16 +689,16 @@ export const PurchaseInvoicesPage: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span className="text-textSecondary">Total Bill Value:</span>
-              <span className="font-mono tabular-nums">₹{parseFloat(selectedInvoice?.total_amount || 0).toFixed(2)}</span>
+              <span className="font-mono tabular-nums font-bold">{formatCurrency(selectedInvoice?.total_amount)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-textSecondary">Previously Paid:</span>
-              <span className="font-mono tabular-nums text-emerald-700">₹{parseFloat(selectedInvoice?.paid_amount || 0).toFixed(2)}</span>
+              <span className="font-mono tabular-nums text-emerald-700 font-semibold">{formatCurrency(selectedInvoice?.paid_amount)}</span>
             </div>
             <div className="flex justify-between font-bold text-rose-600 border-t border-borderLine pt-1">
               <span>Remaining Balance:</span>
               <span className="font-mono tabular-nums">
-                ₹{(parseFloat(selectedInvoice?.total_amount || 0) - parseFloat(selectedInvoice?.paid_amount || 0)).toFixed(2)}
+                {formatCurrency(parseFloat(selectedInvoice?.total_amount || 0) - parseFloat(selectedInvoice?.paid_amount || 0))}
               </span>
             </div>
           </div>
@@ -785,8 +801,8 @@ export const PurchaseInvoicesPage: React.FC = () => {
 
               <div className="text-right">
                 <span className="text-[10px] text-textSecondary uppercase font-bold block">Bill Dates</span>
-                <span className="block mt-0.5 font-medium">Invoice Date: <strong>{invoiceDetails.invoice_date}</strong></span>
-                <span className="text-textSecondary block">Payment Due Date: {invoiceDetails.due_date || 'N/A'}</span>
+                <span className="block mt-0.5 font-medium">Invoice Date: <strong>{formatDate(invoiceDetails.invoice_date)}</strong></span>
+                <span className="text-textSecondary block">Payment Due Date: {formatDate(invoiceDetails.due_date)}</span>
                 <span className="font-mono text-emerald-700 block mt-1">
                   {invoiceDetails.grn_number ? `Matched with ${invoiceDetails.grn_number}` : 'Direct Bill'}
                 </span>
@@ -798,15 +814,15 @@ export const PurchaseInvoicesPage: React.FC = () => {
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-slate-50 p-2 rounded">
                   <span className="text-[10px] text-textSecondary block">Subtotal</span>
-                  <span className="font-bold font-mono">₹{parseFloat(invoiceDetails.subtotal).toFixed(2)}</span>
+                  <span className="font-bold font-mono">{formatCurrency(invoiceDetails.subtotal)}</span>
                 </div>
                 <div className="bg-slate-50 p-2 rounded">
                   <span className="text-[10px] text-textSecondary block">GST Output Tax</span>
-                  <span className="font-bold font-mono">₹{parseFloat(invoiceDetails.tax_amount).toFixed(2)}</span>
+                  <span className="font-bold font-mono">{formatCurrency(invoiceDetails.tax_amount)}</span>
                 </div>
                 <div className="bg-blue-50 p-2 rounded border border-blue-200">
                   <span className="text-[10px] text-primary block font-bold">Total Bill Value</span>
-                  <span className="font-bold font-mono text-primary">₹{parseFloat(invoiceDetails.total_amount).toFixed(2)}</span>
+                  <span className="font-bold font-mono text-primary">{formatCurrency(invoiceDetails.total_amount)}</span>
                 </div>
               </div>
             </div>
@@ -836,11 +852,11 @@ export const PurchaseInvoicesPage: React.FC = () => {
                       invoicePayments.map((p) => (
                         <tr key={p.id} className="hover:bg-slate-50">
                           <td className="py-2 px-3 font-mono font-bold text-emerald-700">{p.payment_number}</td>
-                          <td className="py-2 px-3 text-textSecondary">{new Date(p.payment_date).toLocaleDateString()}</td>
+                          <td className="py-2 px-3 text-textSecondary whitespace-nowrap">{formatDate(p.payment_date)}</td>
                           <td className="py-2 px-3 font-semibold">{p.payment_mode}</td>
                           <td className="py-2 px-3 font-mono text-textSecondary">{p.reference_number || '-'}</td>
                           <td className="py-2 px-3 text-right font-bold text-emerald-700 tabular-nums">
-                            ₹{parseFloat(p.amount).toFixed(2)}
+                            {formatCurrency(p.amount)}
                           </td>
                         </tr>
                       ))

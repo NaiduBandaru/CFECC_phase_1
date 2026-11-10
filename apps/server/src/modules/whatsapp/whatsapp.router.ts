@@ -105,6 +105,7 @@ whatsappRouter.get('/config', authenticateToken, requireRole('SUPER_ADMIN'), asy
           ? `${creds.accessToken.substring(0, 8)}...${creds.accessToken.substring(creds.accessToken.length - 4)}`
           : '',
         apiVersion: creds.apiVersion,
+        testPhoneNumber: process.env.WHATSAPP_TEST_NUMBER || '+1 (555) 614-9515',
         webhookVerifyToken: creds.webhookVerifyToken,
         webhookUrl: '/api/whatsapp/webhook',
         approvedTemplates: [
@@ -397,6 +398,25 @@ whatsappRouter.get('/logs', authenticateToken, requireRole('SUPER_ADMIN', 'STORE
       LIMIT 100;
     `);
     return res.json({ success: true, data: logs.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Clear test or failed WhatsApp delivery logs
+ */
+whatsappRouter.post('/logs/clear', authenticateToken, requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next) => {
+  try {
+    const { statusFilter } = req.body;
+    let whereClause = "1=1";
+    if (statusFilter === 'FAILED') {
+      whereClause = "status = 'FAILED'";
+    } else if (statusFilter === 'TEST') {
+      whereClause = "message_type = 'API_TEST' OR recipient_phone LIKE '%555%'";
+    }
+    await executeRawSql(`DELETE FROM whatsapp_logs WHERE ${whereClause};`);
+    return res.json({ success: true, message: 'WhatsApp delivery logs cleaned successfully.' });
   } catch (err) {
     next(err);
   }

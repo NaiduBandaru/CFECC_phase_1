@@ -54,9 +54,26 @@ export async function initDatabase() {
 
   if (!connectedRemote) {
     // Zero-config embedded PostgreSQL via PGlite
-    const dataDir = path.resolve(process.cwd(), '.data', 'pglite');
+    let rootDir = process.cwd();
+    let cur = rootDir;
+    while (cur && cur !== path.dirname(cur)) {
+      if (fs.existsSync(path.join(cur, 'pnpm-workspace.yaml'))) {
+        rootDir = cur;
+        break;
+      }
+      cur = path.dirname(cur);
+    }
+    const dataDir = process.env.PGLITE_DATA_DIR || path.resolve(rootDir, '.data', 'pglite');
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const pidFile = path.join(dataDir, 'postmaster.pid');
+    if (fs.existsSync(pidFile)) {
+      try {
+        fs.unlinkSync(pidFile);
+      } catch (err: any) {
+        // Ignored if actively locked
+      }
     }
     console.log(`[Database] Initializing embedded PostgreSQL storage at ${dataDir}...`);
     pgliteInstance = new PGlite(dataDir);
@@ -693,6 +710,8 @@ async function ensureTablesCreated() {
     );
 
     ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id INTEGER REFERENCES pos_shifts(id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_entries_period_emp ON payroll_entries(payroll_period_id, employee_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_ledger_ref ON employee_ledger(employee_id, reference_type, reference_id);
   `;
 
   await executeScript(ddl);

@@ -24,6 +24,11 @@ import {
   MessageSquare,
 } from 'lucide-react';
 
+const formatCurrency = (val: number | string | undefined | null) => {
+  const num = parseFloat((val ?? 0).toString());
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 export const EmployeeProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -44,12 +49,13 @@ export const EmployeeProfilePage: React.FC = () => {
   const [waNotice, setWaNotice] = useState<string | null>(null);
 
   const handleSendWhatsAppBalance = async () => {
-    if (!data?.basic?.id) return;
+    const employeeId = data?.overview?.id || id;
+    if (!employeeId) return;
     try {
       setWaSending(true);
       setWaNotice(null);
       const res = await api.post('/whatsapp/send-employee-balance', {
-        employeeId: data.basic.id,
+        employeeId: parseInt(employeeId.toString(), 10),
       });
       if (res.data.success) {
         setWaNotice(res.data.message || 'WhatsApp balance dispatched!');
@@ -326,9 +332,9 @@ export const EmployeeProfilePage: React.FC = () => {
             <div className="flex items-center space-x-3 text-xs text-textSecondary mt-1">
               <span className="font-mono font-semibold text-primary">{emp.employee_code}</span>
               <span>&bull;</span>
-              <span>{emp.department_name || 'Administration'}</span>
+              <span>{emp.department_name || 'Administration & Management'}</span>
               <span>&bull;</span>
-              <span>{emp.designation_title || 'Staff'}</span>
+              <span>{emp.designation_title || 'General Manager'}</span>
             </div>
           </div>
         </div>
@@ -555,11 +561,11 @@ export const EmployeeProfilePage: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-xs">
                 <div>
                   <span className="text-textSecondary font-medium block">Department</span>
-                  <span className="font-bold text-navy-800">{data.employment.departmentName || 'Administration'}</span>
+                  <span className="font-bold text-navy-800">{data.employment.departmentName || 'Administration & Management'}</span>
                 </div>
                 <div>
                   <span className="text-textSecondary font-medium block">Designation</span>
-                  <span className="font-bold text-navy-800">{data.employment.designationTitle || 'Staff'}</span>
+                  <span className="font-bold text-navy-800">{data.employment.designationTitle || 'General Manager'}</span>
                 </div>
                 <div>
                   <span className="text-textSecondary font-medium block">Joining Date</span>
@@ -835,7 +841,7 @@ export const EmployeeProfilePage: React.FC = () => {
                             </span>
                           </td>
                           <td className="py-2.5 px-4 text-right font-bold text-navy-800 tabular-nums font-mono">
-                            ₹{parseFloat(sale.total_amount).toFixed(2)}
+                            {formatCurrency(sale.total_amount)}
                           </td>
                         </tr>
                       ))
@@ -881,13 +887,13 @@ export const EmployeeProfilePage: React.FC = () => {
                           <td className="py-2.5 px-4 font-sans font-semibold text-navy-800">{entry.transaction_type}</td>
                           <td className="py-2.5 px-4 text-textSecondary">{entry.reference_id || '-'}</td>
                           <td className="py-2.5 px-4 text-right font-semibold text-rose-700">
-                            {parseFloat(entry.debit_amount) > 0 ? `₹${parseFloat(entry.debit_amount).toFixed(2)}` : '-'}
+                            {parseFloat(entry.debit_amount) > 0 ? formatCurrency(entry.debit_amount) : '-'}
                           </td>
                           <td className="py-2.5 px-4 text-right font-semibold text-emerald-700">
-                            {parseFloat(entry.credit_amount) > 0 ? `₹${parseFloat(entry.credit_amount).toFixed(2)}` : '-'}
+                            {parseFloat(entry.credit_amount) > 0 ? formatCurrency(entry.credit_amount) : '-'}
                           </td>
                           <td className="py-2.5 px-4 text-right font-bold text-navy-800">
-                            ₹{parseFloat(entry.running_balance).toFixed(2)}
+                            {formatCurrency(entry.running_balance)}
                           </td>
                         </tr>
                       ))

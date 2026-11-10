@@ -36,6 +36,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const [sortBy, setSortBy] = useState<string>('e.id');
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Column Visibility State
   const [columnVisibility, setColumnVisibility] = useState({
@@ -94,16 +95,26 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const handleQuickWhatsAppBalance = async (emp: Employee) => {
     try {
       setWaSendingId(emp.id);
+      setMessage(null);
       const res = await api.post('/whatsapp/send-employee-balance', {
         employeeId: emp.id,
       });
       if (res.data.success) {
-        alert(res.data.message || `Balance statement sent to ${emp.first_name}!`);
+        setMessage({
+          type: 'success',
+          text: res.data.message || `Live store credit balance notice dispatched to ${emp.first_name} (${emp.mobile}) via WhatsApp!`,
+        });
       } else {
-        alert(res.data.message || 'Failed to dispatch WhatsApp statement');
+        setMessage({
+          type: 'error',
+          text: res.data.message || 'Failed to dispatch WhatsApp statement',
+        });
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to dispatch message');
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || err.message || 'Failed to dispatch message',
+      });
     } finally {
       setWaSendingId(null);
     }
@@ -185,6 +196,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const handleBulkAction = async (action: 'SET_CREDIT' | 'SET_STATUS', value: any) => {
     if (selectedIds.length === 0) return;
     setIsBulkProcessing(true);
+    setMessage(null);
     try {
       const res = await api.post('/employees/bulk-action', {
         employeeIds: selectedIds,
@@ -192,12 +204,18 @@ export const EmployeeDirectoryPage: React.FC = () => {
         value,
       });
       if (res.data.success) {
-        alert(res.data.message);
+        setMessage({
+          type: 'success',
+          text: res.data.message || `Bulk action applied to ${selectedIds.length} employee accounts.`,
+        });
         setSelectedIds([]);
         fetchEmployees();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Bulk action failed');
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || err.message || 'Bulk action failed',
+      });
     } finally {
       setIsBulkProcessing(false);
     }
@@ -360,6 +378,31 @@ export const EmployeeDirectoryPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {message && (
+        <div
+          className={`p-3.5 rounded-lg border text-xs flex items-center justify-between ${
+            message.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-status-danger'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            {message.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            ) : (
+              <XCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            )}
+            <span>{message.text}</span>
+          </div>
+          <button
+            onClick={() => setMessage(null)}
+            className="text-xs font-bold opacity-60 hover:opacity-100 ml-4"
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle space-y-3">
@@ -589,8 +632,8 @@ export const EmployeeDirectoryPage: React.FC = () => {
                       {/* Department & Designation */}
                       {columnVisibility.department && (
                         <td className="py-3 px-4">
-                          <div className="font-medium text-textPrimary">{emp.department_name || 'Unassigned'}</div>
-                          <div className="text-[11px] text-textSecondary">{emp.designation_title || 'General'}</div>
+                          <div className="font-medium text-textPrimary">{emp.department_name || 'Administration & Management'}</div>
+                          <div className="text-[11px] text-textSecondary">{emp.designation_title || 'General Manager'}</div>
                         </td>
                       )}
 

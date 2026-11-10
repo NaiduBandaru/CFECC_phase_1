@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../lib/api.js';
 import { Modal } from '../../components/ui/Modal.js';
 import {
@@ -14,12 +14,24 @@ import {
   AlertCircle,
   Copy,
   ExternalLink,
+  Search,
+  Filter,
+  Trash2,
+  Eye,
+  Info,
+  X,
 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const [waLogs, setWaLogs] = useState<any[]>([]);
   const [waConfig, setWaConfig] = useState<any>(null);
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+  const [isClearingLogs, setIsClearingLogs] = useState<boolean>(false);
+
+  // Search & Filter for Logs
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'FAILED' | 'SENT' | 'DELIVERED' | 'SIMULATED'>('ALL');
+  const [selectedLogForModal, setSelectedLogForModal] = useState<any | null>(null);
 
   // WhatsApp Config Modal
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
@@ -35,7 +47,7 @@ export const SettingsPage: React.FC = () => {
   const [testPhone, setTestPhone] = useState('+15551439313');
   const [testNote, setTestNote] = useState('CFECC Official Gateway Verification Ping');
   const [sendingTest, setSendingTest] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; errorCode?: number } | null>(null);
 
   const [copiedWebhook, setCopiedWebhook] = useState(false);
 
@@ -117,6 +129,46 @@ export const SettingsPage: React.FC = () => {
       setSendingTest(false);
     }
   };
+
+  const handleClearLogs = async (targetStatus = 'FAILED') => {
+    if (!window.confirm(`Are you sure you want to purge ${targetStatus === 'ALL' ? 'all' : 'all failed'} WhatsApp delivery audit logs?`)) return;
+    try {
+      setIsClearingLogs(true);
+      const res = await api.post('/whatsapp/logs/clear', { statusFilter: targetStatus });
+      if (res.data.success) {
+        fetchWaLogs();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to clear logs');
+    } finally {
+      setIsClearingLogs(false);
+    }
+  };
+
+  const filteredLogs = useMemo(() => {
+    return waLogs.filter((log) => {
+      const s = (log.status || '').toUpperCase();
+      if (statusFilter !== 'ALL') {
+        if (statusFilter === 'DELIVERED' && s !== 'DELIVERED' && s !== 'READ') return false;
+        if (statusFilter === 'SENT' && s !== 'SENT') return false;
+        if (statusFilter === 'FAILED' && s !== 'FAILED') return false;
+        if (statusFilter === 'SIMULATED' && s !== 'SIMULATED') return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesName = (log.recipient_name || '').toLowerCase().includes(q);
+        const matchesPhone = (log.recipient_phone || '').includes(q);
+        const matchesRef = (log.reference_id || '').toLowerCase().includes(q);
+        const matchesType = (log.message_type || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesPhone && !matchesRef && !matchesType) return false;
+      }
+      return true;
+    });
+  }, [waLogs, statusFilter, searchQuery]);
+
+  const failedCount = useMemo(() => waLogs.filter(l => (l.status || '').toUpperCase() === 'FAILED').length, [waLogs]);
+  const deliveredCount = useMemo(() => waLogs.filter(l => ['DELIVERED', 'READ', 'SENT'].includes((l.status || '').toUpperCase())).length, [waLogs]);
+  const simulatedCount = useMemo(() => waLogs.filter(l => (l.status || '').toUpperCase() === 'SIMULATED').length, [waLogs]);
 
   const copyWebhookUrl = () => {
     const fullUrl = `${window.location.origin}/api/whatsapp/webhook`;
@@ -311,13 +363,23 @@ export const SettingsPage: React.FC = () => {
               <label className="block font-semibold text-textSecondary uppercase">
                 Recipient Mobile Number *
               </label>
-              <button
-                type="button"
-                onClick={() => setTestPhone('+15551439313')}
-                className="text-[10px] text-primary hover:underline font-semibold"
-              >
-                Reset to Test Number
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setTestPhone(waConfig?.testPhoneNumber || '+15551439313')}
+                  className="text-[10px] text-primary hover:underline font-semibold"
+                >
+                  Test Sandbox
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => setTestPhone('9985172319')}
+                  className="text-[10px] text-primary hover:underline font-semibold"
+                >
+                  Admin Mobile
+                </button>
+              </div>
             </div>
             <div className="relative">
               <Phone className="w-4 h-4 absolute left-3 top-2.5 text-textSecondary" />
@@ -358,87 +420,307 @@ export const SettingsPage: React.FC = () => {
         </form>
 
         {testResult && (
-          <div
-            className={`mt-4 p-3 rounded-lg border text-xs flex items-center space-x-2 ${
-              testResult.success
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : 'bg-rose-50 border-rose-200 text-rose-800'
-            }`}
-          >
-            {testResult.success ? <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />}
-            <span>{testResult.message}</span>
+          <div className="mt-4 space-y-2">
+            <div
+              className={`p-3 rounded-lg border text-xs flex items-center space-x-2 ${
+                testResult.success
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-rose-50 border-rose-200 text-rose-800'
+              }`}
+            >
+              {testResult.success ? (
+                <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+              )}
+              <span className="font-medium">{testResult.message}</span>
+            </div>
+
+            {/* Diagnostic Action Guidance */}
+            {!testResult.success && testResult.message.includes('131005') && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1">
+                <div className="font-bold flex items-center space-x-1.5 text-amber-800">
+                  <Key className="w-3.5 h-3.5" />
+                  <span>Meta Access Token Expired (Code #131005)</span>
+                </div>
+                <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                  The temporary 24-hour Meta Developer Token has expired. Generate a fresh token in the{' '}
+                  <a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="underline font-bold">
+                    Meta Developer Portal
+                  </a>{' '}
+                  under WhatsApp &rarr; API Setup, and click{' '}
+                  <button
+                    type="button"
+                    onClick={() => setIsConfigModalOpen(true)}
+                    className="underline font-bold text-amber-950"
+                  >
+                    Configure WhatsApp API
+                  </button>{' '}
+                  above to paste it.
+                </p>
+              </div>
+            )}
+
+            {!testResult.success && testResult.message.includes('131030') && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 space-y-1">
+                <div className="font-bold flex items-center space-x-1.5 text-blue-800">
+                  <Info className="w-3.5 h-3.5" />
+                  <span>Recipient Phone Not Whitelisted (Code #131030)</span>
+                </div>
+                <p className="text-[11px] text-blue-800/90 leading-relaxed">
+                  In Meta Cloud API Test/Development Mode, messages can only be dispatched to phone numbers explicitly added to the{' '}
+                  <strong>&ldquo;To&rdquo; recipient list</strong> in your Meta App Dashboard under WhatsApp &rarr; API Setup. Add{' '}
+                  <strong className="font-mono">{testPhone}</strong> there or use the official test sandbox number.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* WhatsApp Message Delivery Audit Logs */}
       <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
-        <div className="p-4 border-b border-borderLine flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-navy-800">WhatsApp Notification & Statement Delivery Logs</h3>
-            <p className="text-[11px] text-textSecondary">Real-time delivery status reported by Meta Cloud API Webhook</p>
+        {/* Header & Controls */}
+        <div className="p-4 border-b border-borderLine space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-navy-800">WhatsApp Notification & Statement Delivery Logs</h3>
+              <p className="text-[11px] text-textSecondary">Real-time delivery status reported by Meta Cloud API Webhook</p>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={fetchWaLogs}
+                disabled={loadingLogs}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-borderLine text-xs font-semibold text-textSecondary hover:text-navy-800 hover:bg-slate-50 transition-colors shadow-2xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? 'animate-spin' : ''}`} />
+                <span>Refresh Logs</span>
+              </button>
+
+              {failedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleClearLogs('FAILED')}
+                  disabled={isClearingLogs}
+                  className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors shadow-2xs"
+                  title="Purge all failed log records"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>{isClearingLogs ? 'Purging...' : `Clear ${failedCount} Failed`}</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={fetchWaLogs}
-              disabled={loadingLogs}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-borderLine text-xs font-semibold text-textSecondary hover:text-navy-800 hover:bg-slate-50 transition-colors"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? 'animate-spin' : ''}`} />
-              <span>Refresh Logs</span>
-            </button>
-            <span className="text-xs text-textSecondary bg-slate-100 px-2.5 py-1 rounded-full font-semibold">
-              {waLogs.length} total messages
-            </span>
+          {/* Search & Filter Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-3.5 h-3.5 text-textSecondary absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search by recipient, phone, or ref document..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-borderLine rounded-lg focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2 text-textSecondary hover:text-navy-800"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-[11px] text-textSecondary mr-1 flex items-center gap-1">
+                <Filter className="w-3 h-3" />
+                <span>Filter:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ALL')}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  statusFilter === 'ALL'
+                    ? 'bg-navy-800 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                All ({waLogs.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('FAILED')}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  statusFilter === 'FAILED'
+                    ? 'bg-rose-600 text-white shadow-2xs'
+                    : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                }`}
+              >
+                Failed ({failedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('DELIVERED')}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  statusFilter === 'DELIVERED'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                }`}
+              >
+                Delivered / Sent ({deliveredCount})
+              </button>
+              {simulatedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('SIMULATED')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                    statusFilter === 'SIMULATED'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                  }`}
+                >
+                  Simulated ({simulatedCount})
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-borderLine text-[11px] font-bold text-textSecondary uppercase tracking-wider">
-                <th className="py-3 px-4">Recipient</th>
-                <th className="py-3 px-4">Phone Number</th>
-                <th className="py-3 px-4">Message Type</th>
-                <th className="py-3 px-4">Reference Document</th>
-                <th className="py-3 px-4">Provider Message ID</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4">Timestamp</th>
+        {/* Audit Logs Table */}
+        <div className="overflow-x-auto overflow-y-auto max-h-[460px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+            <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+              <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                <th className="py-2.5 px-4">Recipient</th>
+                <th className="py-2.5 px-4">Phone Number</th>
+                <th className="py-2.5 px-4">Message Type</th>
+                <th className="py-2.5 px-4">Ref Document</th>
+                <th className="py-2.5 px-4 text-center">Status</th>
+                <th className="py-2.5 px-4">Delivery Diagnostics & Error Reason</th>
+                <th className="py-2.5 px-4">Timestamp</th>
+                <th className="py-2.5 px-3 text-center">Details</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-borderLine">
-              {waLogs.length === 0 ? (
+            <tbody className="divide-y divide-borderLine font-mono">
+              {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-textSecondary">
-                    No WhatsApp notifications logged yet. Dispatches will appear here automatically.
+                  <td colSpan={8} className="py-8 text-center text-textSecondary font-sans">
+                    {searchQuery || statusFilter !== 'ALL'
+                      ? 'No WhatsApp logs match your active filter.'
+                      : 'No WhatsApp notifications logged yet. Dispatches will appear here automatically.'}
                   </td>
                 </tr>
               ) : (
-                waLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-4 font-bold text-navy-800">{log.recipient_name || 'Valued Customer'}</td>
-                    <td className="py-3 px-4 font-mono">{log.recipient_phone}</td>
-                    <td className="py-3 px-4 font-mono text-textSecondary">
-                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-semibold">
-                        {log.message_type || log.template_name}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono font-semibold text-navy-800">{log.reference_id || 'N/A'}</td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-textSecondary">
-                      {log.provider_message_id || '—'}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {getStatusBadge(log.status)}
-                    </td>
-                    <td className="py-3 px-4 text-textSecondary whitespace-nowrap">
-                      {new Date(log.sent_at || log.created_at).toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                ))
+                filteredLogs.map((log) => {
+                  const isFailed = (log.status || '').toUpperCase() === 'FAILED';
+                  const isTokenError = isFailed && log.error_message?.includes('131005');
+                  const isWhitelistError = isFailed && log.error_message?.includes('131030');
+
+                  return (
+                    <tr key={log.id} className="hover:bg-slate-50/70 transition-colors font-sans">
+                      <td className="py-2.5 px-4">
+                        <div className="font-bold text-navy-800">{log.recipient_name || 'Valued Member'}</div>
+                      </td>
+                      <td className="py-2.5 px-4 font-mono text-textPrimary">{log.recipient_phone}</td>
+                      <td className="py-2.5 px-4">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[10px] font-semibold text-slate-700 border border-slate-200">
+                          {log.message_type || log.template_name}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 font-mono font-semibold text-navy-800">
+                        {log.reference_id || '—'}
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        {getStatusBadge(log.status)}
+                      </td>
+                      <td className="py-2.5 px-4 max-w-[320px]">
+                        {isFailed ? (
+                          <div className="space-y-0.5">
+                            {isTokenError ? (
+                              <div className="flex items-center space-x-1.5 text-rose-700">
+                                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                <span className="text-[11px] font-semibold">Access Token Expired (#131005)</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsConfigModalOpen(true)}
+                                  className="text-[10px] text-primary underline font-bold ml-1 hover:text-primary-hover"
+                                >
+                                  Update
+                                </button>
+                              </div>
+                            ) : isWhitelistError ? (
+                              <div className="flex items-center space-x-1.5 text-amber-700">
+                                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                <span className="text-[11px] font-semibold">Recipient Not Whitelisted (#131030)</span>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-rose-700 truncate" title={log.error_message}>
+                                {log.error_message || 'Meta Gateway delivery rejected'}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-emerald-700 flex items-center space-x-1">
+                            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>Dispatched via Meta Graph API</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-4 text-textSecondary text-[11px] whitespace-nowrap">
+                        {new Date(log.sent_at || log.created_at).toLocaleString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLogForModal(log)}
+                          className="p-1 rounded hover:bg-slate-200 text-textSecondary hover:text-navy-800 transition-colors"
+                          title="View message payload & delivery metadata"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Standard Floating Summary Footer */}
+        <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+          <div>
+            Showing <span className="font-bold text-navy-800 font-mono">{filteredLogs.length}</span> of{' '}
+            <span className="font-bold text-navy-800 font-mono">{waLogs.length}</span> logged WhatsApp events
+          </div>
+          <div className="flex items-center space-x-3 text-[11px]">
+            <span className="text-emerald-700 font-medium font-mono">
+              Delivered / Sent: {deliveredCount}
+            </span>
+            <span className="text-slate-400">&bull;</span>
+            <span className="text-rose-700 font-medium font-mono">
+              Failed: {failedCount}
+            </span>
+            {simulatedCount > 0 && (
+              <>
+                <span className="text-slate-400">&bull;</span>
+                <span className="text-amber-700 font-medium font-mono">
+                  Simulated: {simulatedCount}
+                </span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -561,6 +843,108 @@ export const SettingsPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* WhatsApp Message Log Details Modal */}
+      {selectedLogForModal && (
+        <Modal
+          isOpen={Boolean(selectedLogForModal)}
+          onClose={() => setSelectedLogForModal(null)}
+          title={`WhatsApp Dispatch Audit: #${selectedLogForModal.id}`}
+        >
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 border border-borderLine rounded-lg">
+              <div>
+                <span className="text-textSecondary block text-[11px]">Recipient</span>
+                <span className="font-bold text-navy-800">{selectedLogForModal.recipient_name || 'Valued Member'}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[11px]">Mobile Number</span>
+                <span className="font-mono font-semibold text-navy-800">{selectedLogForModal.recipient_phone}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[11px]">Message Type</span>
+                <span className="font-mono font-semibold">{selectedLogForModal.message_type}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[11px]">Template Name</span>
+                <span className="font-mono text-slate-600">{selectedLogForModal.template_name}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[11px]">Status</span>
+                <div>{getStatusBadge(selectedLogForModal.status)}</div>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[11px]">Reference Document</span>
+                <span className="font-mono font-semibold text-navy-800">{selectedLogForModal.reference_id || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[11px]">Provider Message ID</span>
+                <span className="font-mono text-[11px] text-textSecondary">{selectedLogForModal.provider_message_id || '—'}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block text-[11px]">Timestamp</span>
+                <span className="text-textSecondary">
+                  {new Date(selectedLogForModal.sent_at || selectedLogForModal.created_at).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            {selectedLogForModal.error_message && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 space-y-1">
+                <div className="font-bold flex items-center space-x-1.5 text-rose-800">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>Meta Cloud API Error Diagnostics</span>
+                </div>
+                <p className="font-mono text-[11px] bg-white/70 p-2 rounded border border-rose-200/60 leading-relaxed text-rose-800 break-words">
+                  {selectedLogForModal.error_message}
+                </p>
+                {selectedLogForModal.error_message.includes('131005') && (
+                  <p className="text-[11px] text-rose-700">
+                    💡 <strong>Resolution:</strong> Temporary Meta Developer Token expired. Click{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLogForModal(null);
+                        setIsConfigModalOpen(true);
+                      }}
+                      className="underline font-bold text-primary"
+                    >
+                      Configure WhatsApp API
+                    </button>{' '}
+                    to update it.
+                  </p>
+                )}
+                {selectedLogForModal.error_message.includes('131030') && (
+                  <p className="text-[11px] text-rose-700">
+                    💡 <strong>Resolution:</strong> The recipient number is not whitelisted in Meta Developer Portal. Add it to the &ldquo;To&rdquo; list under WhatsApp &gt; API Setup.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {selectedLogForModal.payload && (
+              <div>
+                <span className="text-[11px] font-bold text-navy-800 block mb-1">Message Payload Data</span>
+                <pre className="p-3 bg-slate-900 text-slate-100 rounded-lg text-[11px] font-mono overflow-x-auto max-h-48">
+                  {typeof selectedLogForModal.payload === 'string'
+                    ? selectedLogForModal.payload
+                    : JSON.stringify(selectedLogForModal.payload, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-3 border-t border-borderLine">
+              <button
+                type="button"
+                onClick={() => setSelectedLogForModal(null)}
+                className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-navy-800 rounded-lg font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

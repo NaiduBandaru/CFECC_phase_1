@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
 import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
+import { sendPosReceipt } from '../../services/whatsapp.service.js';
 
 export const salesRouter = Router();
 
@@ -306,27 +307,48 @@ salesRouter.post('/:id/send-whatsapp', authenticateToken, async (req: Request, r
       return res.status(400).json({ success: false, message: 'No phone number available for this invoice.' });
     }
 
-    const payload = {
-      invoiceNumber: sale.invoice_number,
-      customerName,
-      amount: parseFloat(sale.total_amount).toFixed(2),
-      date: new Date(sale.created_at).toLocaleDateString('en-IN'),
-    };
-
-    await executeRawSql(`
-      INSERT INTO whatsapp_logs (
-        recipient_phone, recipient_name, message_type, reference_type, reference_id,
-        template_name, payload, status, sent_at
-      ) VALUES (
-        '${phone}', '${customerName.replace(/'/g, "''")}', 'SALE_RECEIPT', 'SALE_INVOICE', '${sale.invoice_number}',
-        'store_sale_receipt_v1', '${JSON.stringify(payload)}', 'SENT', NOW()
-      );
+    const itemsRes = await executeRawSql(`
+      SELECT si.*, i.name as item_name
+      FROM sale_items si
+      JOIN items i ON si.item_id = i.id
+      WHERE si.sale_id = ${saleId}
     `);
+
+    const result = await sendPosReceipt({
+      phone,
+      customerName,
+      billNumber: sale.invoice_number,
+      totalAmount: sale.total_amount,
+      subtotal: sale.subtotal,
+      taxAmount: sale.tax_amount,
+      paymentMode: sale.payment_mode,
+      itemsCount: itemsRes.rows.length,
+      itemsList: itemsRes.rows.map((r: any) => ({
+        name: r.item_name,
+        quantity: r.quantity,
+        unitPrice: r.unit_price,
+        totalPrice: r.total_price,
+      })),
+      date: new Date(sale.created_at).toLocaleString('en-IN'),
+      saleId: sale.id,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: `WhatsApp Delivery Failed: ${result.errorMessage || 'Access Denied / Meta API Error'}`,
+        recipient: phone,
+        details: result,
+      });
+    }
 
     return res.json({
       success: true,
-      message: `Digital invoice receipt queued and dispatched to ${phone} via WhatsApp.`,
+      message: result.mode === 'LIVE'
+        ? `Official invoice receipt dispatched to ${phone} via WhatsApp Meta Cloud API (Msg ID: ${result.messageId || 'SENT'}).`
+        : `Digital receipt logged for ${phone} via WhatsApp service.`,
       recipient: phone,
+      details: result,
     });
   } catch (err) {
     next(err);

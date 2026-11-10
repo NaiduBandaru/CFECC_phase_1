@@ -21,6 +21,11 @@ import {
   GstItcReportItem,
 } from '../../types/index.js';
 
+const formatCurrency = (val: number | string | undefined | null) => {
+  const num = parseFloat((val ?? 0).toString());
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 export const ReportsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as any) || 'purchases';
@@ -41,6 +46,25 @@ export const ReportsPage: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [vendorsList, setVendorsList] = useState<any[]>([]);
+
+  const setDatePreset = (preset: 'ALL' | 'MARCH26' | 'MONTH' | 'TODAY') => {
+    const today = new Date().toISOString().split('T')[0];
+    if (preset === 'ALL') {
+      setStartDate('');
+      setEndDate('');
+    } else if (preset === 'MARCH26') {
+      setStartDate('2026-03-01');
+      setEndDate('2026-03-31');
+    } else if (preset === 'MONTH') {
+      const d = new Date();
+      const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+      setStartDate(firstDay);
+      setEndDate(today);
+    } else if (preset === 'TODAY') {
+      setStartDate(today);
+      setEndDate(today);
+    }
+  };
 
   // Data States
   const [outstandingData, setOutstandingData] = useState<any[]>([]);
@@ -429,7 +453,7 @@ export const ReportsPage: React.FC = () => {
 
           {/* Filtering Bar */}
           <div className="bg-surface p-3.5 rounded-cfecc border border-borderLine shadow-subtle flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <div className="flex items-center space-x-1.5">
                 <span className="text-textSecondary font-semibold">From:</span>
                 <input
@@ -448,6 +472,39 @@ export const ReportsPage: React.FC = () => {
                   onChange={(e) => setEndDate(e.target.value)}
                   className="px-2.5 py-1 bg-slate-50 border border-borderLine rounded-md font-mono"
                 />
+              </div>
+
+              {/* Date Quick Presets */}
+              <div className="flex items-center space-x-1 border-r border-borderLine pr-2">
+                <button
+                  type="button"
+                  onClick={() => setDatePreset('MARCH26')}
+                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                    startDate === '2026-03-01' && endDate === '2026-03-31'
+                      ? 'bg-navy-800 text-white'
+                      : 'bg-slate-100 text-textSecondary hover:bg-slate-200'
+                  }`}
+                >
+                  March 2026
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDatePreset('MONTH')}
+                  className="px-2 py-1 rounded text-[11px] font-semibold bg-slate-100 text-textSecondary hover:bg-slate-200 transition-colors"
+                >
+                  This Month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDatePreset('ALL')}
+                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                    !startDate && !endDate
+                      ? 'bg-navy-800 text-white'
+                      : 'bg-slate-100 text-textSecondary hover:bg-slate-200'
+                  }`}
+                >
+                  All Dates
+                </button>
               </div>
 
               {purchaseSubReport === 'register' && (
@@ -485,6 +542,7 @@ export const ReportsPage: React.FC = () => {
               )}
 
               <button
+                type="button"
                 onClick={fetchActivePurchaseReport}
                 className="flex items-center space-x-1 px-3 py-1 rounded-md bg-navy-800 text-white font-semibold hover:bg-navy-900 transition-colors"
               >
@@ -524,17 +582,17 @@ export const ReportsPage: React.FC = () => {
                 <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
                   <span className="text-xs text-textSecondary font-semibold">Gross Purchase Value</span>
                   <div className="text-xl font-bold text-navy-800 mt-1 tabular-nums">
-                    ₹{parseFloat(purchaseRegisterSummary.totalInvoiced || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {formatCurrency(purchaseRegisterSummary.totalInvoiced)}
                   </div>
                   <span className="text-[11px] text-textSecondary">
-                    Includes GST ₹{parseFloat(purchaseRegisterSummary.totalTax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    Includes GST {formatCurrency(purchaseRegisterSummary.totalTax)}
                   </span>
                 </div>
 
                 <div className="bg-surface p-4 rounded-cfecc border border-emerald-200 bg-emerald-50/20 shadow-subtle">
                   <span className="text-xs text-emerald-800 font-semibold">Total Vendor Disbursements</span>
                   <div className="text-xl font-bold text-emerald-700 mt-1 tabular-nums">
-                    ₹{parseFloat(purchaseRegisterSummary.totalPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {formatCurrency(purchaseRegisterSummary.totalPaid)}
                   </div>
                   <span className="text-[11px] text-emerald-800/80">Cleared via Bank / Cheque</span>
                 </div>
@@ -542,14 +600,14 @@ export const ReportsPage: React.FC = () => {
                 <div className="bg-surface p-4 rounded-cfecc border border-amber-200 bg-amber-50/20 shadow-subtle">
                   <span className="text-xs text-amber-800 font-semibold">Total Payables Outstanding</span>
                   <div className="text-xl font-bold text-amber-700 mt-1 tabular-nums">
-                    ₹{parseFloat(purchaseRegisterSummary.totalOutstanding || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {formatCurrency(purchaseRegisterSummary.totalOutstanding)}
                   </div>
                   <span className="text-[11px] text-amber-800/80">Balance due to suppliers</span>
                 </div>
               </div>
 
               {/* Inward Invoices Table */}
-              <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden">
+              <div className="bg-surface rounded-cfecc border border-borderLine shadow-subtle overflow-hidden flex flex-col">
                 <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
                   <table className="w-full text-left text-xs border-collapse min-w-[950px]">
                     <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
@@ -595,19 +653,19 @@ export const ReportsPage: React.FC = () => {
                               <div className="text-[11px] text-textSecondary font-mono">{inv.vendor_code} &bull; GSTIN: {inv.vendor_gstin || 'Unregistered'}</div>
                             </td>
                             <td className="py-3 px-4 text-right tabular-nums text-textSecondary font-medium">
-                              ₹{parseFloat(inv.subtotal as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              {formatCurrency(inv.subtotal)}
                             </td>
                             <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
-                              ₹{parseFloat(inv.tax_amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              {formatCurrency(inv.tax_amount)}
                             </td>
                             <td className="py-3 px-4 text-right tabular-nums font-bold text-navy-800">
-                              ₹{parseFloat(inv.total_amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              {formatCurrency(inv.total_amount)}
                             </td>
                             <td className="py-3 px-4 text-right tabular-nums font-semibold text-emerald-700">
-                              ₹{parseFloat(inv.paid_amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              {formatCurrency(inv.paid_amount)}
                             </td>
                             <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700">
-                              ₹{parseFloat(inv.balance_due as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              {formatCurrency(inv.balance_due)}
                             </td>
                             <td className="py-3 px-4 text-center">
                               <StatusBadge status={inv.status} />
@@ -617,6 +675,20 @@ export const ReportsPage: React.FC = () => {
                       )}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Standard Floating Summary Footer */}
+                <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+                  <div>
+                    Showing <span className="font-bold text-navy-800 font-mono">{purchaseRegisterData.length}</span> inward purchase bills
+                  </div>
+                  <div className="flex items-center space-x-3 text-[11px]">
+                    <span>Total Value: <strong className="text-navy-800 font-mono">{formatCurrency(purchaseRegisterSummary.totalInvoiced)}</strong></span>
+                    <span className="text-slate-400">&bull;</span>
+                    <span>Disbursed: <strong className="text-emerald-700 font-mono">{formatCurrency(purchaseRegisterSummary.totalPaid)}</strong></span>
+                    <span className="text-slate-400">&bull;</span>
+                    <span>Outstanding: <strong className="text-amber-700 font-mono">{formatCurrency(purchaseRegisterSummary.totalOutstanding)}</strong></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -691,18 +763,32 @@ export const ReportsPage: React.FC = () => {
                             {v.total_invoices}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums font-bold text-navy-800">
-                            ₹{parseFloat(v.total_purchased as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(v.total_purchased)}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums font-semibold text-emerald-700">
-                            ₹{parseFloat(v.total_paid as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(v.total_paid)}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700">
-                            ₹{parseFloat(v.current_outstanding as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(v.current_outstanding)}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Standard Floating Summary Footer */}
+                <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+                  <div>
+                    Showing <span className="font-bold text-navy-800 font-mono">{vendorSummaryData.length}</span> trade vendors & suppliers
+                  </div>
+                  <div className="flex items-center space-x-3 text-[11px]">
+                    <span>Total Inward: <strong className="text-navy-800 font-mono">{formatCurrency(vendorSummaryData.reduce((s, v) => s + parseFloat((v.total_purchased as any) || 0), 0))}</strong></span>
+                    <span className="text-slate-400">&bull;</span>
+                    <span>Disbursed: <strong className="text-emerald-700 font-mono">{formatCurrency(vendorSummaryData.reduce((s, v) => s + parseFloat((v.total_paid as any) || 0), 0))}</strong></span>
+                    <span className="text-slate-400">&bull;</span>
+                    <span>Payables Due: <strong className="text-amber-700 font-mono">{formatCurrency(vendorSummaryData.reduce((s, v) => s + parseFloat((v.current_outstanding as any) || 0), 0))}</strong></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -765,18 +851,30 @@ export const ReportsPage: React.FC = () => {
                             {parseFloat(item.total_received_qty as any).toFixed(0)}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums font-bold text-navy-800">
-                            ₹{parseFloat(item.weighted_avg_cost as any).toFixed(2)}
+                            {formatCurrency(item.weighted_avg_cost)}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums text-textSecondary font-medium">
-                            ₹{parseFloat(item.current_selling_price as any).toFixed(2)}
+                            {formatCurrency(item.current_selling_price)}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums font-bold text-primary">
-                            ₹{parseFloat(item.total_purchase_spend as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(item.total_purchase_spend)}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Standard Floating Summary Footer */}
+                <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+                  <div>
+                    Showing <span className="font-bold text-navy-800 font-mono">{itemSummaryData.length}</span> procurement item commodities
+                  </div>
+                  <div className="flex items-center space-x-3 text-[11px]">
+                    <span>Total Received: <strong className="text-navy-800 font-mono">{itemSummaryData.reduce((s, i) => s + parseFloat((i.total_received_qty as any) || 0), 0)} Units</strong></span>
+                    <span className="text-slate-400">&bull;</span>
+                    <span>Total Spend: <strong className="text-primary font-mono">{formatCurrency(itemSummaryData.reduce((s, i) => s + parseFloat((i.total_purchase_spend as any) || 0), 0))}</strong></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -863,6 +961,18 @@ export const ReportsPage: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Standard Floating Summary Footer */}
+                <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+                  <div>
+                    Showing <span className="font-bold text-navy-800 font-mono">{grnRegisterData.length}</span> Goods Receipt Notes
+                  </div>
+                  <div className="flex items-center space-x-3 text-[11px]">
+                    <span>Total Accepted: <strong className="text-emerald-700 font-mono">{grnRegisterData.reduce((s, g) => s + parseFloat((g.total_accepted_qty as any) || 0), 0)} Units</strong></span>
+                    <span className="text-slate-400">&bull;</span>
+                    <span>Total Rejected: <strong className="text-rose-600 font-mono">{grnRegisterData.reduce((s, g) => s + parseFloat((g.total_rejected_qty as any) || 0), 0)} Units</strong></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -957,24 +1067,36 @@ export const ReportsPage: React.FC = () => {
                             </div>
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums font-medium text-textSecondary">
-                            ₹{parseFloat(row.taxable_amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(row.taxable_amount)}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums text-blue-700 font-mono">
-                            ₹{parseFloat(row.cgst_amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(row.cgst_amount)}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums text-blue-700 font-mono">
-                            ₹{parseFloat(row.sgst_amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(row.sgst_amount)}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums font-bold text-emerald-700">
-                            ₹{parseFloat(row.total_gst as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(row.total_gst)}
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums font-bold text-navy-800">
-                            ₹{parseFloat(row.invoice_total as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(row.invoice_total)}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Standard Floating Summary Footer */}
+                <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+                  <div>
+                    Showing <span className="font-bold text-navy-800 font-mono">{gstItcData.length}</span> tax audit records
+                  </div>
+                  <div className="flex items-center space-x-3 text-[11px]">
+                    <span>Taxable Purchases: <strong className="text-navy-800 font-mono">{formatCurrency(gstItcSummary.totalTaxable)}</strong></span>
+                    <span className="text-slate-400">&bull;</span>
+                    <span>Total Claimable ITC: <strong className="text-emerald-700 font-mono">{formatCurrency(gstItcSummary.totalGst)}</strong></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1014,18 +1136,28 @@ export const ReportsPage: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 font-mono">{emp.mobile}</td>
                       <td className="py-3 px-4 text-right tabular-nums text-textSecondary font-medium">
-                        ₹{parseFloat(emp.credit_limit).toLocaleString('en-IN')}
+                        {formatCurrency(emp.credit_limit)}
                       </td>
                       <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700">
-                        ₹{parseFloat(emp.current_outstanding).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {formatCurrency(emp.current_outstanding)}
                       </td>
                       <td className="py-3 px-4 text-right tabular-nums font-bold text-emerald-700">
-                        ₹{parseFloat(emp.available_credit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {formatCurrency(emp.available_credit)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+
+              {/* Standard Floating Summary Footer */}
+              <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+                <div>
+                  Showing <span className="font-bold text-navy-800 font-mono">{outstandingData.length}</span> staff members with outstanding store balances
+                </div>
+                <div className="flex items-center space-x-3 text-[11px]">
+                  <span>Total Due: <strong className="text-amber-700 font-mono">{formatCurrency(outstandingData.reduce((s, r) => s + parseFloat(r.current_outstanding || 0), 0))}</strong></span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1055,18 +1187,30 @@ export const ReportsPage: React.FC = () => {
                         {parseFloat(item.current_stock)} {item.unit_code}
                       </td>
                       <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
-                        ₹{parseFloat(item.purchase_price).toFixed(2)}
+                        {formatCurrency(item.purchase_price)}
                       </td>
                       <td className="py-3 px-4 text-right tabular-nums font-bold text-navy-800">
-                        ₹{parseFloat(item.valuation_purchase).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {formatCurrency(item.valuation_purchase)}
                       </td>
                       <td className="py-3 px-4 text-right tabular-nums font-medium text-textSecondary">
-                        ₹{parseFloat(item.valuation_retail).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {formatCurrency(item.valuation_retail)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+
+              {/* Standard Floating Summary Footer */}
+              <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
+                <div>
+                  Showing <span className="font-bold text-navy-800 font-mono">{inventoryData.length}</span> warehouse commodity items
+                </div>
+                <div className="flex items-center space-x-3 text-[11px]">
+                  <span>Purchase Valuation: <strong className="text-navy-800 font-mono">{formatCurrency(inventoryData.reduce((s, item) => s + parseFloat((item.valuation_purchase as any) || 0), 0))}</strong></span>
+                  <span className="text-slate-400">&bull;</span>
+                  <span>Retail Potential: <strong className="text-emerald-700 font-mono">{formatCurrency(inventoryData.reduce((s, item) => s + parseFloat((item.valuation_retail as any) || 0), 0))}</strong></span>
+                </div>
+              </div>
             </div>
           )}
 

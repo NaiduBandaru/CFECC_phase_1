@@ -76,7 +76,7 @@ purchasingRouter.get('/orders', authenticateToken, async (req: Request, res: Res
         po.*, 
         v.name as vendor_name, 
         v.vendor_code,
-        (SELECT COUNT(*) FROM purchase_order_items poi WHERE poi.po_id = po.id) as item_count
+        (SELECT CAST(COUNT(*) AS INTEGER) FROM purchase_order_items poi WHERE poi.po_id = po.id) as item_count
       FROM purchase_orders po
       JOIN vendors v ON po.vendor_id = v.id
       WHERE ${whereSql}
@@ -226,7 +226,7 @@ purchasingRouter.get('/receipts', authenticateToken, async (req: Request, res: R
         v.name as vendor_name,
         v.vendor_code,
         po.po_number,
-        (SELECT COUNT(*) FROM goods_receipt_items gri WHERE gri.grn_id = gr.id) as item_count
+        (SELECT CAST(COUNT(*) AS INTEGER) FROM goods_receipt_items gri WHERE gri.grn_id = gr.id) as item_count
       FROM goods_receipts gr
       JOIN vendors v ON gr.vendor_id = v.id
       LEFT JOIN purchase_orders po ON gr.po_id = po.id

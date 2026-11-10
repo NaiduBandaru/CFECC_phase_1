@@ -59,8 +59,8 @@ vendorsRouter.get('/', authenticateToken, async (req: Request, res: Response, ne
     const result = await executeRawSql(`
       SELECT 
         v.*,
-        COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po.vendor_id = v.id), 0) as po_count,
-        COALESCE((SELECT COUNT(*) FROM purchase_invoices pi WHERE pi.vendor_id = v.id), 0) as invoice_count,
+        CAST(COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po.vendor_id = v.id), 0) AS INTEGER) as po_count,
+        CAST(COALESCE((SELECT COUNT(*) FROM purchase_invoices pi WHERE pi.vendor_id = v.id), 0) AS INTEGER) as invoice_count,
         COALESCE((SELECT SUM(po.total_amount) FROM purchase_orders po WHERE po.vendor_id = v.id), 0.00) as total_purchases
       FROM vendors v
       ${whereSql}

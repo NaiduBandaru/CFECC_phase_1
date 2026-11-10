@@ -92,7 +92,7 @@ export async function seedDatabase() {
     ) VALUES
       (
         1, 'CFE-1001', 'Rajesh', 'Varma', '1985-06-15', 'MALE',
-        '9848022334', '9848022335', 'rajesh.varma@cfecc.org', 'MVP Colony, Sector 3, Visakhapatnam', 'MVP Colony, Sector 3, Visakhapatnam',
+        '9985172319', '9848022335', 'rajesh.varma@cfecc.org', 'MVP Colony, Sector 3, Visakhapatnam', 'MVP Colony, Sector 3, Visakhapatnam',
         1, 1, '2018-04-01', 'PERMANENT',
         'ACTIVE', TRUE, 25000.00, 3250.00, 21750.00
       ),
@@ -272,7 +272,10 @@ export async function seedDatabase() {
       (5, 'PO-2026-0005', 2, '2026-03-18', '2026-03-22', 32400.00, 1160.00, 33560.00, 'COMPLETED', 'Edible oil, refined sugar, salt & dals consignment'),
       (6, 'PO-2026-0006', 3, '2026-03-20', '2026-03-25', 24800.00, 4464.00, 29264.00, 'COMPLETED', 'HUL personal care: shampoo, toothpastes, bar soaps & dishwash'),
       (7, 'PO-2026-0007', 4, '2026-03-22', '2026-03-26', 18500.00, 2220.00, 20720.00, 'COMPLETED', 'ITC biscuits, Sunfeast dark fantasy & Classmate notebooks'),
-      (8, 'PO-2026-0008', 5, '2026-03-24', '2026-03-28', 12400.00, 2232.00, 14632.00, 'APPROVED', 'Godrej Goodknight mosquito refills & Cinthol soaps')
+      (8, 'PO-2026-0008', 5, '2026-03-24', '2026-03-28', 12400.00, 2232.00, 14632.00, 'APPROVED', 'Godrej Goodknight mosquito refills & Cinthol soaps consignment'),
+      (9, 'PO-2026-0009', 1, '2026-10-31', '2026-11-02', 42500.00, 2125.00, 44625.00, 'COMPLETED', 'Visakha Dairy fresh bulk milk & pure ghee supply'),
+      (10, 'PO-2026-0010', 2, '2026-11-01', '2026-11-03', 38000.00, 1900.00, 39900.00, 'APPROVED', 'Wholesale Sona Masoori rice & edible oil'),
+      (11, 'PO-2026-0011', 3, '2026-11-02', '2026-11-04', 24500.00, 1225.00, 25725.00, 'APPROVED', 'HUL Surf Excel & Bru Coffee FMCG bulk stock')
     ON CONFLICT (po_number) DO NOTHING;
   `);
 
@@ -300,7 +303,21 @@ export async function seedDatabase() {
       (17, 6, 21, 70.000, 70.000, 90.00, 18.00, 1134.00, 7434.00),
       (18, 6, 22, 80.000, 80.000, 85.00, 18.00, 1224.00, 8024.00),
       (19, 7, 23, 80.000, 80.000, 120.00, 18.00, 1728.00, 11328.00),
-      (20, 7, 27, 150.000, 150.000, 48.00, 12.00, 864.00, 8064.00)
+      (20, 7, 27, 150.000, 150.000, 48.00, 12.00, 864.00, 8064.00),
+      -- PO 8: Vendor 5 (Godrej Consumer Products)
+      (21, 8, 25, 100.000, 100.000, 72.00, 18.00, 1296.00, 8496.00),
+      (22, 8, 26, 100.000, 100.000, 52.00, 18.00, 936.00, 6136.00),
+      -- PO 9: Vendor 1 (Visakha Dairy)
+      (23, 9, 5, 550.000, 550.000, 28.00, 5.00, 770.00, 16170.00),
+      (24, 9, 6, 75.000, 75.000, 320.00, 5.00, 1200.00, 25200.00),
+      (25, 9, 14, 100.000, 100.000, 31.00, 5.00, 155.00, 3255.00),
+      -- PO 10: Vendor 2 (Vizag Wholesale)
+      (26, 10, 1, 20.000, 0.000, 1250.00, 5.00, 1250.00, 26250.00),
+      (27, 10, 4, 50.000, 0.000, 145.00, 5.00, 362.50, 7612.50),
+      (28, 10, 2, 50.000, 0.000, 115.00, 5.00, 287.50, 6037.50),
+      -- PO 11: Vendor 3 (HUL)
+      (29, 11, 9, 100.000, 0.000, 150.00, 5.00, 750.00, 15750.00),
+      (30, 11, 8, 50.000, 0.000, 190.00, 5.00, 475.00, 9975.00)
     ON CONFLICT (id) DO NOTHING;
   `);
 
@@ -315,8 +332,41 @@ export async function seedDatabase() {
       (4, 'GRN-2026-0004', 4, 1, '2026-03-17', 'DC-VD-8945', 'AP 31 TT 4421', 'VERIFIED', 'Fresh paneer and curd consignments delivered safely'),
       (5, 'GRN-2026-0005', 5, 2, '2026-03-21', 'DC-ZW-4190', 'AP 31 TY 1109', 'VERIFIED', 'Edible oils and sugar sacks unloaded in store storage'),
       (6, 'GRN-2026-0006', 3, 3, '2026-03-24', 'DC-HUL-1188', 'AP 31 U 8802', 'VERIFIED', 'Shampoos, teas and toothpastes checked and verified'),
-      (7, 'GRN-2026-0007', 7, 4, '2026-03-25', 'DC-ITC-9901', 'AP 31 V 4510', 'VERIFIED', 'Biscuits and Classmate long notebooks received in store')
+      (7, 'GRN-2026-0007', 7, 4, '2026-03-25', 'DC-ITC-9901', 'AP 31 V 4510', 'VERIFIED', 'Biscuits and Classmate long notebooks received in store'),
+      (8, 'GRN-2026-0008', 8, 5, '2026-03-26', 'DC-GD-7712', 'AP 31 U 9081', 'VERIFIED', 'Goodknight mosquito repellent packs and Cinthol soaps safely unloaded'),
+      (9, 'GRN-2026-0009', 9, 6, '2026-03-27', 'DC-TCP-4412', 'AP 31 V 1102', 'VERIFIED', 'Tata Sampann pulses and iodized salt bags verified and stacked')
     ON CONFLICT (grn_number) DO NOTHING;
+  `);
+
+  // 13b. Goods Receipt Items (for 3-Way Matching and itemized receipt details)
+  await executeRawSql(`
+    INSERT INTO goods_receipt_items (
+      id, grn_id, item_id, received_qty, accepted_qty, rejected_qty, unit_cost, rejection_reason
+    ) VALUES
+      (1, 1, 5, 200.000, 200.000, 0.000, 28.00, null),
+      (2, 1, 6, 60.000, 60.000, 0.000, 320.00, null),
+      (3, 2, 1, 30.000, 30.000, 0.000, 1250.00, null),
+      (4, 2, 4, 50.000, 50.000, 0.000, 145.00, null),
+      (5, 3, 9, 100.000, 100.000, 0.000, 150.00, null),
+      (6, 3, 10, 100.000, 100.000, 0.000, 135.00, null),
+      (7, 4, 11, 100.000, 100.000, 0.000, 32.00, null),
+      (8, 4, 12, 40.000, 40.000, 0.000, 260.00, null),
+      (9, 4, 13, 60.000, 60.000, 0.000, 95.00, null),
+      (10, 4, 14, 80.000, 80.000, 0.000, 30.00, null),
+      (11, 5, 2, 100.000, 100.000, 0.000, 115.00, null),
+      (12, 5, 3, 30.000, 30.000, 0.000, 420.00, null),
+      (13, 5, 15, 40.000, 40.000, 0.000, 130.00, null),
+      (14, 5, 16, 120.000, 120.000, 0.000, 42.00, null),
+      (15, 6, 19, 120.000, 120.000, 0.000, 32.00, null),
+      (16, 6, 20, 50.000, 50.000, 0.000, 110.00, null),
+      (17, 6, 21, 70.000, 70.000, 0.000, 90.00, null),
+      (18, 6, 22, 80.000, 80.000, 0.000, 85.00, null),
+      (19, 7, 23, 80.000, 80.000, 0.000, 120.00, null),
+      (20, 7, 27, 150.000, 150.000, 0.000, 48.00, null),
+      (21, 8, 25, 100.000, 100.000, 0.000, 72.00, null),
+      (22, 8, 26, 100.000, 100.000, 0.000, 52.00, null),
+      (23, 9, 4, 100.000, 100.000, 0.000, 145.00, null)
+    ON CONFLICT (id) DO NOTHING;
   `);
 
   // 14. Purchase Invoices
@@ -325,13 +375,15 @@ export async function seedDatabase() {
       id, invoice_number, system_bill_number, vendor_id, grn_id, invoice_date, due_date,
       subtotal, tax_amount, total_amount, paid_amount, status, notes
     ) VALUES
-      (1, 'INV-VD-2026-091', 'PINV-2026-0001', 1, 1, '2026-03-04', '2026-03-19', 24800.00, 2304.00, 27104.00, 15000.00, 'PARTIALLY_PAID', 'Partially cleared via RTGS, balance payable'),
+      (1, 'INV-VD-2026-091', 'PINV-2026-0001', 1, 1, '2026-03-04', '2026-03-19', 24796.00, 2304.00, 27100.00, 15000.00, 'PARTIALLY_PAID', 'Partially cleared via RTGS, balance payable'),
       (2, 'INV-VWP-5510', 'PINV-2026-0002', 2, 2, '2026-03-09', '2026-04-08', 44750.00, 0.00, 44750.00, 44750.00, 'PAID', 'Full payment settled via NEFT'),
       (3, 'INV-HUL-8821', 'PINV-2026-0003', 3, 3, '2026-03-14', '2026-04-13', 28500.00, 5130.00, 33630.00, 15000.00, 'PARTIALLY_PAID', 'Advance partial payment made'),
       (4, 'INV-VD-2026-118', 'PINV-2026-0004', 1, 4, '2026-03-17', '2026-04-01', 21330.00, 1422.00, 22752.00, 20352.00, 'PARTIALLY_PAID', 'Paneer and curd delivery invoice'),
-      (5, 'INV-VWP-5640', 'PINV-2026-0005', 2, 5, '2026-03-21', '2026-04-20', 32400.00, 1160.00, 33560.00, 0.00, 'UNPAID', 'Sugar and oils consignment pending payment'),
-      (6, 'INV-HUL-8994', 'PINV-2026-0006', 3, 6, '2026-03-24', '2026-04-23', 24800.00, 4464.00, 29264.00, 25794.00, 'PARTIALLY_PAID', 'HUL personal care replenishment'),
-      (7, 'INV-ITC-4410', 'PINV-2026-0007', 4, 7, '2026-03-25', '2026-04-24', 18500.00, 2220.00, 20720.00, 0.00, 'UNPAID', 'ITC food products & stationery bill')
+      (5, 'INV-VWP-5640', 'PINV-2026-0005', 2, 5, '2026-03-21', '2026-04-20', 36380.95, 1819.05, 38200.00, 0.00, 'UNPAID', 'Sugar and oils consignment pending payment'),
+      (6, 'INV-HUL-8994', 'PINV-2026-0006', 3, 6, '2026-10-15', '2026-11-24', 24800.00, 4464.00, 29264.00, 25794.00, 'PARTIALLY_PAID', 'HUL personal care replenishment'),
+      (7, 'INV-ITC-4410', 'PINV-2026-0007', 4, 7, '2026-03-25', '2026-04-24', 18500.00, 2220.00, 20720.00, 2220.00, 'PARTIALLY_PAID', 'ITC food products & stationery bill'),
+      (8, 'INV-GC-2026-102', 'PINV-2026-0008', 5, 8, '2026-10-25', '2026-11-20', 12400.00, 2232.00, 14632.00, 2232.00, 'PARTIALLY_PAID', 'Godrej consumer goods replenishment invoice'),
+      (9, 'INV-TCP-2026-301', 'PINV-2026-0009', 6, 9, '2026-10-28', '2026-11-28', 25600.00, 0.00, 25600.00, 0.00, 'UNPAID', 'Tata Sampann pulses and Tata Salt delivery invoice')
     ON CONFLICT (system_bill_number) DO NOTHING;
   `);
 
@@ -343,7 +395,9 @@ export async function seedDatabase() {
       (1, 'VPAY-2026-0001', 1, '2026-03-06', 'NEFT_RTGS', 15000.00, 'UTR-SBI-9912048', 1, 'Advance part payment against milk delivery'),
       (2, 'VPAY-2026-0002', 2, '2026-03-12', 'NEFT_RTGS', 44750.00, 'UTR-SBI-4481023', 2, 'Full settlement for rice and dal procurement'),
       (3, 'VPAY-2026-0003', 3, '2026-03-16', 'NEFT_RTGS', 15000.00, 'UTR-HDFC-881920', 3, 'Part payment for FMCG consignment'),
-      (4, 'VPAY-2026-0004', 1, '2026-03-20', 'NEFT_RTGS', 20352.00, 'UTR-SBI-7729104', 4, 'Payment for dairy paneer & curd invoice')
+      (4, 'VPAY-2026-0004', 1, '2026-03-20', 'NEFT_RTGS', 20352.00, 'UTR-SBI-7729104', 4, 'Payment for dairy paneer & curd invoice'),
+      (5, 'VPAY-2026-0005', 5, '2026-03-27', 'NEFT_RTGS', 2822.00, 'UTR-HDFC-991201', 8, 'GST tax component clearance on invoice INV-GC-2026-102'),
+      (6, 'VPAY-2026-0006', 4, '2026-03-26', 'NEFT_RTGS', 2220.00, 'UTR-SBI-778819', 7, 'Tax component clearance on invoice INV-ITC-4410')
     ON CONFLICT (payment_number) DO NOTHING;
   `);
 
@@ -412,7 +466,8 @@ export async function seedDatabase() {
   await executeRawSql(`
     INSERT INTO employee_ledger (
       employee_id, transaction_date, transaction_type, reference_type, reference_id, debit_amount, credit_amount, running_balance, remarks
-    ) VALUES
+    )
+    SELECT * FROM (VALUES
       (1, NOW() - INTERVAL '5 days', 'CREDIT_SALE', 'SALE', 'INV-2026-00001', 3250.00, 0.00, 3250.00, 'Store Credit Purchase at POS Terminal 1'),
       (2, NOW() - INTERVAL '4 days', 'CREDIT_SALE', 'SALE', 'INV-2026-00002', 1840.00, 0.00, 1840.00, 'Store Credit Purchase at POS Terminal 1'),
       (3, NOW() - INTERVAL '3 days', 'CREDIT_SALE', 'SALE', 'INV-2026-00003', 890.00, 0.00, 890.00, 'Store Credit Purchase at POS Terminal 1'),
@@ -420,7 +475,10 @@ export async function seedDatabase() {
       (6, NOW() - INTERVAL '1 days', 'CREDIT_SALE', 'SALE', 'INV-2026-00007', 2150.00, 0.00, 2150.00, 'Store Credit Purchase at POS Terminal 1'),
       (7, NOW() - INTERVAL '1 days', 'CREDIT_SALE', 'SALE', 'INV-2026-00008', 3600.00, 0.00, 3600.00, 'Store Credit Purchase at POS Terminal 1'),
       (9, NOW() - INTERVAL '6 hours', 'CREDIT_SALE', 'SALE', 'INV-2026-00010', 2850.00, 0.00, 2850.00, 'Store Credit Purchase at POS Terminal 1')
-    ON CONFLICT DO NOTHING;
+    ) AS v(employee_id, transaction_date, transaction_type, reference_type, reference_id, debit_amount, credit_amount, running_balance, remarks)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM employee_ledger el WHERE el.reference_id = v.reference_id AND el.reference_type = v.reference_type
+    );
   `);
 
   // 20. Billing Periods (Feb 2026 Closed + March 2026 Active)
@@ -428,7 +486,7 @@ export async function seedDatabase() {
     INSERT INTO billing_periods (
       id, period_code, period_name, start_date, end_date, billing_date, status, total_employees_billed, total_billed_amount, total_recovered_amount
     ) VALUES
-      (1, 'BILL-2026-03', 'March 2026 Store Billing', '2026-02-26', '2026-03-25', '2026-03-26', 'OPEN', 6, 18700.00, 0.00),
+      (1, 'BILL-2026-03', 'March 2026 Store Billing', '2026-02-26', '2026-03-25', '2026-03-26', 'OPEN', 6, 15850.00, 0.00),
       (2, 'BILL-2026-02', 'February 2026 Store Billing', '2026-01-26', '2026-02-25', '2026-02-26', 'CLOSED', 5, 14200.00, 14200.00)
     ON CONFLICT (period_code) DO NOTHING;
   `);
@@ -456,7 +514,7 @@ export async function seedDatabase() {
       id, period_code, month_year, start_date, end_date, payout_date, status,
       total_gross_salary, total_store_recovery, total_net_salary
     ) VALUES
-      (1, 'PAY-2026-03', '2026-03', '2026-03-01', '2026-03-31', '2026-04-01', 'CALCULATED', 242000.00, 18700.00, 199100.00),
+      (1, 'PAY-2026-03', '2026-03', '2026-03-01', '2026-03-31', '2026-04-01', 'CALCULATED', 205500.00, 15850.00, 170700.00),
       (2, 'PAY-2026-02', '2026-02', '2026-02-01', '2026-02-28', '2026-03-01', 'DISBURSED', 235000.00, 14200.00, 197300.00)
     ON CONFLICT (period_code) DO NOTHING;
   `);
@@ -467,14 +525,18 @@ export async function seedDatabase() {
       payroll_period_id, employee_id, basic_salary, da, hra, other_allowances,
       gross_salary, store_recovery_amount, statutory_deductions, other_deductions,
       total_deductions, net_salary, payment_status
-    ) VALUES
+    )
+    SELECT * FROM (VALUES
       (1, 1, 28000.00, 5600.00, 4200.00, 3200.00, 41000.00, 3250.00, 3800.00, 0.00, 7050.00, 33950.00, 'PENDING'),
       (1, 2, 24000.00, 4800.00, 3600.00, 2600.00, 35000.00, 1840.00, 3200.00, 0.00, 5040.00, 29960.00, 'PENDING'),
       (1, 3, 20000.00, 4000.00, 3000.00, 2000.00, 29000.00, 890.00, 2700.00, 0.00, 3590.00, 25410.00, 'PENDING'),
       (1, 4, 22000.00, 4400.00, 3300.00, 2300.00, 32000.00, 4120.00, 2950.00, 0.00, 7070.00, 24930.00, 'PENDING'),
       (1, 6, 21000.00, 4200.00, 3150.00, 2150.00, 30500.00, 2150.00, 2800.00, 0.00, 4950.00, 25550.00, 'PENDING'),
       (1, 7, 26000.00, 5200.00, 3900.00, 2900.00, 38000.00, 3600.00, 3500.00, 0.00, 7100.00, 30900.00, 'PENDING')
-    ON CONFLICT DO NOTHING;
+    ) AS v(payroll_period_id, employee_id, basic_salary, da, hra, other_allowances, gross_salary, store_recovery_amount, statutory_deductions, other_deductions, total_deductions, net_salary, payment_status)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM payroll_entries pe WHERE pe.payroll_period_id = v.payroll_period_id AND pe.employee_id = v.employee_id
+    );
   `);
 
   // 24. Recovery Records (Audit Trail for store credit deductions)

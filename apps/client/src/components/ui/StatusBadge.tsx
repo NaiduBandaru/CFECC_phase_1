@@ -10,7 +10,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, variant }) => 
   const getVariant = (): 'success' | 'warning' | 'danger' | 'info' | 'neutral' => {
     if (variant) return variant;
     const s = status.toUpperCase();
-    if (['ACTIVE', 'COMPLETED', 'PAID', 'APPROVED', 'FINALIZED', 'DELIVERED', 'RECEIVED', 'SENT'].includes(s)) {
+    if (['ACTIVE', 'COMPLETED', 'PAID', 'APPROVED', 'FINALIZED', 'DELIVERED', 'RECEIVED', 'SENT', 'RECOVERED'].includes(s)) {
       return 'success';
     }
     if (['PENDING', 'DRAFT', 'PARTIAL', 'PARTIALLY_PAID', 'ON_LEAVE', 'CALCULATED', 'UNPAID'].includes(s)) {

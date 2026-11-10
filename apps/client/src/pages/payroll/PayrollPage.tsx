@@ -14,8 +14,15 @@ import {
   Download,
   Search,
   MessageSquare,
+  AlertCircle,
+  User,
 } from 'lucide-react';
 import { PayrollPeriod, PayrollEntry, RecoveryRecord } from '../../types/index.js';
+
+const formatCurrency = (val: number | string | undefined | null) => {
+  const num = parseFloat((val ?? 0).toString());
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 interface PayrollPageProps {
   initialTab?: 'PAYROLL' | 'RECOVERY';
@@ -33,6 +40,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
   const [loading, setLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isDisbursing, setIsDisbursing] = useState<boolean>(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // New Cycle Modal State
   const [isNewCycleModalOpen, setIsNewCycleModalOpen] = useState<boolean>(false);
@@ -138,6 +146,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
   const handleComputePayroll = async () => {
     if (!selectedPeriodId) return;
     setIsProcessing(true);
+    setMessage(null);
 
     try {
       const res = await api.post('/payroll/calculate', {
@@ -145,12 +154,18 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
         billingPeriodId: selectedBillingPeriodId ? parseInt(selectedBillingPeriodId, 10) : undefined,
       });
       if (res.data.success) {
-        alert(res.data.message || 'Payroll calculations and store recoveries successfully computed!');
+        setMessage({
+          type: 'success',
+          text: res.data.message || 'Payroll calculations and store recoveries successfully computed!',
+        });
         await fetchPayrollEntries(selectedPeriodId);
         await fetchPayrollPeriods();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to compute payroll');
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to compute payroll',
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -169,19 +184,26 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
     if (!confirmDisburse) return;
 
     setIsDisbursing(true);
+    setMessage(null);
     try {
       const res = await api.post('/payroll/disburse', {
         payrollPeriodId: parseInt(selectedPeriodId, 10),
         billingPeriodId: selectedBillingPeriodId ? parseInt(selectedBillingPeriodId, 10) : undefined,
       });
       if (res.data.success) {
-        alert(res.data.message || 'Payroll disbursed and Store Credit Recoveries executed successfully!');
+        setMessage({
+          type: 'success',
+          text: res.data.message || 'Payroll disbursed and Store Credit Recoveries executed successfully!',
+        });
         await fetchPayrollEntries(selectedPeriodId);
         await fetchPayrollPeriods();
         await fetchRecoveryRecords();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to disburse payroll');
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to disburse payroll',
+      });
     } finally {
       setIsDisbursing(false);
     }
@@ -189,6 +211,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
 
   const handleCreatePeriod = async (e: React.FormEvent) => {
     e.preventDefault();
+    setMessage(null);
     try {
       const res = await api.post('/payroll/periods', {
         periodCode: newPeriodCode,
@@ -199,11 +222,15 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
       });
       if (res.data.success) {
         setIsNewCycleModalOpen(false);
+        setMessage({ type: 'success', text: `Payroll period ${newPeriodCode} initialized successfully!` });
         await fetchPayrollPeriods();
         setSelectedPeriodId(res.data.data.id.toString());
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to create payroll period');
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to create payroll period',
+      });
     }
   };
 
@@ -218,10 +245,17 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
   const handleSendWhatsAppPayslip = async (entryId: number) => {
     try {
       setWaSendingEntryId(entryId);
+      setMessage(null);
       const res = await api.post('/whatsapp/send-payroll-advice', { payrollEntryId: entryId });
-      alert(res.data.message || 'WhatsApp recovery advice dispatched!');
+      setMessage({
+        type: res.data.success ? 'success' : 'error',
+        text: res.data.message || (res.data.success ? 'WhatsApp recovery advice dispatched!' : 'Failed to dispatch WhatsApp message'),
+      });
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to dispatch WhatsApp message');
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to dispatch WhatsApp message',
+      });
     } finally {
       setWaSendingEntryId(null);
     }
@@ -232,10 +266,17 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
     if (!window.confirm('Dispatch WhatsApp payroll deduction notices to all employees in this period?')) return;
     try {
       setWaBulkSending(true);
+      setMessage(null);
       const res = await api.post('/whatsapp/bulk-payroll-advice', { payrollPeriodId: parseInt(selectedPeriodId, 10) });
-      alert(res.data.message || 'WhatsApp notices dispatched successfully!');
+      setMessage({
+        type: res.data.success ? 'success' : 'error',
+        text: res.data.message || (res.data.success ? 'WhatsApp notices dispatched successfully!' : 'Failed to dispatch bulk notices'),
+      });
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to dispatch bulk notices');
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to dispatch bulk notices',
+      });
     } finally {
       setWaBulkSending(false);
     }
@@ -342,43 +383,129 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
         </div>
       </div>
 
+      {/* Message Notification Banner */}
+      {message && (
+        <div
+          className={`p-3.5 rounded-lg border text-xs font-semibold flex items-center justify-between shadow-subtle ${
+            message.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border-rose-200'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{message.text}</span>
+          </div>
+          <button
+            onClick={() => setMessage(null)}
+            className="text-slate-400 hover:text-slate-600 font-bold ml-4 text-sm"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* TAB 1: PAYROLL & SALARY REGISTER */}
       {activeTab === 'PAYROLL' && (
         <div className="space-y-6">
           {/* Cycle Selection & Actions Bar */}
-          <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center space-x-2">
-                <span className="text-xs font-bold text-navy-800">Payroll Cycle:</span>
-                <select
-                  value={selectedPeriodId}
-                  onChange={(e) => setSelectedPeriodId(e.target.value)}
-                  className="px-3 py-1.5 text-xs font-semibold text-navy-800 bg-white border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+          <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle space-y-3">
+            {/* Row 1: Payroll Cycle & Main Action Buttons */}
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 pb-3 border-b border-borderLine/60">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-bold text-navy-800 whitespace-nowrap">Payroll Cycle:</span>
+                  <select
+                    value={selectedPeriodId}
+                    onChange={(e) => setSelectedPeriodId(e.target.value)}
+                    className="px-3 py-1.5 text-xs font-semibold text-navy-800 bg-white border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+                  >
+                    {periods.map((p) => (
+                      <option key={p.id} value={p.id.toString()}>
+                        {p.period_code} ({p.month_year}) - {p.status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {activePeriod && (
+                  <div className="flex items-center space-x-2">
+                    <StatusBadge status={activePeriod.status} />
+                    <span className="text-[11px] text-textSecondary font-medium">
+                      Payout Date: <strong className="text-navy-800">{new Date(activePeriod.payout_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                    </span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setIsNewCycleModalOpen(true)}
+                  className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg border border-borderLine bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-navy-800 transition-colors shadow-2xs"
+                  title="Initialize new monthly payroll period"
                 >
-                  {periods.map((p) => (
-                    <option key={p.id} value={p.id.toString()}>
-                      {p.period_code} ({p.month_year}) - {p.status}
-                    </option>
-                  ))}
-                </select>
+                  <Plus className="w-3.5 h-3.5 text-primary" />
+                  <span>New Cycle</span>
+                </button>
               </div>
 
-              {activePeriod && (
-                <div className="flex items-center space-x-2">
-                  <StatusBadge status={activePeriod.status} />
-                  <span className="text-[11px] text-textSecondary">
-                    Payout Date: {new Date(activePeriod.payout_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </span>
-                </div>
-              )}
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={handleComputePayroll}
+                  disabled={isProcessing || isPeriodDisbursed}
+                  className="flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-white border border-primary text-primary hover:bg-primary/5 text-xs font-semibold transition-colors disabled:opacity-50 shadow-2xs whitespace-nowrap"
+                >
+                  <Play className="w-3.5 h-3.5 text-primary" />
+                  <span>{isProcessing ? 'Computing...' : 'Calculate Payroll & Deductions'}</span>
+                </button>
 
-              {/* Linked Store Billing Statement Period */}
-              <div className="flex items-center space-x-2">
-                <span className="text-xs font-bold text-amber-800">Store Bill Cycle:</span>
+                <button
+                  type="button"
+                  onClick={handleDisbursePayroll}
+                  disabled={isDisbursing || entries.length === 0 || isPeriodDisbursed}
+                  className={`flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg text-white text-xs font-semibold transition-colors shadow-subtle whitespace-nowrap ${isPeriodDisbursed
+                      ? 'bg-emerald-600 opacity-90 cursor-default'
+                      : 'bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50'
+                    }`}
+                >
+                  {isPeriodDisbursed ? (
+                    <>
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>Disbursed & Recovered</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>{isDisbursing ? 'Disbursing...' : 'Approve & Disburse Payroll'}</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkSendWhatsAppPayroll}
+                  disabled={waBulkSending || entries.length === 0}
+                  className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold transition-colors disabled:opacity-50 shadow-2xs whitespace-nowrap"
+                  title="Dispatch WhatsApp recovery slips to all employees"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{waBulkSending ? 'Sending...' : 'WhatsApp Slips'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Row 2: Linked Store Bill Cycle (Store Recoveries) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-0.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex items-center space-x-1 text-amber-800 font-bold">
+                  <Receipt className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Store Bill Cycle:</span>
+                </div>
                 <select
                   value={selectedBillingPeriodId}
                   onChange={(e) => setSelectedBillingPeriodId(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs font-semibold text-amber-900 bg-amber-50/60 border border-amber-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="px-2.5 py-1 text-xs font-semibold text-amber-900 bg-amber-50/60 border border-amber-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
                   title="Monthly store credit purchases statement linked for salary deductions"
                 >
                   {billingPeriods.length === 0 ? (
@@ -391,58 +518,15 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                     ))
                   )}
                 </select>
+                <span className="text-[11px] text-textSecondary italic hidden sm:inline">
+                  Monthly CFECC store credit dues are extracted from this statement and deducted from employee salaries.
+                </span>
               </div>
 
-              <button
-                onClick={() => setIsNewCycleModalOpen(true)}
-                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg border border-borderLine bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-navy-800 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>New Cycle</span>
-              </button>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center space-x-2.5 w-full md:w-auto">
-              <button
-                onClick={handleComputePayroll}
-                disabled={isProcessing || isPeriodDisbursed}
-                className="flex-1 md:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-white border border-primary text-primary hover:bg-primary/5 text-xs font-semibold transition-colors disabled:opacity-50"
-              >
-                <Play className="w-3.5 h-3.5" />
-                <span>{isProcessing ? 'Computing...' : 'Calculate Payroll & Deductions'}</span>
-              </button>
-
-              <button
-                onClick={handleDisbursePayroll}
-                disabled={isDisbursing || entries.length === 0 || isPeriodDisbursed}
-                className={`flex-1 md:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg text-white text-xs font-semibold transition-colors shadow-subtle ${isPeriodDisbursed
-                    ? 'bg-emerald-600 opacity-90 cursor-default'
-                    : 'bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50'
-                  }`}
-              >
-                {isPeriodDisbursed ? (
-                  <>
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    <span>Disbursed & Recovered</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>{isDisbursing ? 'Disbursing...' : 'Approve & Disburse Payroll'}</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={handleBulkSendWhatsAppPayroll}
-                disabled={waBulkSending || entries.length === 0}
-                className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold transition-colors disabled:opacity-50"
-                title="Dispatch WhatsApp recovery slips to all employees"
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{waBulkSending ? 'Sending...' : 'WhatsApp Slips'}</span>
-              </button>
+              <div className="flex items-center space-x-2 text-[11px] text-emerald-700 font-medium bg-emerald-50/60 px-2.5 py-1 rounded-md border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                <span>Ledger Auto-Reconciliation Active</span>
+              </div>
             </div>
           </div>
 
@@ -451,7 +535,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
             <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
               <span className="text-xs text-textSecondary font-semibold">Total Gross Salaries</span>
               <div className="text-xl font-bold text-navy-800 mt-1 tabular-nums">
-                ₹{totalGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(totalGross)}
               </div>
               <span className="text-[11px] text-textSecondary">Base + DA + HRA + Allowances</span>
             </div>
@@ -462,7 +546,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-bold">CFECC Bills</span>
               </span>
               <div className="text-xl font-bold text-amber-700 mt-1 tabular-nums">
-                ₹{totalStoreRecovery.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(totalStoreRecovery)}
               </div>
               <span className="text-[11px] text-amber-800/80">Direct credit deduction from salary</span>
             </div>
@@ -470,7 +554,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
             <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
               <span className="text-xs text-textSecondary font-semibold">Statutory Deductions</span>
               <div className="text-xl font-bold text-navy-800 mt-1 tabular-nums">
-                ₹{totalStatutory.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(totalStatutory)}
               </div>
               <span className="text-[11px] text-textSecondary">Provident Fund & ESI contributions</span>
             </div>
@@ -478,7 +562,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
             <div className="bg-surface p-4 rounded-cfecc border border-emerald-200 bg-emerald-50/20 shadow-subtle">
               <span className="text-xs text-emerald-800 font-semibold">Net Payout Amount</span>
               <div className="text-xl font-bold text-emerald-700 mt-1 tabular-nums">
-                ₹{totalNet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(totalNet)}
               </div>
               <span className="text-[11px] text-emerald-800/80">Bank NEFT/RTGS disbursement</span>
             </div>
@@ -547,23 +631,23 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                           </div>
                         </td>
                         <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
-                          ₹{parseFloat((entry.basic_salary as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(entry.basic_salary)}
                         </td>
                         <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
-                          ₹{(parseFloat((entry.da as any) || 0) + parseFloat((entry.hra as any) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(parseFloat((entry.da as any) || 0) + parseFloat((entry.hra as any) || 0))}
                         </td>
                         <td className="py-3 px-4 text-right tabular-nums font-semibold text-navy-800">
-                          ₹{parseFloat((entry.gross_salary as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(entry.gross_salary)}
                         </td>
                         {/* Store Recovery Highlight */}
                         <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700 bg-amber-50/30">
-                          ₹{parseFloat((entry.store_recovery_amount as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(entry.store_recovery_amount)}
                         </td>
                         <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
-                          ₹{parseFloat((entry.statutory_deductions as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(entry.statutory_deductions)}
                         </td>
                         <td className="py-3 px-4 text-right tabular-nums font-bold text-emerald-700 text-sm">
-                          ₹{parseFloat((entry.net_salary as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(entry.net_salary)}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <StatusBadge status={entry.payment_status} />
@@ -602,11 +686,11 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
               </div>
               <div className="flex items-center space-x-3 text-[11px]">
                 <span className="text-amber-700 font-medium font-mono">
-                  Total Store Recoveries: ₹{entries.reduce((acc, e) => acc + parseFloat((e.store_recovery_amount as any) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  Total Store Recoveries: {formatCurrency(entries.reduce((acc, e) => acc + parseFloat((e.store_recovery_amount as any) || 0), 0))}
                 </span>
                 <span className="text-slate-400">&bull;</span>
                 <span className="text-emerald-700 font-medium font-mono">
-                  Net Payout: ₹{entries.reduce((acc, e) => acc + parseFloat((e.net_salary as any) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  Net Payout: {formatCurrency(entries.reduce((acc, e) => acc + parseFloat((e.net_salary as any) || 0), 0))}
                 </span>
               </div>
             </div>
@@ -622,7 +706,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
             <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
               <span className="text-xs text-textSecondary font-semibold">Total Recovered from Salaries</span>
               <div className="text-xl font-bold text-amber-700 mt-1 tabular-nums">
-                ₹{totalHistoricalRecoveries.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(totalHistoricalRecoveries)}
               </div>
               <span className="text-[11px] text-textSecondary">Cumulative CFECC store credit recoveries</span>
             </div>
@@ -734,7 +818,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700">
-                          ₹{parseFloat(rec.amount_deducted as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(rec.amount_deducted)}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
@@ -930,23 +1014,23 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                 <div className="divide-y divide-borderLine p-3 space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-textSecondary">Basic Salary</span>
-                    <span className="font-mono tabular-nums">₹{parseFloat((selectedEntry.basic_salary as any) || 0).toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(selectedEntry.basic_salary)}</span>
                   </div>
                   <div className="flex justify-between pt-1.5">
                     <span className="text-textSecondary">Dearness Allowance (DA)</span>
-                    <span className="font-mono tabular-nums">₹{parseFloat((selectedEntry.da as any) || 0).toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(selectedEntry.da)}</span>
                   </div>
                   <div className="flex justify-between pt-1.5">
                     <span className="text-textSecondary">House Rent Allowance (HRA)</span>
-                    <span className="font-mono tabular-nums">₹{parseFloat((selectedEntry.hra as any) || 0).toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(selectedEntry.hra)}</span>
                   </div>
                   <div className="flex justify-between pt-1.5">
                     <span className="text-textSecondary">Special Allowances</span>
-                    <span className="font-mono tabular-nums">₹{parseFloat((selectedEntry.other_allowances as any) || 0).toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(selectedEntry.other_allowances)}</span>
                   </div>
                   <div className="flex justify-between pt-2 border-t-2 border-borderLine font-bold text-navy-800">
                     <span>GROSS EARNINGS</span>
-                    <span className="font-mono tabular-nums">₹{parseFloat((selectedEntry.gross_salary as any) || 0).toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(selectedEntry.gross_salary)}</span>
                   </div>
                 </div>
               </div>
@@ -961,11 +1045,11 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                   {/* Store Purchase Recovery */}
                   <div className="flex justify-between font-bold text-amber-800 bg-amber-50/60 p-1.5 rounded">
                     <span>CFECC Store Credit Purchases Recovery</span>
-                    <span className="font-mono tabular-nums">₹{parseFloat((selectedEntry.store_recovery_amount as any) || 0).toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(selectedEntry.store_recovery_amount)}</span>
                   </div>
                   <div className="flex justify-between pt-1.5">
                     <span className="text-textSecondary">Provident Fund (PF) & Statutory</span>
-                    <span className="font-mono tabular-nums">₹{parseFloat((selectedEntry.statutory_deductions as any) || 0).toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(selectedEntry.statutory_deductions)}</span>
                   </div>
                   <div className="flex justify-between pt-1.5">
                     <span className="text-textSecondary">Professional Tax (PT)</span>
@@ -973,7 +1057,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                   </div>
                   <div className="flex justify-between pt-2 border-t-2 border-borderLine font-bold text-amber-800">
                     <span>TOTAL DEDUCTIONS</span>
-                    <span className="font-mono tabular-nums">₹{parseFloat((selectedEntry.total_deductions as any) || 0).toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(selectedEntry.total_deductions)}</span>
                   </div>
                 </div>
               </div>
@@ -986,7 +1070,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                 <span className="text-[11px] text-emerald-700">Amount transferred directly to employee bank account</span>
               </div>
               <div className="text-xl font-bold font-mono text-emerald-800 tabular-nums">
-                ₹{parseFloat((selectedEntry.net_salary as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(selectedEntry.net_salary)}
               </div>
             </div>
 

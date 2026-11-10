@@ -177,7 +177,12 @@ payrollRouter.get('/entries', authenticateToken, async (req: Request, res: Respo
       JOIN employees e ON pe.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN designations des ON e.designation_id = des.id
-      LEFT JOIN employee_bank_details bd ON e.id = bd.employee_id
+      LEFT JOIN LATERAL (
+        SELECT bank_name, account_number, ifsc_code 
+        FROM employee_bank_details 
+        WHERE employee_id = e.id 
+        LIMIT 1
+      ) bd ON true
       WHERE pe.payroll_period_id = ${parseInt(periodId as string, 10)}
       ORDER BY e.employee_code ASC;
     `);

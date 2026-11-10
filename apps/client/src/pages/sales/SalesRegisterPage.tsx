@@ -21,6 +21,11 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
+const formatCurrency = (val: number | string | undefined | null) => {
+  const num = parseFloat((val ?? 0).toString());
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 export const SalesRegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const [sales, setSales] = useState<Sale[]>([]);
@@ -50,6 +55,7 @@ export const SalesRegisterPage: React.FC = () => {
   const [loadingInvoice, setLoadingInvoice] = useState<boolean>(false);
   const [whatsappSending, setWhatsappSending] = useState<boolean>(false);
   const [whatsappSuccess, setWhatsappSuccess] = useState<string | null>(null);
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
 
   // Cancel Invoice Modal
   const [isCancelModalOpen, setIsCancelModalOpen] = useState<boolean>(false);
@@ -99,6 +105,7 @@ export const SalesRegisterPage: React.FC = () => {
   const handleViewInvoice = async (id: number) => {
     setLoadingInvoice(true);
     setWhatsappSuccess(null);
+    setWhatsappError(null);
     setIsInvoiceModalOpen(true);
     try {
       const res = await api.get(`/sales/${id}`);
@@ -118,13 +125,15 @@ export const SalesRegisterPage: React.FC = () => {
     if (!selectedSale) return;
     setWhatsappSending(true);
     setWhatsappSuccess(null);
+    setWhatsappError(null);
     try {
       const res = await api.post(`/sales/${selectedSale.id}/send-whatsapp`);
       if (res.data.success) {
         setWhatsappSuccess(res.data.message);
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to send WhatsApp receipt');
+      const msg = err.response?.data?.message || err.message || 'Failed to send WhatsApp receipt';
+      setWhatsappError(msg);
     } finally {
       setWhatsappSending(false);
     }
@@ -487,15 +496,15 @@ export const SalesRegisterPage: React.FC = () => {
                       <td className="py-3 px-4 text-center font-medium">{sale.item_count || 1} line(s)</td>
 
                       <td className="py-3 px-4 text-right font-medium text-textSecondary tabular-nums">
-                        ₹{parseFloat(sale.subtotal.toString()).toFixed(2)}
+                        {formatCurrency(sale.subtotal)}
                       </td>
 
                       <td className="py-3 px-4 text-right font-medium text-textSecondary tabular-nums">
-                        ₹{parseFloat(sale.tax_amount.toString()).toFixed(2)}
+                        {formatCurrency(sale.tax_amount)}
                       </td>
 
                       <td className="py-3 px-4 text-right font-bold text-navy-800 tabular-nums">
-                        ₹{parseFloat(sale.total_amount.toString()).toFixed(2)}
+                        {formatCurrency(sale.total_amount)}
                       </td>
 
                       <td className="py-3 px-4 text-center">
@@ -573,6 +582,13 @@ export const SalesRegisterPage: React.FC = () => {
               </div>
             )}
 
+            {whatsappError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>{whatsappError}</span>
+              </div>
+            )}
+
             {/* Printable Receipt Container */}
             <div className="p-4 border border-borderLine rounded-lg bg-white space-y-4 print:border-none print:p-0">
               {/* Receipt Header */}
@@ -619,19 +635,19 @@ export const SalesRegisterPage: React.FC = () => {
                   <div>
                     <span className="text-[10px] text-primary uppercase font-bold block">Previous Outstanding</span>
                     <span className="font-mono font-bold text-navy-800">
-                      ₹{(parseFloat(selectedSale.current_outstanding) - parseFloat(selectedSale.total_amount)).toFixed(2)}
+                      {formatCurrency(parseFloat(selectedSale.current_outstanding || '0') - parseFloat(selectedSale.total_amount || '0'))}
                     </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-primary uppercase font-bold block">Current Bill Amount</span>
                     <span className="font-mono font-bold text-primary">
-                      +₹{parseFloat(selectedSale.total_amount).toFixed(2)}
+                      +{formatCurrency(selectedSale.total_amount)}
                     </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-primary uppercase font-bold block">Updated Store Balance</span>
                     <span className="font-mono font-bold text-rose-600">
-                      ₹{parseFloat(selectedSale.current_outstanding).toFixed(2)}
+                      {formatCurrency(selectedSale.current_outstanding)}
                     </span>
                   </div>
                 </div>
@@ -664,16 +680,16 @@ export const SalesRegisterPage: React.FC = () => {
                         {parseFloat(itm.quantity)} {itm.unit_code}
                       </td>
                       <td className="py-2 px-3 text-right font-mono">
-                        ₹{parseFloat(itm.unit_price).toFixed(2)}
+                        {formatCurrency(itm.unit_price)}
                       </td>
                       <td className="py-2 px-3 text-right font-mono text-textSecondary">
                         {parseFloat(itm.tax_rate)}%
                       </td>
                       <td className="py-2 px-3 text-right font-mono text-textSecondary">
-                        ₹{parseFloat(itm.tax_amount).toFixed(2)}
+                        {formatCurrency(itm.tax_amount)}
                       </td>
                       <td className="py-2 px-3 text-right font-bold font-mono text-navy-800">
-                        ₹{parseFloat(itm.total_price).toFixed(2)}
+                        {formatCurrency(itm.total_price)}
                       </td>
                     </tr>
                   ))}
@@ -684,21 +700,21 @@ export const SalesRegisterPage: React.FC = () => {
               <div className="pt-3 border-t border-borderLine space-y-1 text-right text-xs">
                 <div className="flex justify-between text-textSecondary">
                   <span>Subtotal Amount:</span>
-                  <span className="font-mono tabular-nums">₹{parseFloat(selectedSale.subtotal).toFixed(2)}</span>
+                  <span className="font-mono tabular-nums">{formatCurrency(selectedSale.subtotal)}</span>
                 </div>
                 {parseFloat(selectedSale.discount_amount || '0') > 0 && (
                   <div className="flex justify-between text-emerald-700">
                     <span>Discount Applied:</span>
-                    <span className="font-mono tabular-nums">-₹{parseFloat(selectedSale.discount_amount).toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">-{formatCurrency(selectedSale.discount_amount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-textSecondary">
                   <span>GST Output Tax:</span>
-                  <span className="font-mono tabular-nums">₹{parseFloat(selectedSale.tax_amount).toFixed(2)}</span>
+                  <span className="font-mono tabular-nums">{formatCurrency(selectedSale.tax_amount)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-navy-800 text-sm pt-2 border-t border-borderLine">
                   <span>Grand Total (Net Payable):</span>
-                  <span className="font-mono tabular-nums text-primary">₹{parseFloat(selectedSale.total_amount).toFixed(2)}</span>
+                  <span className="font-mono tabular-nums text-primary font-bold">{formatCurrency(selectedSale.total_amount)}</span>
                 </div>
               </div>
 
@@ -775,7 +791,7 @@ export const SalesRegisterPage: React.FC = () => {
               <span>Are you sure you want to cancel this invoice?</span>
             </div>
             <p className="text-[11px] text-rose-700">
-              Total Amount: <strong>₹{parseFloat(selectedSale?.total_amount || 0).toFixed(2)}</strong> via{' '}
+              Total Amount: <strong>{formatCurrency(selectedSale?.total_amount)}</strong> via{' '}
               <strong>{selectedSale?.payment_mode}</strong>
             </p>
             <p className="text-[10px] text-rose-600">

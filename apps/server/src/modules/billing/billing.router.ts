@@ -10,7 +10,15 @@ billingRouter.get('/periods', authenticateToken, async (req: Request, res: Respo
   try {
     const result = await executeRawSql(`
       SELECT bp.*,
-        usr.full_name as finalized_by_name
+        usr.full_name as finalized_by_name,
+        COALESCE(
+          (SELECT SUM(closing_outstanding) FROM employee_invoices ei WHERE ei.billing_period_id = bp.id),
+          bp.total_billed_amount
+        ) as total_billed_amount,
+        COALESCE(
+          (SELECT COUNT(*) FROM employee_invoices ei WHERE ei.billing_period_id = bp.id),
+          bp.total_employees_billed
+        ) as total_employees_billed
       FROM billing_periods bp
       LEFT JOIN users usr ON bp.finalized_by = usr.id
       ORDER BY bp.start_date DESC;
@@ -222,6 +230,85 @@ billingRouter.get('/statements', authenticateToken, async (req: Request, res: Re
     `);
 
     return res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4b. Get Specific Statement Details (with line-item sales, payments & deductions breakdown)
+billingRouter.get('/statements/:id', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const rawId = req.params.id;
+    const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
+    const stmtId = parseInt(idStr, 10);
+
+    if (isNaN(stmtId)) {
+      return res.status(400).json({ success: false, message: 'Invalid statement ID' });
+    }
+
+    const stmtRes = await executeRawSql(`
+      SELECT 
+        ei.*,
+        bp.period_name, bp.period_code,
+        TO_CHAR(bp.start_date, 'YYYY-MM-DD') as period_start_date,
+        TO_CHAR(bp.end_date, 'YYYY-MM-DD') as period_end_date,
+        TO_CHAR(bp.billing_date, 'YYYY-MM-DD') as billing_date,
+        e.employee_code, e.first_name, e.last_name, e.mobile, e.email, e.credit_limit,
+        e.current_outstanding as live_employee_outstanding,
+        d.name as department_name, des.title as designation_title
+      FROM employee_invoices ei
+      JOIN billing_periods bp ON ei.billing_period_id = bp.id
+      JOIN employees e ON ei.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN designations des ON e.designation_id = des.id
+      WHERE ei.id = ${stmtId};
+    `);
+
+    if (!stmtRes.rows || stmtRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Statement record not found' });
+    }
+
+    const stmt = stmtRes.rows[0];
+
+    // Itemized credit sales during this period
+    const salesRes = await executeRawSql(`
+      SELECT s.id, s.invoice_number, s.created_at, s.subtotal, s.tax_amount, s.total_amount, s.payment_mode,
+        (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) as item_count
+      FROM sales s
+      WHERE s.employee_id = ${stmt.employee_id}
+        AND s.payment_mode = 'EMPLOYEE_CREDIT'
+        AND s.created_at >= '${stmt.period_start_date} 00:00:00'
+        AND s.created_at <= '${stmt.period_end_date} 23:59:59'
+      ORDER BY s.created_at DESC;
+    `);
+
+    // Direct payments during period
+    const paymentsRes = await executeRawSql(`
+      SELECT * FROM payments
+      WHERE employee_id = ${stmt.employee_id}
+        AND payment_date >= '${stmt.period_start_date} 00:00:00'
+        AND payment_date <= '${stmt.period_end_date} 23:59:59'
+      ORDER BY payment_date DESC;
+    `);
+
+    // Recoveries during period
+    const recoveriesRes = await executeRawSql(`
+      SELECT * FROM recovery_records
+      WHERE employee_id = ${stmt.employee_id}
+        AND recovered_at >= '${stmt.period_start_date} 00:00:00'
+        AND recovered_at <= '${stmt.period_end_date} 23:59:59'
+      ORDER BY recovered_at DESC;
+    `);
+
+    return res.json({
+      success: true,
+      data: {
+        statement: stmt,
+        sales: salesRes.rows,
+        payments: paymentsRes.rows,
+        recoveries: recoveriesRes.rows,
+      },
+    });
   } catch (err) {
     next(err);
   }

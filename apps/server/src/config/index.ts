@@ -11,10 +11,10 @@ const candidatePaths = [
 
 for (const envPath of candidatePaths) {
   if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath });
+    dotenv.config({ path: envPath, override: true });
   }
 }
-dotenv.config(); // fallback default
+dotenv.config({ override: true }); // fallback default
 
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
@@ -30,8 +30,8 @@ export const config = {
     gstin: '37AAAAA0000A1Z5',
   },
   whatsapp: {
-    apiUrl: process.env.WHATSAPP_API_URL || 'https://graph.facebook.com/v21.0',
-    apiVersion: process.env.WHATSAPP_API_VERSION || 'v21.0',
+    apiUrl: process.env.WHATSAPP_API_URL || 'https://graph.facebook.com',
+    apiVersion: process.env.WHATSAPP_API_VERSION || 'v25.0',
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
     accessToken: process.env.WHATSAPP_API_TOKEN || process.env.META_WA_ACCESS_TOKEN || '',
     businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',

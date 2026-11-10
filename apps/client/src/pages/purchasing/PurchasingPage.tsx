@@ -19,6 +19,17 @@ import {
   MessageSquare,
 } from 'lucide-react';
 
+const formatDate = (dateStr?: string | null) => {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+};
+
 export const PurchasingPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ORDERS' | 'GRN' | 'INVOICES' | 'RETURNS'>('ORDERS');
 
@@ -121,7 +132,7 @@ export const PurchasingPage: React.FC = () => {
       ]);
       if (vRes.data.success) setVendors(vRes.data.data);
       if (iRes.data.success) setItems(iRes.data.data);
-      await fetchOrders();
+      await Promise.all([fetchOrders(), fetchReceipts(), fetchInvoices()]);
     } catch (err) {
       console.error(err);
     } finally {
@@ -666,9 +677,9 @@ export const PurchasingPage: React.FC = () => {
                         <div className="font-bold text-navy-800">{po.vendor_name}</div>
                         <div className="text-[11px] text-textSecondary font-mono">{po.vendor_code}</div>
                       </td>
-                      <td className="py-3 px-4 text-textSecondary">{po.order_date}</td>
-                      <td className="py-3 px-4 text-textSecondary">{po.expected_delivery_date || '-'}</td>
-                      <td className="py-3 px-4 text-center font-medium">{po.item_count || 1} line(s)</td>
+                      <td className="py-3 px-4 text-textSecondary whitespace-nowrap">{formatDate(po.order_date)}</td>
+                      <td className="py-3 px-4 text-textSecondary whitespace-nowrap">{formatDate(po.expected_delivery_date)}</td>
+                      <td className="py-3 px-4 text-center font-medium">{parseInt(String(po.item_count || 0), 10)} line(s)</td>
                       <td className="py-3 px-4 text-right font-medium text-textSecondary tabular-nums">
                         ₹{parseFloat(po.subtotal.toString()).toFixed(2)}
                       </td>
@@ -778,10 +789,10 @@ export const PurchasingPage: React.FC = () => {
                       <td className="py-3 px-4 font-mono font-bold text-emerald-700">{gr.grn_number}</td>
                       <td className="py-3 px-4 font-mono text-textSecondary">{gr.po_number || 'Direct Inward'}</td>
                       <td className="py-3 px-4 font-semibold text-navy-800">{gr.vendor_name}</td>
-                      <td className="py-3 px-4 text-textSecondary">{gr.receipt_date}</td>
+                      <td className="py-3 px-4 text-textSecondary whitespace-nowrap">{formatDate(gr.receipt_date)}</td>
                       <td className="py-3 px-4 font-mono text-textSecondary">{gr.delivery_challan_number || '-'}</td>
                       <td className="py-3 px-4 font-mono text-textSecondary">{gr.vehicle_number || '-'}</td>
-                      <td className="py-3 px-4 text-center font-bold text-navy-800">{gr.item_count || 1} item(s)</td>
+                      <td className="py-3 px-4 text-center font-bold text-navy-800">{parseInt(String(gr.item_count || 0), 10)} item(s)</td>
                       <td className="py-3 px-4 text-center">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
                           {gr.status}
@@ -853,8 +864,8 @@ export const PurchasingPage: React.FC = () => {
                         <td className="py-3 px-4 font-mono text-textSecondary">{inv.invoice_number}</td>
                         <td className="py-3 px-4 font-semibold text-navy-800">{inv.vendor_name}</td>
                         <td className="py-3 px-4 font-mono text-textSecondary">{inv.grn_number || '-'}</td>
-                        <td className="py-3 px-4 text-textSecondary">{inv.invoice_date}</td>
-                        <td className="py-3 px-4 text-textSecondary">{inv.due_date || '-'}</td>
+                        <td className="py-3 px-4 text-textSecondary whitespace-nowrap">{formatDate(inv.invoice_date)}</td>
+                        <td className="py-3 px-4 text-textSecondary whitespace-nowrap">{formatDate(inv.due_date)}</td>
                         <td className="py-3 px-4 text-right font-bold text-navy-800 tabular-nums">
                           ₹{parseFloat(inv.total_amount.toString()).toFixed(2)}
                         </td>
@@ -867,10 +878,10 @@ export const PurchasingPage: React.FC = () => {
                         <td className="py-3 px-4 text-center">
                           <span
                             className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${inv.status === 'PAID'
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : inv.status === 'PARTIALLY_PAID'
-                                  ? 'bg-amber-50 text-amber-700'
-                                  : 'bg-rose-50 text-rose-700'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : inv.status === 'PARTIALLY_PAID'
+                                ? 'bg-amber-50 text-amber-700'
+                                : 'bg-rose-50 text-rose-700'
                               }`}
                           >
                             {inv.status}
