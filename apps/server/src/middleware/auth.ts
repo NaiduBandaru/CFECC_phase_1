@@ -34,8 +34,13 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     const decoded = jwt.verify(token, config.jwtSecret) as AuthenticatedUser;
     req.user = decoded;
     next();
-  } catch (err) {
-    return res.status(403).json({ success: false, message: 'Invalid or expired authentication token.' });
+  } catch (err: any) {
+    return res.status(401).json({
+      success: false,
+      message: err.name === 'TokenExpiredError'
+        ? 'Session expired. Please sign in again.'
+        : 'Invalid or expired authentication token.',
+    });
   }
 }
 

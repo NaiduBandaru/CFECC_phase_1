@@ -11,6 +11,7 @@
     "db:generate": "pnpm --filter @cfecc/server db:generate",
     "db:migrate": "pnpm --filter @cfecc/server db:migrate",
     "db:seed": "pnpm --filter @cfecc/server db:seed",
+    "db:prod-init": "pnpm --filter @cfecc/server db:prod-init",
     "db:supabase": "pnpm --filter @cfecc/server db:supabase"
   },
   "devDependencies": {

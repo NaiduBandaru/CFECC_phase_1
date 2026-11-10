@@ -29,17 +29,37 @@ authRouter.post('/login', async (req: Request, res: Response, next) => {
     `);
 
     if (!result.rows || result.rows.length === 0) {
+      await logAudit({
+        action: 'FAILED_LOGIN',
+        entity: 'USER',
+        newValues: { attemptedUsername: username },
+        ipAddress: req.ip,
+      });
       return res.status(401).json({ success: false, message: 'Invalid username or password' });
     }
 
     const user = result.rows[0];
 
     if (!user.is_active) {
+      await logAudit({
+        userId: user.id,
+        action: 'DEACTIVATED_LOGIN_ATTEMPT',
+        entity: 'USER',
+        entityId: user.id,
+        ipAddress: req.ip,
+      });
       return res.status(403).json({ success: false, message: 'Account is deactivated. Please contact administrator.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
+      await logAudit({
+        userId: user.id,
+        action: 'FAILED_LOGIN_PASSWORD',
+        entity: 'USER',
+        entityId: user.id,
+        ipAddress: req.ip,
+      });
       return res.status(401).json({ success: false, message: 'Invalid username or password' });
     }
 
