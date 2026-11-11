@@ -332,7 +332,7 @@ whatsappRouter.post('/send-receipt', authenticateToken, requireRole('SUPER_ADMIN
     if (!targetPhone) {
       return res.status(400).json({
         success: false,
-        message: 'No mobile number found for this sale. Please provide a phone number.',
+        message: 'No mobile phone number found for this member/customer. Please enter a recipient mobile number.',
       });
     }
 

@@ -712,6 +712,68 @@ async function ensureTablesCreated() {
     ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id INTEGER REFERENCES pos_shifts(id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_entries_period_emp ON payroll_entries(payroll_period_id, employee_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_ledger_ref ON employee_ledger(employee_id, reference_type, reference_id);
+
+    -- Cooperative Society Enhancements (FoxPro Real Data Migration)
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS cs_no TEXT;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'WORKER';
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS hr_no TEXT;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS share_capital NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS cum_thrift NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS thrift_deposit NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS domestic_balance NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS old_domestic_balance NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS festival_advance_balance NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS festival_month_year TEXT;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS unrecovered_dues NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS misc_deductions NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS additional_shares NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS coupon_amount NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS direct_receipt_payments NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS current_month_bills NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE employees ALTER COLUMN mobile DROP NOT NULL;
+    ALTER TABLE employees ALTER COLUMN joining_date DROP NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_employees_cs_no ON employees(cs_no);
+
+    -- Dual-Batch Inventory Fields
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS batch1_qty NUMERIC(12, 3) DEFAULT 0.000;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS batch1_rate NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS batch2_qty NUMERIC(12, 3) DEFAULT 0.000;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS batch2_rate NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS purchase_rate1 NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS purchase_rate2 NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS cgst_rate NUMERIC(5, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS sgst_rate NUMERIC(5, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS vat_rate NUMERIC(5, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS physical_qty NUMERIC(12, 3) DEFAULT 0.000;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS stock_value NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS purchase_valuation NUMERIC(12, 2) DEFAULT 0.00;
+    CREATE INDEX IF NOT EXISTS idx_items_item_code ON items(item_code);
+
+    -- Store Recovery Advice 10-Head Fields
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS cs_no TEXT;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS category TEXT;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS current_month_bills NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS domestic_installment NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS old_domestic NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS festival_advance NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS misc_deductions NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS unrecovered_dues NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS additional_shares NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS thrift_deposit NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS coupon_amount NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS direct_receipt_payments NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS total_store_deduction NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE payroll_entries ALTER COLUMN total_deductions DROP NOT NULL;
+    ALTER TABLE payroll_entries ALTER COLUMN basic_salary DROP NOT NULL;
+    ALTER TABLE payroll_entries ALTER COLUMN gross_salary DROP NOT NULL;
+    ALTER TABLE payroll_entries ALTER COLUMN net_salary DROP NOT NULL;
+
+    -- POS Sale Item Batch tracking
+    ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS item_code TEXT;
+    ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS batch_number INTEGER DEFAULT 1;
+
+    -- Vendors optional phone
+    ALTER TABLE vendors ALTER COLUMN phone DROP NOT NULL;
   `;
 
   await executeScript(ddl);

@@ -51,6 +51,8 @@ export const saleItems = pgTable('sale_items', {
   id: serial('id').primaryKey(),
   saleId: integer('sale_id').notNull().references(() => sales.id, { onDelete: 'cascade' }),
   itemId: integer('item_id').notNull().references(() => items.id),
+  itemCode: text('item_code'),
+  batchNumber: integer('batch_number').default(1).notNull(),
   quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
   unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
   discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).default('0.00').notNull(),

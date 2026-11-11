@@ -31,6 +31,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
   // Filters, Search & Sorting
   const [search, setSearch] = useState<string>('');
   const [departmentId, setDepartmentId] = useState<string>('ALL');
+  const [category, setCategory] = useState<string>('ALL');
   const [status, setStatus] = useState<string>('ALL');
   const [creditEligibility, setCreditEligibility] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<string>('e.id');
@@ -128,7 +129,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
 
   useEffect(() => {
     fetchEmployees();
-  }, [search, departmentId, status, creditEligibility, sortBy, sortOrder, pagination.page]);
+  }, [search, departmentId, category, status, creditEligibility, sortBy, sortOrder, pagination.page]);
 
   const fetchDepartments = async () => {
     try {
@@ -148,6 +149,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
       const params = new URLSearchParams({
         search,
         departmentId,
+        category,
         status,
         creditEligibility,
         sortBy,
@@ -406,7 +408,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
 
       {/* Filter and Search Bar */}
       <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
           {/* Search Box */}
           <div className="relative">
             <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
@@ -414,9 +416,23 @@ export const EmployeeDirectoryPage: React.FC = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search code, name, mobile..."
+              placeholder="Search code, CS No, name, mobile..."
               className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
             />
+          </div>
+
+          {/* Category Filter */}
+          <div>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+            >
+              <option value="ALL">All Categories</option>
+              <option value="STAFF">Staff (Management)</option>
+              <option value="WORKER">Worker (Non-Management)</option>
+              <option value="SPECIAL">Cooperative Accounts</option>
+            </select>
           </div>
 
           {/* Department Filter */}
@@ -621,10 +637,28 @@ export const EmployeeDirectoryPage: React.FC = () => {
                             {emp.first_name.charAt(0)}
                           </div>
                           <div>
-                            <div className="font-bold text-navy-800 hover:text-primary transition-colors">
-                              {emp.first_name} {emp.last_name}
+                            <div className="font-bold text-navy-800 hover:text-primary transition-colors flex items-center space-x-1.5">
+                              <span>{emp.first_name} {emp.last_name}</span>
+                              {emp.category && (
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
+                                  emp.category === 'STAFF'
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : emp.category === 'SPECIAL'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                }`}>
+                                  {emp.category}
+                                </span>
+                              )}
                             </div>
-                            <div className="text-[11px] text-textSecondary font-mono">{emp.employee_code}</div>
+                            <div className="text-[11px] text-textSecondary font-mono flex items-center space-x-2 mt-0.5">
+                              <span>{emp.employee_code}</span>
+                              {emp.cs_no && (
+                                <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded font-semibold border border-slate-200">
+                                  CS #{emp.cs_no}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -651,7 +685,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
                       {/* Joining Date */}
                       {columnVisibility.joiningDate && (
                         <td className="py-3 px-4 font-medium text-textSecondary">
-                          {new Date(emp.joining_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {emp.joining_date ? new Date(emp.joining_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
                         </td>
                       )}
 

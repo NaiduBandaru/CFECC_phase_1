@@ -5,7 +5,7 @@ export const vendors = pgTable('vendors', {
   vendorCode: text('vendor_code').notNull().unique(), // e.g. 'VND-001'
   name: text('name').notNull(),
   contactPerson: text('contact_person'),
-  phone: text('phone').notNull(),
+  phone: text('phone').default('').notNull(),
   email: text('email'),
   address: text('address'),
   city: text('city').default('Visakhapatnam'),

@@ -27,16 +27,34 @@ export const employees = pgTable('employees', {
   maritalStatus: text('marital_status'), // 'SINGLE', 'MARRIED', etc.
 
   // Contact
-  mobile: text('mobile').notNull(),
+  mobile: text('mobile').default('').notNull(),
   alternateMobile: text('alternate_mobile'),
   email: text('email'),
   currentAddress: text('current_address'),
   permanentAddress: text('permanent_address'),
 
+  // Cooperative Society Master Fields
+  csNo: text('cs_no'), // Consumer Society / Member Number (e.g. '973')
+  category: text('category').default('WORKER'), // 'STAFF', 'WORKER', 'SUB-STAFF'
+  hrNo: text('hr_no'), // Corporate HR Number (e.g. '10000973')
+  shareCapital: numeric('share_capital', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  cumThrift: numeric('cum_thrift', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  thriftDeposit: numeric('thrift_deposit', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  domesticBalance: numeric('domestic_balance', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  oldDomesticBalance: numeric('old_domestic_balance', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  festivalAdvanceBalance: numeric('festival_advance_balance', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  festivalMonthYear: text('festival_month_year'),
+  unrecoveredDues: numeric('unrecovered_dues', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  miscDeductions: numeric('misc_deductions', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  additionalShares: numeric('additional_shares', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  couponAmount: numeric('coupon_amount', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  directReceiptPayments: numeric('direct_receipt_payments', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  currentMonthBills: numeric('current_month_bills', { precision: 12, scale: 2 }).default('0.00').notNull(),
+
   // Employment
   departmentId: integer('department_id').references(() => departments.id),
   designationId: integer('designation_id').references(() => designations.id),
-  joiningDate: date('joining_date').notNull(),
+  joiningDate: date('joining_date'),
   employmentType: text('employment_type').default('PERMANENT').notNull(), // 'PERMANENT', 'CONTRACT', 'PROBATION'
   reportingManagerId: integer('reporting_manager_id'),
   employmentStatus: text('employment_status').default('ACTIVE').notNull(), // 'ACTIVE', 'ON_LEAVE', 'SUSPENDED', 'RESIGNED', 'RETIRED'

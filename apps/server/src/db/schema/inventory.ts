@@ -36,6 +36,20 @@ export const items = pgTable('items', {
   sellingPrice: numeric('selling_price', { precision: 12, scale: 2 }).default('0.00').notNull(), // Standard price
   employeePrice: numeric('employee_price', { precision: 12, scale: 2 }).default('0.00').notNull(), // Subsidized/special employee price
 
+  // Dual-Batch Inventory & Pricing (FoxPro FIFO)
+  batch1Qty: numeric('batch1_qty', { precision: 12, scale: 3 }).default('0.000').notNull(),
+  batch1Rate: numeric('batch1_rate', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  batch2Qty: numeric('batch2_qty', { precision: 12, scale: 3 }).default('0.000').notNull(),
+  batch2Rate: numeric('batch2_rate', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  purchaseRate1: numeric('purchase_rate1', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  purchaseRate2: numeric('purchase_rate2', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  cgstRate: numeric('cgst_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
+  sgstRate: numeric('sgst_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
+  vatRate: numeric('vat_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
+  physicalQty: numeric('physical_qty', { precision: 12, scale: 3 }).default('0.000').notNull(),
+  stockValue: numeric('stock_value', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  purchaseValuation: numeric('purchase_valuation', { precision: 12, scale: 2 }).default('0.00').notNull(),
+
   // Stock Thresholds & Levels
   currentStock: numeric('current_stock', { precision: 12, scale: 3 }).default('0.000').notNull(),
   minStock: numeric('min_stock', { precision: 12, scale: 3 }).default('5.000').notNull(),

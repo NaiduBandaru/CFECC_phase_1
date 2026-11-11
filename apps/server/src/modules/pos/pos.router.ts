@@ -13,22 +13,24 @@ posRouter.get('/lookup-employee', authenticateToken, async (req: Request, res: R
       return res.json({ success: true, employees: [] });
     }
 
-    const q = (query as string).replace(/'/g, "''").toLowerCase();
+    const q = (query as string).replace(/'/g, "''").toLowerCase().trim();
     const result = await executeRawSql(`
       SELECT 
         e.id, e.employee_code, e.first_name, e.last_name, e.mobile, e.email,
-        e.credit_enabled, e.credit_limit, e.current_outstanding, e.available_credit,
+        e.cs_no, e.category, e.credit_enabled, e.credit_limit, e.current_outstanding, e.available_credit,
+        e.share_capital, e.thrift_deposit, e.domestic_balance, e.festival_advance_balance, e.unrecovered_dues,
         e.employment_status, d.name as department_name, des.title as designation_title
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN designations des ON e.designation_id = des.id
       WHERE (
         LOWER(e.employee_code) LIKE '%${q}%' OR 
+        LOWER(COALESCE(e.cs_no, '')) LIKE '%${q}%' OR
         LOWER(e.first_name) LIKE '%${q}%' OR 
         LOWER(e.last_name) LIKE '%${q}%' OR 
         LOWER(e.mobile) LIKE '%${q}%'
       ) AND e.employment_status = 'ACTIVE'
-      LIMIT 10;
+      LIMIT 15;
     `);
 
     return res.json({
@@ -36,7 +38,9 @@ posRouter.get('/lookup-employee', authenticateToken, async (req: Request, res: R
       employees: result.rows.map((r: any) => ({
         id: r.id,
         employeeCode: r.employee_code,
-        name: `${r.first_name} ${r.last_name}`,
+        csNo: r.cs_no,
+        category: r.category,
+        name: `${r.first_name} ${r.last_name}`.trim(),
         mobile: r.mobile,
         department: r.department_name,
         designation: r.designation_title,
@@ -44,6 +48,11 @@ posRouter.get('/lookup-employee', authenticateToken, async (req: Request, res: R
         creditLimit: parseFloat(r.credit_limit),
         currentOutstanding: parseFloat(r.current_outstanding),
         availableCredit: parseFloat(r.available_credit),
+        shareCapital: parseFloat(r.share_capital || 0),
+        thriftDeposit: parseFloat(r.thrift_deposit || 0),
+        domesticBalance: parseFloat(r.domestic_balance || 0),
+        festivalAdvance: parseFloat(r.festival_advance_balance || 0),
+        unrecoveredDues: parseFloat(r.unrecovered_dues || 0),
       })),
     });
   } catch (err) {
@@ -51,7 +60,7 @@ posRouter.get('/lookup-employee', authenticateToken, async (req: Request, res: R
   }
 });
 
-// 2. Barcode or Item search for POS
+// 2. Barcode or Item search for POS (supports 4-digit numpad codes)
 posRouter.get('/lookup-item', authenticateToken, async (req: Request, res: Response, next) => {
   try {
     const { query = '', barcode = '' } = req.query;
@@ -60,11 +69,17 @@ posRouter.get('/lookup-item', authenticateToken, async (req: Request, res: Respo
     if (barcode) {
       whereClause += ` AND i.barcode = '${(barcode as string).replace(/'/g, "''")}'`;
     } else if (query) {
-      const q = (query as string).replace(/'/g, "''").toLowerCase();
+      const rawQ = (query as string).replace(/'/g, "''").trim();
+      const q = rawQ.toLowerCase();
+      const isDigits = /^\d+$/.test(rawQ);
+      const padded = isDigits && rawQ.length < 4 ? rawQ.padStart(4, '0') : rawQ;
+
       whereClause += ` AND (
+        i.item_code = '${rawQ}' OR
+        i.item_code = '${padded}' OR
         LOWER(i.item_code) LIKE '%${q}%' OR 
         LOWER(i.name) LIKE '%${q}%' OR 
-        LOWER(i.barcode) LIKE '%${q}%'
+        LOWER(COALESCE(i.barcode, '')) LIKE '%${q}%'
       )`;
     }
 
@@ -72,15 +87,59 @@ posRouter.get('/lookup-item', authenticateToken, async (req: Request, res: Respo
       SELECT 
         i.id, i.item_code, i.name, i.barcode, i.current_stock,
         i.selling_price, i.employee_price, i.tax_rate,
+        i.batch1_qty, i.batch1_rate, i.batch2_qty, i.batch2_rate,
+        i.cgst_rate, i.sgst_rate, i.vat_rate, i.hsn_code,
         c.name as category_name, u.code as unit_code
       FROM items i
       LEFT JOIN item_categories c ON i.category_id = c.id
       LEFT JOIN units u ON i.unit_id = u.id
       WHERE ${whereClause}
-      LIMIT 20;
+      ORDER BY 
+        CASE 
+          WHEN i.item_code = '${(query as string).trim()}' THEN 0
+          WHEN i.item_code = '${(query as string).trim().padStart(4, '0')}' THEN 1
+          ELSE 2
+        END,
+        i.item_code ASC
+      LIMIT 25;
     `);
 
     return res.json({ success: true, items: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 2b. Instant 4-digit code lookup for numpad entry
+posRouter.get('/quick-lookup-code', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { code = '' } = req.query;
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'Code is required' });
+    }
+
+    const raw = (code as string).trim().replace(/'/g, "''");
+    const padded = /^\d+$/.test(raw) && raw.length < 4 ? raw.padStart(4, '0') : raw;
+
+    const result = await executeRawSql(`
+      SELECT 
+        i.id, i.item_code, i.name, i.barcode, i.current_stock,
+        i.selling_price, i.employee_price, i.tax_rate,
+        i.batch1_qty, i.batch1_rate, i.batch2_qty, i.batch2_rate,
+        i.cgst_rate, i.sgst_rate, i.vat_rate, i.hsn_code,
+        c.name as category_name, u.code as unit_code
+      FROM items i
+      LEFT JOIN item_categories c ON i.category_id = c.id
+      LEFT JOIN units u ON i.unit_id = u.id
+      WHERE (i.item_code = '${raw}' OR i.item_code = '${padded}') AND i.is_active = TRUE
+      LIMIT 1;
+    `);
+
+    if (result.rows.length === 0) {
+      return res.json({ success: false, message: `Item with code '${raw}' (${padded}) not found.` });
+    }
+
+    return res.json({ success: true, item: result.rows[0] });
   } catch (err) {
     next(err);
   }
@@ -187,43 +246,116 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
 
     const saleId = saleRes.rows[0].id;
 
-    // 5. Insert line items & update inventory
+    // 5. Insert line items & update inventory with Dual-Batch FIFO Logic
     for (const itm of items) {
-      const lineSubtotal = itm.quantity * itm.unitPrice;
-      const discount = itm.discountAmount || 0;
-      const taxable = lineSubtotal - discount;
-      const tax = taxable * ((itm.taxRate || 0) / 100);
-      const lineTotal = taxable + tax;
-
-      await executeRawSql(`
-        INSERT INTO sale_items (
-          sale_id, item_id, quantity, unit_price, discount_amount, tax_rate, tax_amount, total_price
-        ) VALUES (
-          ${saleId}, ${itm.itemId}, ${parseFloat(itm.quantity).toFixed(3)},
-          ${parseFloat(itm.unitPrice).toFixed(2)}, ${parseFloat(discount).toFixed(2)},
-          ${parseFloat(String(itm.taxRate || 0)).toFixed(2)}, ${parseFloat(String(tax)).toFixed(2)}, ${lineTotal.toFixed(2)}
-        );
+      const itemRes = await executeRawSql(`
+        SELECT id, item_code, name, current_stock, batch1_qty, batch1_rate, batch2_qty, batch2_rate,
+               purchase_price, purchase_rate1, purchase_rate2, cgst_rate, sgst_rate, vat_rate, tax_rate
+        FROM items WHERE id = ${itm.itemId}
       `);
+      const dbItem = itemRes.rows[0];
 
-      // Decrement stock & record stock movement
-      const curStockRes = await executeRawSql(`SELECT current_stock, purchase_price FROM items WHERE id = ${itm.itemId}`);
-      const curStock = parseFloat(curStockRes.rows[0]?.current_stock || '0');
-      const purchasePrice = parseFloat(curStockRes.rows[0]?.purchase_price || '0');
-      const newStock = curStock - parseFloat(itm.quantity);
+      const b1Qty = parseFloat(dbItem?.batch1_qty || '0');
+      const b1Rate = parseFloat(dbItem?.batch1_rate || '0') > 0 ? parseFloat(dbItem.batch1_rate) : parseFloat(itm.unitPrice);
+      const b2Qty = parseFloat(dbItem?.batch2_qty || '0');
+      const b2Rate = parseFloat(dbItem?.batch2_rate || '0') > 0 ? parseFloat(dbItem.batch2_rate) : parseFloat(itm.unitPrice);
+      const reqQty = parseFloat(itm.quantity);
+      const taxRate = parseFloat(String(itm.taxRate || dbItem?.tax_rate || 0));
 
+      let newB1Qty = b1Qty;
+      let newB2Qty = b2Qty;
+      const curStock = parseFloat(dbItem?.current_stock || '0');
+      const newStock = curStock - reqQty;
+      const itemCode = dbItem?.item_code || '';
+
+      if (b1Qty > 0 && reqQty <= b1Qty) {
+        // Entire order fulfilled from Active Batch 1
+        newB1Qty = b1Qty - reqQty;
+        const lineSub = reqQty * b1Rate;
+        const lineDiscount = itm.discountAmount || 0;
+        const taxable = lineSub - lineDiscount;
+        const taxAmt = taxable * (taxRate / 100);
+        const lineTotal = taxable + taxAmt;
+
+        await executeRawSql(`
+          INSERT INTO sale_items (
+            sale_id, item_id, item_code, batch_number, quantity, unit_price, discount_amount, tax_rate, tax_amount, total_price
+          ) VALUES (
+            ${saleId}, ${itm.itemId}, '${itemCode}', 1, ${reqQty.toFixed(3)},
+            ${b1Rate.toFixed(2)}, ${lineDiscount.toFixed(2)}, ${taxRate.toFixed(2)}, ${taxAmt.toFixed(2)}, ${lineTotal.toFixed(2)}
+          );
+        `);
+      } else if (b1Qty > 0 && reqQty > b1Qty) {
+        // Split Batch: Consume all of Batch 1, roll remainder into Batch 2
+        const remQty = reqQty - b1Qty;
+        newB1Qty = 0;
+        newB2Qty = Math.max(0, b2Qty - remQty);
+
+        // 1. Batch 1 portion
+        const line1Sub = b1Qty * b1Rate;
+        const tax1Amt = line1Sub * (taxRate / 100);
+        const line1Total = line1Sub + tax1Amt;
+
+        await executeRawSql(`
+          INSERT INTO sale_items (
+            sale_id, item_id, item_code, batch_number, quantity, unit_price, discount_amount, tax_rate, tax_amount, total_price
+          ) VALUES (
+            ${saleId}, ${itm.itemId}, '${itemCode}', 1, ${b1Qty.toFixed(3)},
+            ${b1Rate.toFixed(2)}, 0.00, ${taxRate.toFixed(2)}, ${tax1Amt.toFixed(2)}, ${line1Total.toFixed(2)}
+          );
+        `);
+
+        // 2. Batch 2 portion
+        const line2Sub = remQty * b2Rate;
+        const tax2Amt = line2Sub * (taxRate / 100);
+        const line2Total = line2Sub + tax2Amt;
+
+        await executeRawSql(`
+          INSERT INTO sale_items (
+            sale_id, item_id, item_code, batch_number, quantity, unit_price, discount_amount, tax_rate, tax_amount, total_price
+          ) VALUES (
+            ${saleId}, ${itm.itemId}, '${itemCode}', 2, ${remQty.toFixed(3)},
+            ${b2Rate.toFixed(2)}, 0.00, ${taxRate.toFixed(2)}, ${tax2Amt.toFixed(2)}, ${line2Total.toFixed(2)}
+          );
+        `);
+      } else {
+        // Batch 1 is 0: consume from Batch 2 or standard
+        const activeRate = b2Qty > 0 && b2Rate > 0 ? b2Rate : parseFloat(itm.unitPrice);
+        newB2Qty = Math.max(0, b2Qty - reqQty);
+        const lineSub = reqQty * activeRate;
+        const lineDiscount = itm.discountAmount || 0;
+        const taxable = lineSub - lineDiscount;
+        const taxAmt = taxable * (taxRate / 100);
+        const lineTotal = taxable + taxAmt;
+
+        await executeRawSql(`
+          INSERT INTO sale_items (
+            sale_id, item_id, item_code, batch_number, quantity, unit_price, discount_amount, tax_rate, tax_amount, total_price
+          ) VALUES (
+            ${saleId}, ${itm.itemId}, '${itemCode}', ${b2Qty > 0 ? 2 : 1}, ${reqQty.toFixed(3)},
+            ${activeRate.toFixed(2)}, ${lineDiscount.toFixed(2)}, ${taxRate.toFixed(2)}, ${taxAmt.toFixed(2)}, ${lineTotal.toFixed(2)}
+          );
+        `);
+      }
+
+      // Decrement stock & batch balances in items
       await executeRawSql(`
         UPDATE items SET
           current_stock = ${newStock.toFixed(3)},
+          batch1_qty = ${newB1Qty.toFixed(3)},
+          batch2_qty = ${newB2Qty.toFixed(3)},
           updated_at = NOW()
         WHERE id = ${itm.itemId};
       `);
 
+      // Record inventory movement
+      const purchasePrice = parseFloat(dbItem?.purchase_price || '0');
       await executeRawSql(`
         INSERT INTO stock_movements (
           item_id, movement_type, reference_type, reference_id, quantity, unit_cost, balance_after, notes, created_by
         ) VALUES (
           ${itm.itemId}, 'SALE', 'SALE', '${invoiceNumber}',
-          ${(-parseFloat(itm.quantity)).toFixed(3)}, ${purchasePrice.toFixed(2)}, ${newStock.toFixed(3)},
+          ${(-reqQty).toFixed(3)}, ${purchasePrice.toFixed(2)}, ${newStock.toFixed(3)},
           'POS Sale ${invoiceNumber}', ${req.user?.id || 'NULL'}
         );
       `);

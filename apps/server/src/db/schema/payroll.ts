@@ -22,18 +22,36 @@ export const payrollEntries = pgTable('payroll_entries', {
   payrollPeriodId: integer('payroll_period_id').notNull().references(() => payrollPeriods.id, { onDelete: 'cascade' }),
   employeeId: integer('employee_id').notNull().references(() => employees.id),
 
-  basicSalary: numeric('basic_salary', { precision: 12, scale: 2 }).notNull(),
+  // Cooperative Member Identification
+  csNo: text('cs_no'),
+  category: text('category'),
+
+  // Cooperative Store Recovery Breakdown (10 Standard Heads)
+  currentMonthBills: numeric('current_month_bills', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  domesticInstallment: numeric('domestic_installment', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  oldDomestic: numeric('old_domestic', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  festivalAdvance: numeric('festival_advance', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  miscDeductions: numeric('misc_deductions', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  unrecoveredDues: numeric('unrecovered_dues', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  additionalShares: numeric('additional_shares', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  thriftDeposit: numeric('thrift_deposit', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  couponAmount: numeric('coupon_amount', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  directReceiptPayments: numeric('direct_receipt_payments', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  totalStoreDeduction: numeric('total_store_deduction', { precision: 12, scale: 2 }).default('0.00').notNull(),
+
+  // CFL Corporate Base Salary (Managed by CFL Corporate, tracked here for record)
+  basicSalary: numeric('basic_salary', { precision: 12, scale: 2 }).default('0.00').notNull(),
   da: numeric('da', { precision: 12, scale: 2 }).default('0.00').notNull(),
   hra: numeric('hra', { precision: 12, scale: 2 }).default('0.00').notNull(),
   otherAllowances: numeric('other_allowances', { precision: 12, scale: 2 }).default('0.00').notNull(),
-  grossSalary: numeric('gross_salary', { precision: 12, scale: 2 }).notNull(),
+  grossSalary: numeric('gross_salary', { precision: 12, scale: 2 }).default('0.00').notNull(),
 
-  // Key CFECC Integration Field:
+  // Key CFECC Integration Field (alias to totalStoreDeduction for backward compat):
   storeRecoveryAmount: numeric('store_recovery_amount', { precision: 12, scale: 2 }).default('0.00').notNull(),
   statutoryDeductions: numeric('statutory_deductions', { precision: 12, scale: 2 }).default('0.00').notNull(),
   otherDeductions: numeric('other_deductions', { precision: 12, scale: 2 }).default('0.00').notNull(),
-  totalDeductions: numeric('total_deductions', { precision: 12, scale: 2 }).notNull(),
-  netSalary: numeric('net_salary', { precision: 12, scale: 2 }).notNull(),
+  totalDeductions: numeric('total_deductions', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  netSalary: numeric('net_salary', { precision: 12, scale: 2 }).default('0.00').notNull(),
 
   paymentStatus: text('payment_status').default('PENDING').notNull(), // 'PENDING', 'PAID', 'HOLD'
   notes: text('notes'),

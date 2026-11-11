@@ -43,6 +43,7 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
       search = '',
       departmentId,
       status,
+      category,
       creditEligibility,
       page = '1',
       limit = '10',
@@ -57,14 +58,19 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
     let whereClauses: string[] = ['1=1'];
 
     if (search) {
-      const q = (search as string).replace(/'/g, "''").toLowerCase();
+      const q = (search as string).replace(/'/g, "''").toLowerCase().trim();
       whereClauses.push(`(
         LOWER(e.employee_code) LIKE '%${q}%' OR 
+        LOWER(COALESCE(e.cs_no, '')) LIKE '%${q}%' OR
         LOWER(e.first_name) LIKE '%${q}%' OR 
         LOWER(e.last_name) LIKE '%${q}%' OR 
-        LOWER(e.mobile) LIKE '%${q}%' OR
-        LOWER(e.email) LIKE '%${q}%'
+        LOWER(COALESCE(e.mobile, '')) LIKE '%${q}%' OR
+        LOWER(COALESCE(e.email, '')) LIKE '%${q}%'
       )`);
+    }
+
+    if (category && category !== 'ALL') {
+      whereClauses.push(`e.category = '${(category as string).replace(/'/g, "''")}'`);
     }
 
     if (departmentId && departmentId !== 'ALL') {
@@ -91,8 +97,11 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
     // Fetch records
     const listResult = await executeRawSql(`
       SELECT 
-        e.id, e.employee_code, e.first_name, e.last_name, e.date_of_birth, e.gender, e.profile_image_url,
+        e.id, e.employee_code, e.cs_no, e.category, e.hr_no,
+        e.first_name, e.last_name, e.date_of_birth, e.gender, e.profile_image_url,
         e.mobile, e.alternate_mobile, e.email, e.current_address, e.permanent_address,
+        e.share_capital, e.cum_thrift, e.thrift_deposit, e.domestic_balance, e.old_domestic_balance,
+        e.festival_advance_balance, e.unrecovered_dues, e.current_month_bills,
         e.department_id, d.name as department_name, d.code as department_code,
         e.designation_id, des.title as designation_title,
         e.joining_date, e.employment_type, e.employment_status,

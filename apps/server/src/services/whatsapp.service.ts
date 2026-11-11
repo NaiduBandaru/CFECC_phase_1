@@ -273,8 +273,14 @@ export async function sendPosReceipt(params: {
   }
 
   // 1. Prepare Rich CFECC Store Receipt Text
+  const balanceNote = params.currentOutstanding !== undefined
+    ? ` Current Outstanding: Rs. ${parseFloat((params.currentOutstanding ?? 0).toString()).toFixed(2)}.`
+    : '';
+
   const richReceiptText =
-`🧾 *CFECC STORES & EMPLOYEE COOPERATIVE*
+`Dear ${custName}, thank you for shopping at CFECC Stores! Your Bill #${billNum} for Rs. ${formattedAmount} (${count} items) has been recorded to your Store Credit Account.${balanceNote}
+
+🧾 *CFECC STORES & EMPLOYEE COOPERATIVE*
 📍 Visakhapatnam, Andhra Pradesh
 GSTIN: 37AAAAA0000A1Z5
 ━━━━━━━━━━━━━━━━━━━━━

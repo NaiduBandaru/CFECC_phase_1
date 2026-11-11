@@ -19,9 +19,11 @@ reportsRouter.get('/employee-outstanding', async (req: Request, res: Response, n
 
     const result = await executeRawSql(`
       SELECT 
-        e.id, e.employee_code, e.first_name, e.last_name, e.mobile,
+        e.id, e.employee_code, e.cs_no, e.category, e.hr_no, e.first_name, e.last_name, e.mobile,
         d.name as department_name, des.title as designation_title,
         e.credit_limit, e.current_outstanding, e.available_credit,
+        e.share_capital, e.cum_thrift, e.thrift_deposit, e.domestic_balance,
+        e.festival_advance_balance, e.unrecovered_dues, e.current_month_bills,
         (
           SELECT MAX(transaction_date) 
           FROM employee_ledger el 
@@ -54,18 +56,20 @@ reportsRouter.get('/inventory-valuation', authenticateToken, async (req: Request
   try {
     const result = await executeRawSql(`
       SELECT 
-        i.id, i.item_code, i.name, i.brand,
+        i.id, i.item_code, i.name, i.brand, i.hsn_code,
         c.name as category_name, u.code as unit_code,
         i.current_stock, i.min_stock, i.reorder_level,
         i.purchase_price, i.selling_price, i.employee_price,
-        (i.current_stock * i.purchase_price) as valuation_purchase,
-        (i.current_stock * i.selling_price) as valuation_retail,
+        i.batch1_qty, i.batch1_rate, i.batch2_qty, i.batch2_rate,
+        i.purchase_rate1, i.purchase_rate2, i.cgst_rate, i.sgst_rate,
+        COALESCE(i.purchase_valuation, i.current_stock * i.purchase_price) as valuation_purchase,
+        COALESCE(i.stock_value, i.current_stock * i.selling_price) as valuation_retail,
         (i.current_stock <= i.min_stock) as is_low_stock
       FROM items i
       LEFT JOIN item_categories c ON i.category_id = c.id
       LEFT JOIN units u ON i.unit_id = u.id
       WHERE i.is_active = TRUE
-      ORDER BY (i.current_stock * i.purchase_price) DESC;
+      ORDER BY COALESCE(i.purchase_valuation, i.current_stock * i.purchase_price) DESC;
     `);
 
     const totalValuation = result.rows.reduce((sum: number, r: any) => sum + parseFloat(r.valuation_purchase), 0);

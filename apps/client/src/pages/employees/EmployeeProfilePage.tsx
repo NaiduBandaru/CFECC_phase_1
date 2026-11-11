@@ -329,12 +329,33 @@ export const EmployeeProfilePage: React.FC = () => {
               </h2>
               <StatusBadge status={emp.employment_status} />
             </div>
-            <div className="flex items-center space-x-3 text-xs text-textSecondary mt-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-textSecondary mt-1">
               <span className="font-mono font-semibold text-primary">{emp.employee_code}</span>
+              {emp.cs_no && (
+                <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                  CS #{emp.cs_no}
+                </span>
+              )}
+              {emp.category && (
+                <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                  emp.category === 'STAFF'
+                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                    : emp.category === 'SPECIAL'
+                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                }`}>
+                  {emp.category}
+                </span>
+              )}
+              {emp.hr_no && (
+                <span className="font-mono text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded text-[11px] border border-slate-200">
+                  HR #{emp.hr_no}
+                </span>
+              )}
               <span>&bull;</span>
-              <span>{emp.department_name || 'Administration & Management'}</span>
+              <span>{emp.department_name || 'Store Operations & Logistics'}</span>
               <span>&bull;</span>
-              <span>{emp.designation_title || 'General Manager'}</span>
+              <span>{emp.designation_title || 'Cooperative Society Member'}</span>
             </div>
           </div>
         </div>
@@ -678,6 +699,111 @@ export const EmployeeProfilePage: React.FC = () => {
               </div>
             </div>
 
+            {/* Cooperative Society Accounts & Balances Card */}
+            <div className="bg-surface rounded-xl border border-amber-200 bg-amber-50/10 p-5 shadow-subtle space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-amber-200/60">
+                <div>
+                  <h3 className="text-xs font-bold text-navy-800 uppercase tracking-wider flex items-center space-x-2">
+                    <Building2 className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Cooperative Society Accounts & FoxPro Balances</span>
+                  </h3>
+                  <p className="text-[11px] text-textSecondary mt-0.5">
+                    Member thrift, society capital, loans, advances and recovery heads synchronised from live FoxPro data.
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] font-mono px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded font-bold">
+                    CS #{emp.cs_no || 'N/A'}
+                  </span>
+                  <span className="text-[10px] uppercase px-2 py-0.5 bg-purple-100 text-purple-900 border border-purple-200 rounded font-bold">
+                    {emp.category || 'WORKER'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Share Capital</span>
+                  <span className="text-sm font-bold text-navy-800 tabular-nums font-mono">
+                    {formatCurrency(emp.share_capital || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Society shareholding</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Cum. Thrift Fund</span>
+                  <span className="text-sm font-bold text-emerald-700 tabular-nums font-mono">
+                    {formatCurrency(emp.cum_thrift || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Total thrift savings</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Monthly Thrift</span>
+                  <span className="text-sm font-bold text-navy-800 tabular-nums font-mono">
+                    {formatCurrency(emp.thrift_deposit || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Monthly deposit head</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Domestic Appliance Loan</span>
+                  <span className="text-sm font-bold text-amber-700 tabular-nums font-mono">
+                    {formatCurrency(emp.domestic_balance || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Consumer goods balance</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Festival Advance</span>
+                  <span className="text-sm font-bold text-amber-700 tabular-nums font-mono">
+                    {formatCurrency(emp.festival_advance_balance || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Festival advance balance</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Old Domestic Balance</span>
+                  <span className="text-sm font-bold text-textSecondary tabular-nums font-mono">
+                    {formatCurrency(emp.old_domestic_balance || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Prior domestic dues</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Unrecovered Dues</span>
+                  <span className="text-sm font-bold text-rose-700 tabular-nums font-mono">
+                    {formatCurrency(emp.unrecovered_dues || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Carried forward dues</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Current Month Store Bills</span>
+                  <span className="text-sm font-bold text-primary tabular-nums font-mono">
+                    {formatCurrency(emp.current_month_bills || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Active POS purchases</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Direct Bank/Cash Pay</span>
+                  <span className="text-sm font-bold text-emerald-700 tabular-nums font-mono">
+                    {formatCurrency(emp.direct_receipt_payments || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Direct counter payments</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-textSecondary block text-[11px]">Total Net Outstandings</span>
+                  <span className="text-sm font-bold text-amber-800 tabular-nums font-mono">
+                    {formatCurrency(emp.current_outstanding || 0)}
+                  </span>
+                  <span className="text-[10px] text-textSecondary block mt-0.5">Store credit balance</span>
+                </div>
+              </div>
+            </div>
+
             {/* Salary Structure Card */}
             <div className="bg-surface rounded-xl border border-borderLine p-5 shadow-subtle space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-borderLine">
@@ -879,8 +1005,8 @@ export const EmployeeProfilePage: React.FC = () => {
                         </td>
                       </tr>
                     ) : (
-                      (data.billing?.ledger || []).map((entry: any) => (
-                        <tr key={entry.id} className="hover:bg-slate-50/70 transition-colors">
+                      (data.billing?.ledger || []).map((entry: any, idx: number) => (
+                        <tr key={`${entry.id || 'led'}-${idx}`} className="hover:bg-slate-50/70 transition-colors">
                           <td className="py-2.5 px-4 text-textSecondary font-sans">
                             {new Date(entry.transaction_date).toLocaleDateString('en-IN')}
                           </td>
@@ -1239,7 +1365,7 @@ export const EmployeeProfilePage: React.FC = () => {
             <input
               type="text"
               required
-              placeholder="e.g. Aadhaar_Rajesh_Varma.pdf"
+              placeholder="e.g. Member_Identity_Document.pdf"
               value={docForm.documentName}
               onChange={(e) => setDocForm({ ...docForm, documentName: e.target.value })}
               className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white"

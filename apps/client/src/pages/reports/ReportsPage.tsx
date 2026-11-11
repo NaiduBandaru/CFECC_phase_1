@@ -1127,8 +1127,28 @@ export const ReportsPage: React.FC = () => {
                   {outstandingData.map((emp) => (
                     <tr key={emp.id} className="hover:bg-slate-50/70">
                       <td className="py-3 px-4">
-                        <div className="font-bold text-navy-800">{emp.first_name} {emp.last_name}</div>
-                        <div className="text-[11px] text-textSecondary font-mono">{emp.employee_code}</div>
+                        <div className="font-bold text-navy-800 flex items-center space-x-1.5">
+                          <span>{emp.first_name} {emp.last_name}</span>
+                          {emp.category && (
+                            <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
+                              emp.category === 'STAFF'
+                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                : emp.category === 'SPECIAL'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                : 'bg-blue-100 text-blue-800 border border-blue-200'
+                            }`}>
+                              {emp.category}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-textSecondary font-mono flex items-center space-x-2 mt-0.5">
+                          <span className="font-semibold text-primary">{emp.employee_code}</span>
+                          {emp.cs_no && (
+                            <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-semibold text-[10px] border border-slate-200">
+                              CS #{emp.cs_no}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="font-medium text-textPrimary">{emp.department_name}</div>
@@ -1180,7 +1200,19 @@ export const ReportsPage: React.FC = () => {
                     <tr key={item.id} className="hover:bg-slate-50/70">
                       <td className="py-3 px-4">
                         <div className="font-bold text-navy-800">{item.name}</div>
-                        <div className="text-[11px] text-textSecondary font-mono">{item.item_code}</div>
+                        <div className="text-[11px] text-textSecondary font-mono flex items-center space-x-2 mt-0.5">
+                          <span className="font-semibold text-primary">{item.item_code}</span>
+                          {item.hsn_code && (
+                            <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 text-[10px] border border-slate-200">
+                              HSN: {item.hsn_code}
+                            </span>
+                          )}
+                          {parseFloat(item.batch1_qty || '0') > 0 && (
+                            <span className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 text-[10px] border border-emerald-200 font-semibold">
+                              B1: {parseFloat(item.batch1_qty)} @ ₹{parseFloat(item.batch1_rate)}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 font-medium text-textPrimary">{item.category_name}</td>
                       <td className="py-3 px-4 text-right tabular-nums font-bold text-navy-800">
