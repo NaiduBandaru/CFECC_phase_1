@@ -35,6 +35,7 @@ export const employees = pgTable('employees', {
 
   // Cooperative Society Master Fields
   csNo: text('cs_no'), // Consumer Society / Member Number (e.g. '973')
+  grade: text('grade'), // 'M', 'NM', 'Other'
   category: text('category').default('WORKER'), // 'STAFF', 'WORKER', 'SUB-STAFF'
   hrNo: text('hr_no'), // Corporate HR Number (e.g. '10000973')
   shareCapital: numeric('share_capital', { precision: 12, scale: 2 }).default('0.00').notNull(),

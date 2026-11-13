@@ -47,11 +47,22 @@ export const DashboardPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('month');
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Initial load: fetch all in parallel
   useEffect(() => {
-    fetchDashboardData();
-  }, [timeRange]);
+    fetchInitialDashboard();
+  }, []);
 
-  const fetchDashboardData = async () => {
+  // When time range switches: only re-fetch metrics (charts & recent activity are independent)
+  const handleRangeChange = (newRange: 'today' | 'week' | 'month') => {
+    setTimeRange(newRange);
+    api.get(`/dashboard/metrics?range=${newRange}`)
+      .then((res) => {
+        if (res.data.success) setMetrics(res.data.data);
+      })
+      .catch((err) => console.error('Failed to update metrics', err));
+  };
+
+  const fetchInitialDashboard = async () => {
     try {
       setLoading(true);
       const [mRes, cRes, aRes] = await Promise.all([
@@ -101,7 +112,7 @@ export const DashboardPage: React.FC = () => {
         <div className="flex items-center bg-surface p-1 rounded-lg border border-borderLine shadow-subtle">
           <Calendar className="w-3.5 h-3.5 text-textSecondary ml-2 mr-1" />
           <button
-            onClick={() => setTimeRange('today')}
+            onClick={() => handleRangeChange('today')}
             className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
               timeRange === 'today' ? 'bg-primary text-white shadow-xs' : 'text-textSecondary hover:text-navy-800'
             }`}
@@ -109,7 +120,7 @@ export const DashboardPage: React.FC = () => {
             Today
           </button>
           <button
-            onClick={() => setTimeRange('week')}
+            onClick={() => handleRangeChange('week')}
             className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
               timeRange === 'week' ? 'bg-primary text-white shadow-xs' : 'text-textSecondary hover:text-navy-800'
             }`}
@@ -117,7 +128,7 @@ export const DashboardPage: React.FC = () => {
             This Week
           </button>
           <button
-            onClick={() => setTimeRange('month')}
+            onClick={() => handleRangeChange('month')}
             className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
               timeRange === 'month' ? 'bg-primary text-white shadow-xs' : 'text-textSecondary hover:text-navy-800'
             }`}

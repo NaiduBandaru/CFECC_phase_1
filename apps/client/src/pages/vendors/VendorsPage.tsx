@@ -534,7 +534,7 @@ export const VendorsPage: React.FC = () => {
                 type="text"
                 required
                 disabled={!!editingVendor}
-                placeholder="e.g. VND-004"
+                placeholder="e.g. V001 or VND-010"
                 value={vendorForm.vendorCode}
                 onChange={(e) => setVendorForm({ ...vendorForm, vendorCode: e.target.value })}
                 className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none disabled:opacity-60"

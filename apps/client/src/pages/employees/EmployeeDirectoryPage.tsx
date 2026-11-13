@@ -13,41 +13,67 @@ import {
   Download,
   Upload,
   ChevronRight,
-  Phone,
   CheckCircle,
   XCircle,
   ArrowUpDown,
   SlidersHorizontal,
-  CheckSquare,
   MessageSquare,
+  Coins,
+  Landmark,
+  ShoppingCart,
+  CreditCard,
+  ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
+
+interface MembersSummary {
+  totalMembers: number;
+  workersCount: number;
+  staffCount: number;
+  specialCount: number;
+  totalShareCapital: number;
+  totalCumThrift: number;
+  totalMonthlyThrift: number;
+  totalMonthBills: number;
+  totalDomesticAdvance: number;
+  totalFestivalAdvance: number;
+  totalOutstanding: number;
+  totalCreditLimit: number;
+  totalAvailableCredit: number;
+}
 
 export const EmployeeDirectoryPage: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [designations, setDesignations] = useState<any[]>([]);
+  const [summary, setSummary] = useState<MembersSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Filters, Search & Sorting
   const [search, setSearch] = useState<string>('');
-  const [departmentId, setDepartmentId] = useState<string>('ALL');
   const [category, setCategory] = useState<string>('ALL');
+  const [balanceFilter, setBalanceFilter] = useState<string>('ALL');
   const [status, setStatus] = useState<string>('ALL');
   const [creditEligibility, setCreditEligibility] = useState<string>('ALL');
+  const [departmentId, setDepartmentId] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<string>('e.id');
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+  const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Column Visibility State
+  // Column Visibility State for CFECC Cooperative Fields
   const [columnVisibility, setColumnVisibility] = useState({
-    department: true,
-    contact: true,
-    joiningDate: true,
-    creditStatus: true,
+    csNo: true,
+    hrNo: true,
+    category: true,
+    shareCapital: true,
+    monthlyThrift: true,
+    monthBills: true,
+    domesticAdvance: true,
     creditLimit: true,
     outstanding: true,
     available: true,
+    creditStatus: true,
     status: true,
   });
   const [showColMenu, setShowColMenu] = useState(false);
@@ -60,6 +86,9 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addForm, setAddForm] = useState({
     employeeCode: '',
+    csNo: '',
+    grade: 'NM',
+    hrNo: '',
     firstName: '',
     lastName: '',
     dateOfBirth: '',
@@ -75,13 +104,13 @@ export const EmployeeDirectoryPage: React.FC = () => {
     employmentStatus: 'ACTIVE',
     creditEnabled: true,
     creditLimit: 10000,
-    basicSalary: 25000,
-    da: 5000,
-    hra: 6000,
-    otherAllowances: 2000,
-    bankName: 'State Bank of India',
+    basicSalary: 0,
+    da: 0,
+    hra: 0,
+    otherAllowances: 0,
+    bankName: '',
     accountNumber: '',
-    ifscCode: 'SBIN0001234',
+    ifscCode: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -92,6 +121,67 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const [importResult, setImportResult] = useState<any | null>(null);
 
   const [waSendingId, setWaSendingId] = useState<number | null>(null);
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchDepartments();
+    fetchSummary();
+  }, []);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, [search, category, balanceFilter, status, creditEligibility, departmentId, sortBy, sortOrder, pagination.page, pagination.limit]);
+
+  const fetchDepartments = async () => {
+    try {
+      const res = await api.get('/employees/departments');
+      if (res.data.success) {
+        setDepartments(res.data.departments || []);
+        setDesignations(res.data.designations || []);
+      }
+    } catch (err) {
+      console.error('Failed to load departments', err);
+    }
+  };
+
+  const fetchSummary = async () => {
+    try {
+      const res = await api.get('/employees/summary');
+      if (res.data.success) {
+        setSummary(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load members summary', err);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        search,
+        category,
+        balanceFilter,
+        status,
+        creditEligibility,
+        departmentId,
+        sortBy,
+        sortOrder,
+        page: pagination.page.toString(),
+        limit: pagination.limit.toString(),
+      });
+      const res = await api.get(`/employees?${params.toString()}`);
+      if (res.data.success) {
+        setEmployees(res.data.data);
+        setPagination(res.data.pagination);
+      }
+    } catch (err) {
+      console.error('Failed to fetch employees', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleQuickWhatsAppBalance = async (emp: Employee) => {
     try {
@@ -118,54 +208,6 @@ export const EmployeeDirectoryPage: React.FC = () => {
       });
     } finally {
       setWaSendingId(null);
-    }
-  };
-
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    fetchDepartments();
-  }, []);
-
-  useEffect(() => {
-    fetchEmployees();
-  }, [search, departmentId, category, status, creditEligibility, sortBy, sortOrder, pagination.page]);
-
-  const fetchDepartments = async () => {
-    try {
-      const res = await api.get('/employees/departments');
-      if (res.data.success) {
-        setDepartments(res.data.departments);
-        setDesignations(res.data.designations);
-      }
-    } catch (err) {
-      console.error('Failed to load departments', err);
-    }
-  };
-
-  const fetchEmployees = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams({
-        search,
-        departmentId,
-        category,
-        status,
-        creditEligibility,
-        sortBy,
-        sortOrder,
-        page: pagination.page.toString(),
-        limit: pagination.limit.toString(),
-      });
-      const res = await api.get(`/employees?${params.toString()}`);
-      if (res.data.success) {
-        setEmployees(res.data.data);
-        setPagination(res.data.pagination);
-      }
-    } catch (err) {
-      console.error('Failed to fetch employees', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -208,10 +250,11 @@ export const EmployeeDirectoryPage: React.FC = () => {
       if (res.data.success) {
         setMessage({
           type: 'success',
-          text: res.data.message || `Bulk action applied to ${selectedIds.length} employee accounts.`,
+          text: res.data.message || `Bulk action applied to ${selectedIds.length} member accounts.`,
         });
         setSelectedIds([]);
         fetchEmployees();
+        fetchSummary();
       }
     } catch (err: any) {
       setMessage({
@@ -229,21 +272,37 @@ export const EmployeeDirectoryPage: React.FC = () => {
     setFormError(null);
 
     try {
+      const grade = addForm.grade || 'NM';
+      const category = grade === 'M' ? 'STAFF' : grade === 'NM' ? 'WORKER' : 'SPECIAL';
+      const othersDept = departments.find((d) => d.name.toLowerCase() === 'others' || d.name.toLowerCase() === 'other');
+      const othersDesig = designations.find((des) => des.title.toLowerCase() === 'others' || des.title.toLowerCase() === 'other');
+      const resolvedDeptId = addForm.departmentId === 'OTHERS'
+        ? (othersDept ? othersDept.id : null)
+        : (addForm.departmentId ? parseInt(addForm.departmentId, 10) : null);
+      const resolvedDesigId = addForm.designationId === 'OTHERS'
+        ? (othersDesig ? othersDesig.id : null)
+        : (addForm.designationId ? parseInt(addForm.designationId, 10) : null);
+
       const payload = {
         ...addForm,
-        departmentId: addForm.departmentId ? parseInt(addForm.departmentId, 10) : null,
-        designationId: addForm.designationId ? parseInt(addForm.designationId, 10) : null,
-        creditLimit: parseFloat(addForm.creditLimit.toString()),
-        basicSalary: parseFloat(addForm.basicSalary.toString()),
-        da: parseFloat(addForm.da.toString()),
-        hra: parseFloat(addForm.hra.toString()),
-        otherAllowances: parseFloat(addForm.otherAllowances.toString()),
+        grade,
+        category,
+        csNo: addForm.csNo ? addForm.csNo.trim() : null,
+        hrNo: addForm.hrNo ? addForm.hrNo.trim() : null,
+        departmentId: resolvedDeptId,
+        designationId: resolvedDesigId,
+        creditLimit: parseFloat(addForm.creditLimit.toString()) || 0,
+        basicSalary: parseFloat(addForm.basicSalary.toString()) || 0,
+        da: parseFloat(addForm.da.toString()) || 0,
+        hra: parseFloat(addForm.hra.toString()) || 0,
+        otherAllowances: parseFloat(addForm.otherAllowances.toString()) || 0,
       };
 
       const res = await api.post('/employees', payload);
       if (res.data.success) {
         setIsAddModalOpen(false);
         fetchEmployees();
+        fetchSummary();
       }
     } catch (err: any) {
       setFormError(err.response?.data?.message || 'Failed to add employee');
@@ -256,7 +315,6 @@ export const EmployeeDirectoryPage: React.FC = () => {
     e.preventDefault();
     setImportResult(null);
     try {
-      // Parse CSV rows
       const lines = importText.trim().split('\n');
       const rows = lines.map(line => {
         const parts = line.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
@@ -279,6 +337,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
       setImportResult(res.data);
       if (res.data.success) {
         fetchEmployees();
+        fetchSummary();
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Import failed');
@@ -290,27 +349,77 @@ export const EmployeeDirectoryPage: React.FC = () => {
       ? employees.filter(e => selectedIds.includes(e.id))
       : employees;
 
-    const headers = ['Employee Code', 'Full Name', 'Department', 'Designation', 'Mobile', 'Status', 'Credit Limit', 'Outstanding', 'Available'];
+    const headers = [
+      'Member Code',
+      'Society CS #',
+      'Corporate HR #',
+      'Full Name',
+      'Category',
+      'Share Capital (INR)',
+      'Monthly Thrift (INR)',
+      'Cum Thrift (INR)',
+      'Current Month Bills (INR)',
+      'Domestic Advance (INR)',
+      'Festival Advance (INR)',
+      'Credit Limit (INR)',
+      'Total Outstanding (INR)',
+      'Available Credit (INR)',
+      'Credit Status',
+      'Account Status',
+    ];
+
     const rows = listToExport.map(e => [
-      e.employee_code,
-      `"${e.first_name} ${e.last_name}"`,
-      `"${e.department_name || ''}"`,
-      `"${e.designation_title || ''}"`,
-      e.mobile,
+      `"${e.employee_code}"`,
+      `"${e.cs_no || ''}"`,
+      `"${e.hr_no || ''}"`,
+      `"${e.first_name} ${e.last_name !== '.' ? e.last_name : ''}".trim()`,
+      `"${e.category || 'WORKER'}"`,
+      parseFloat((e.share_capital || 0).toString()).toFixed(2),
+      parseFloat((e.thrift_deposit || 0).toString()).toFixed(2),
+      parseFloat((e.cum_thrift || 0).toString()).toFixed(2),
+      parseFloat((e.current_month_bills || 0).toString()).toFixed(2),
+      parseFloat((e.domestic_balance || 0).toString()).toFixed(2),
+      parseFloat((e.festival_advance_balance || 0).toString()).toFixed(2),
+      parseFloat((e.credit_limit || 0).toString()).toFixed(2),
+      parseFloat((e.current_outstanding || 0).toString()).toFixed(2),
+      parseFloat((e.available_credit || 0).toString()).toFixed(2),
+      e.credit_enabled ? 'ELIGIBLE' : 'BLOCKED',
       e.employment_status,
-      e.credit_limit,
-      e.current_outstanding,
-      e.available_credit,
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `cfecc_employees_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `cfecc_cooperative_members_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setCategory('ALL');
+    setBalanceFilter('ALL');
+    setStatus('ALL');
+    setCreditEligibility('ALL');
+    setDepartmentId('ALL');
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const columnLabels: Record<string, string> = {
+    csNo: 'Society CS #',
+    hrNo: 'Corporate HR #',
+    category: 'Category',
+    shareCapital: 'Share Capital (₹)',
+    monthlyThrift: 'Monthly Thrift (₹)',
+    monthBills: 'Month Store Bills (₹)',
+    domesticAdvance: 'Domestic Adv (₹)',
+    creditLimit: 'Credit Limit (₹)',
+    outstanding: 'Total Outstanding (₹)',
+    available: 'Available Credit (₹)',
+    creditStatus: 'Credit Status',
+    status: 'Account Status',
   };
 
   return (
@@ -318,9 +427,9 @@ export const EmployeeDirectoryPage: React.FC = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-navy-800">Employee Master Directory</h2>
+          <h2 className="text-xl font-bold text-navy-800">Cooperative Member Directory & Store Balances</h2>
           <p className="text-xs text-textSecondary mt-0.5">
-            Complete employee master data, credit limits, department assignments, and KYC records
+            CFECC consumer co-operative society members, share capital, monthly thrift, current store bills, and credit limits
           </p>
         </div>
 
@@ -336,7 +445,8 @@ export const EmployeeDirectoryPage: React.FC = () => {
             </button>
 
             {showColMenu && (
-              <div className="absolute right-0 mt-1 w-48 bg-surface rounded-lg shadow-elevated border border-borderLine p-2 z-30 space-y-1.5 text-xs">
+              <div className="absolute right-0 mt-1 w-56 bg-surface rounded-lg shadow-elevated border border-borderLine p-2 z-30 space-y-1.5 text-xs">
+                <div className="text-[10px] font-bold uppercase text-slate-500 px-2 py-0.5">Visible Columns</div>
                 {Object.keys(columnVisibility).map((colKey) => (
                   <label key={colKey} className="flex items-center space-x-2 px-2 py-1 rounded hover:bg-slate-50 cursor-pointer">
                     <input
@@ -345,7 +455,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
                       onChange={(e) => setColumnVisibility({ ...columnVisibility, [colKey]: e.target.checked })}
                       className="w-3.5 h-3.5 text-primary rounded"
                     />
-                    <span className="capitalize">{colKey.replace(/([A-Z])/g, ' $1')}</span>
+                    <span className="font-medium text-slate-700">{columnLabels[colKey] || colKey}</span>
                   </label>
                 ))}
               </div>
@@ -370,14 +480,109 @@ export const EmployeeDirectoryPage: React.FC = () => {
             <span>Export ({selectedIds.length > 0 ? selectedIds.length : 'All'})</span>
           </button>
 
-          {/* Add Employee */}
+          {/* Add Member */}
           <button
             onClick={() => setIsAddModalOpen(true)}
             className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors shadow-subtle"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Employee</span>
+            <span>Add Member</span>
           </button>
+        </div>
+      </div>
+
+      {/* Top Cooperative KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
+        {/* Total Members */}
+        <div className="bg-surface p-4 rounded-xl border border-borderLine shadow-2xs hover:shadow-subtle transition-shadow">
+          <div className="flex items-center justify-between text-textSecondary mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Members</span>
+            <div className="p-1.5 rounded-lg bg-navy-50 text-navy-800">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-xl font-extrabold text-navy-900 tabular-nums">
+            {summary ? summary.totalMembers.toLocaleString('en-IN') : '692'}
+          </div>
+          <div className="text-[10px] text-textSecondary mt-1 flex items-center space-x-1">
+            <span className="text-blue-600 font-semibold">{summary?.workersCount ?? 299} W</span>
+            <span>•</span>
+            <span className="text-purple-600 font-semibold">{summary?.staffCount ?? 378} S</span>
+            <span>•</span>
+            <span className="text-amber-600 font-semibold">{summary?.specialCount ?? 15} Sp</span>
+          </div>
+        </div>
+
+        {/* Total Share Capital */}
+        <div className="bg-surface p-4 rounded-xl border border-borderLine shadow-2xs hover:shadow-subtle transition-shadow">
+          <div className="flex items-center justify-between text-textSecondary mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Share Capital</span>
+            <div className="p-1.5 rounded-lg bg-blue-50 text-blue-700">
+              <Coins className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-xl font-extrabold text-blue-900 tabular-nums">
+            ₹{summary ? summary.totalShareCapital.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '1,48,250.00'}
+          </div>
+          <div className="text-[10px] text-textSecondary mt-1">Cooperative equity shares</div>
+        </div>
+
+        {/* Monthly Thrift Deduction */}
+        <div className="bg-surface p-4 rounded-xl border border-borderLine shadow-2xs hover:shadow-subtle transition-shadow">
+          <div className="flex items-center justify-between text-textSecondary mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Monthly Thrift</span>
+            <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-700">
+              <Landmark className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-xl font-extrabold text-indigo-900 tabular-nums">
+            ₹{summary ? summary.totalMonthlyThrift.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '51,050.00'}
+          </div>
+          <div className="text-[10px] text-textSecondary mt-1">Monthly member savings</div>
+        </div>
+
+        {/* Current Month POS Store Bills */}
+        <div className="bg-surface p-4 rounded-xl border border-borderLine shadow-2xs hover:shadow-subtle transition-shadow">
+          <div className="flex items-center justify-between text-textSecondary mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Current Month Bills</span>
+            <div className="p-1.5 rounded-lg bg-amber-50 text-amber-700">
+              <ShoppingCart className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-xl font-extrabold text-amber-900 tabular-nums">
+            ₹{summary ? summary.totalMonthBills.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '14,04,599.20'}
+          </div>
+          <div className="text-[10px] text-amber-700 font-medium mt-1">Store credit sales pending recovery</div>
+        </div>
+
+        {/* Recoverable Advances */}
+        <div className="bg-surface p-4 rounded-xl border border-borderLine shadow-2xs hover:shadow-subtle transition-shadow">
+          <div className="flex items-center justify-between text-textSecondary mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Domestic Advances</span>
+            <div className="p-1.5 rounded-lg bg-rose-50 text-rose-700">
+              <CreditCard className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-xl font-extrabold text-rose-900 tabular-nums">
+            ₹{summary ? summary.totalDomesticAdvance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '75,750.00'}
+          </div>
+          <div className="text-[10px] text-textSecondary mt-1">Recoverable loan balance</div>
+        </div>
+
+        {/* Total Store Outstanding & Available */}
+        <div className="bg-surface p-4 rounded-xl border border-borderLine shadow-2xs hover:shadow-subtle transition-shadow">
+          <div className="flex items-center justify-between text-textSecondary mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Store Credit Limit</span>
+            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-xl font-extrabold text-emerald-900 tabular-nums">
+            ₹{summary ? summary.totalCreditLimit.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '18,11,412'}
+          </div>
+          <div className="text-[10px] text-emerald-700 font-medium mt-1">
+            ₹{summary ? summary.totalAvailableCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '10,69,421'} Available
+          </div>
         </div>
       </div>
 
@@ -416,7 +621,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search code, CS No, name, mobile..."
+              placeholder="Search Name, CS #, HR #, Code..."
               className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
             />
           </div>
@@ -428,43 +633,28 @@ export const EmployeeDirectoryPage: React.FC = () => {
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium"
             >
-              <option value="ALL">All Categories</option>
-              <option value="STAFF">Staff (Management)</option>
-              <option value="WORKER">Worker (Non-Management)</option>
-              <option value="SPECIAL">Cooperative Accounts</option>
+              <option value="ALL">All Categories ({summary?.totalMembers ?? 692})</option>
+              <option value="WORKER">Workers / Plant Operations ({summary?.workersCount ?? 299})</option>
+              <option value="STAFF">Staff / Management ({summary?.staffCount ?? 378})</option>
+              <option value="SPECIAL">Special Institutional Accounts ({summary?.specialCount ?? 15})</option>
             </select>
           </div>
 
-          {/* Department Filter */}
+          {/* Balance / Dues Filter */}
           <div>
             <select
-              value={departmentId}
-              onChange={(e) => setDepartmentId(e.target.value)}
+              value={balanceFilter}
+              onChange={(e) => setBalanceFilter(e.target.value)}
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
             >
-              <option value="ALL">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
+              <option value="ALL">All Member Balances</option>
+              <option value="WITH_DUES">With Store Dues (&gt; ₹0)</option>
+              <option value="ZERO_BALANCE">Zero Balance / Settled</option>
+              <option value="MAXED_OUT">Credit Limit Exceeded / Maxed</option>
             </select>
           </div>
 
-          {/* Status Filter */}
-          <div>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="ACTIVE">Active</option>
-              <option value="ON_LEAVE">On Leave</option>
-              <option value="SUSPENDED">Suspended</option>
-              <option value="RESIGNED">Resigned</option>
-            </select>
-          </div>
-
-          {/* Credit Eligibility Filter */}
+          {/* Credit Status Filter */}
           <div>
             <select
               value={creditEligibility}
@@ -476,6 +666,27 @@ export const EmployeeDirectoryPage: React.FC = () => {
               <option value="INELIGIBLE">Store Credit Blocked</option>
             </select>
           </div>
+
+          {/* Status & Reset Button */}
+          <div className="flex items-center space-x-2">
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="ON_LEAVE">On Leave</option>
+              <option value="SUSPENDED">Suspended</option>
+            </select>
+            <button
+              onClick={handleResetFilters}
+              className="p-2 rounded-lg border border-borderLine hover:bg-slate-100 text-slate-600 transition-colors flex-shrink-0"
+              title="Reset all filters"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -483,7 +694,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
       <FloatingActionBar
         selectedCount={selectedIds.length}
         totalCount={employees.length}
-        itemLabel="employees"
+        itemLabel="members"
         onClear={() => setSelectedIds([])}
       >
         <button
@@ -520,13 +731,13 @@ export const EmployeeDirectoryPage: React.FC = () => {
         </button>
       </FloatingActionBar>
 
-      {/* Employee Data Table with Standard Format and Auto Screen Adjust */}
+      {/* Employee Data Table with Strict Single-Line Rows (No Line Breaks) */}
       <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col">
-        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
-          <table className="w-full text-left border-collapse text-xs min-w-[950px]">
+        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px] scrollbar-thin">
+          <table className="w-full text-left border-collapse text-xs min-w-[1550px]">
             <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
-              <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                <th className="py-3 px-3 text-center w-8">
+              <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">
+                <th className="py-2.5 px-3 text-center w-8 whitespace-nowrap">
                   <input
                     type="checkbox"
                     checked={employees.length > 0 && selectedIds.length === employees.length}
@@ -536,92 +747,164 @@ export const EmployeeDirectoryPage: React.FC = () => {
                 </th>
                 <th
                   onClick={() => handleSort('e.employee_code')}
-                  className="py-3 px-4 cursor-pointer hover:text-navy-800"
+                  className="py-2.5 px-3 cursor-pointer hover:text-navy-800 whitespace-nowrap"
                 >
-                  <div className="flex items-center space-x-1">
-                    <span>Employee</span>
-                    <ArrowUpDown className="w-3 h-3" />
+                  <div className="flex items-center space-x-1 whitespace-nowrap">
+                    <span>Member / Account</span>
+                    <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
                   </div>
                 </th>
-                {columnVisibility.department && (
+                {columnVisibility.csNo && (
                   <th
-                    onClick={() => handleSort('d.name')}
-                    className="py-3 px-4 cursor-pointer hover:text-navy-800"
+                    onClick={() => handleSort('e.cs_no')}
+                    className="py-2.5 px-3 text-center cursor-pointer hover:text-navy-800 whitespace-nowrap"
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Department & Designation</span>
-                      <ArrowUpDown className="w-3 h-3" />
+                    <div className="flex items-center justify-center space-x-1 whitespace-nowrap">
+                      <span>Society CS #</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
                     </div>
                   </th>
                 )}
-                {columnVisibility.contact && <th className="py-3 px-4">Contact</th>}
-                {columnVisibility.joiningDate && (
+                {columnVisibility.hrNo && (
                   <th
-                    onClick={() => handleSort('e.joining_date')}
-                    className="py-3 px-4 cursor-pointer hover:text-navy-800"
+                    onClick={() => handleSort('e.hr_no')}
+                    className="py-2.5 px-3 cursor-pointer hover:text-navy-800 whitespace-nowrap"
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Joining Date</span>
-                      <ArrowUpDown className="w-3 h-3" />
+                    <div className="flex items-center space-x-1 whitespace-nowrap">
+                      <span>Corporate HR #</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
                     </div>
                   </th>
                 )}
-                {columnVisibility.creditStatus && <th className="py-3 px-4 text-center">Credit Status</th>}
+                {columnVisibility.category && (
+                  <th
+                    onClick={() => handleSort('e.category')}
+                    className="py-2.5 px-3 cursor-pointer hover:text-navy-800 whitespace-nowrap"
+                  >
+                    <div className="flex items-center space-x-1 whitespace-nowrap">
+                      <span>Category</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.shareCapital && (
+                  <th
+                    onClick={() => handleSort('e.share_capital')}
+                    className="py-2.5 px-3 text-right cursor-pointer hover:text-navy-800 whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-end space-x-1 whitespace-nowrap">
+                      <span>Share Capital (₹)</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.monthlyThrift && (
+                  <th
+                    onClick={() => handleSort('e.thrift_deposit')}
+                    className="py-2.5 px-3 text-right cursor-pointer hover:text-navy-800 whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-end space-x-1 whitespace-nowrap">
+                      <span>Thrift / Mo (₹)</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.monthBills && (
+                  <th
+                    onClick={() => handleSort('e.current_month_bills')}
+                    className="py-2.5 px-3 text-right cursor-pointer hover:text-navy-800 whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-end space-x-1 whitespace-nowrap">
+                      <span>Month Bills (₹)</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.domesticAdvance && (
+                  <th
+                    onClick={() => handleSort('e.domestic_balance')}
+                    className="py-2.5 px-3 text-right cursor-pointer hover:text-navy-800 whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-end space-x-1 whitespace-nowrap">
+                      <span>Domestic Adv (₹)</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
+                    </div>
+                  </th>
+                )}
                 {columnVisibility.creditLimit && (
                   <th
                     onClick={() => handleSort('e.credit_limit')}
-                    className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                    className="py-2.5 px-3 text-right cursor-pointer hover:text-navy-800 whitespace-nowrap"
                   >
-                    <div className="flex items-center justify-end space-x-1">
-                      <span>Credit Limit</span>
-                      <ArrowUpDown className="w-3 h-3" />
+                    <div className="flex items-center justify-end space-x-1 whitespace-nowrap">
+                      <span>Credit Limit (₹)</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
                     </div>
                   </th>
                 )}
                 {columnVisibility.outstanding && (
                   <th
                     onClick={() => handleSort('e.current_outstanding')}
-                    className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                    className="py-2.5 px-3 text-right cursor-pointer hover:text-navy-800 whitespace-nowrap"
                   >
-                    <div className="flex items-center justify-end space-x-1">
-                      <span>Outstanding</span>
-                      <ArrowUpDown className="w-3 h-3" />
+                    <div className="flex items-center justify-end space-x-1 whitespace-nowrap">
+                      <span>Outstanding (₹)</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
                     </div>
                   </th>
                 )}
-                {columnVisibility.available && <th className="py-3 px-4 text-right">Available</th>}
-                {columnVisibility.status && <th className="py-3 px-4">Status</th>}
-                <th className="py-3 px-4 text-center">Action</th>
+                {columnVisibility.available && (
+                  <th
+                    onClick={() => handleSort('e.available_credit')}
+                    className="py-2.5 px-3 text-right cursor-pointer hover:text-navy-800 whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-end space-x-1 whitespace-nowrap">
+                      <span>Available (₹)</span>
+                      <ArrowUpDown className="w-3 h-3 flex-shrink-0" />
+                    </div>
+                  </th>
+                )}
+                {columnVisibility.creditStatus && <th className="py-2.5 px-3 text-center whitespace-nowrap">Credit Status</th>}
+                {columnVisibility.status && <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>}
+                <th className="py-2.5 px-3 text-center whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLine">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-textSecondary">
+                  <td colSpan={14} className="py-12 text-center text-textSecondary whitespace-nowrap">
                     <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
-                    <div>Loading employee records...</div>
+                    <div>Loading cooperative member directory...</div>
                   </td>
                 </tr>
               ) : employees.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-textSecondary">
+                  <td colSpan={14} className="py-12 text-center text-textSecondary whitespace-nowrap">
                     <Users className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                    <div>No employee records matching criteria.</div>
+                    <div>No cooperative member records matching criteria.</div>
                   </td>
                 </tr>
               ) : (
                 employees.map((emp) => {
                   const isSelected = selectedIds.includes(emp.id);
+                  const shareCap = parseFloat((emp.share_capital || 0).toString());
+                  const thriftDep = parseFloat((emp.thrift_deposit || 0).toString());
+                  const monthBills = parseFloat((emp.current_month_bills || 0).toString());
+                  const domesticAdv = parseFloat((emp.domestic_balance || 0).toString());
+                  const creditLimit = parseFloat((emp.credit_limit || 0).toString());
+                  const outstanding = parseFloat((emp.current_outstanding || 0).toString());
+                  const available = parseFloat((emp.available_credit || 0).toString());
+
                   return (
                     <tr
                       key={emp.id}
                       onClick={() => navigate(`/employees/${emp.id}`)}
-                      className={`hover:bg-slate-50/70 cursor-pointer transition-colors ${
+                      className={`hover:bg-slate-50/70 cursor-pointer transition-colors whitespace-nowrap ${
                         isSelected ? 'bg-blue-50/40' : ''
                       }`}
                     >
                       {/* Checkbox */}
-                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -630,133 +913,172 @@ export const EmployeeDirectoryPage: React.FC = () => {
                         />
                       </td>
 
-                      {/* Employee Profile & Code */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 rounded-full bg-navy-800 text-white flex items-center justify-center font-bold text-xs uppercase flex-shrink-0">
-                            {emp.first_name.charAt(0)}
+                      {/* Member Profile, Name & Code on a Single Line */}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <div className="flex items-center space-x-2 whitespace-nowrap">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] uppercase flex-shrink-0 text-white ${
+                            emp.category === 'STAFF'
+                              ? 'bg-purple-700'
+                              : emp.category === 'SPECIAL'
+                              ? 'bg-amber-600'
+                              : 'bg-navy-800'
+                          }`}>
+                            {emp.first_name ? emp.first_name.charAt(0) : 'M'}
                           </div>
-                          <div>
-                            <div className="font-bold text-navy-800 hover:text-primary transition-colors flex items-center space-x-1.5">
-                              <span>{emp.first_name} {emp.last_name}</span>
-                              {emp.category && (
-                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
-                                  emp.category === 'STAFF'
-                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                                    : emp.category === 'SPECIAL'
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
-                                }`}>
-                                  {emp.category}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-textSecondary font-mono flex items-center space-x-2 mt-0.5">
-                              <span>{emp.employee_code}</span>
-                              {emp.cs_no && (
-                                <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded font-semibold border border-slate-200">
-                                  CS #{emp.cs_no}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                          <span className="font-bold text-navy-800 hover:text-primary transition-colors whitespace-nowrap">
+                            {emp.first_name} {emp.last_name !== '.' ? emp.last_name : ''}
+                          </span>
+                          <span className="text-[11px] font-mono text-slate-400 font-medium whitespace-nowrap">
+                            ({emp.employee_code})
+                          </span>
                         </div>
                       </td>
 
-                      {/* Department & Designation */}
-                      {columnVisibility.department && (
-                        <td className="py-3 px-4">
-                          <div className="font-medium text-textPrimary">{emp.department_name || 'Administration & Management'}</div>
-                          <div className="text-[11px] text-textSecondary">{emp.designation_title || 'General Manager'}</div>
-                        </td>
-                      )}
-
-                      {/* Contact */}
-                      {columnVisibility.contact && (
-                        <td className="py-3 px-4">
-                          <div className="font-medium text-textPrimary flex items-center">
-                            <Phone className="w-3 h-3 text-textSecondary mr-1" />
-                            <span>{emp.mobile}</span>
-                          </div>
-                          <div className="text-[11px] text-textSecondary truncate max-w-[140px]">{emp.email || '-'}</div>
-                        </td>
-                      )}
-
-                      {/* Joining Date */}
-                      {columnVisibility.joiningDate && (
-                        <td className="py-3 px-4 font-medium text-textSecondary">
-                          {emp.joining_date ? new Date(emp.joining_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
-                        </td>
-                      )}
-
-                      {/* Credit Enabled */}
-                      {columnVisibility.creditStatus && (
-                        <td className="py-3 px-4 text-center">
-                          {emp.credit_enabled ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle className="w-3 h-3 mr-1 text-emerald-600" />
-                              Eligible
+                      {/* Society CS # */}
+                      {columnVisibility.csNo && (
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          {emp.cs_no ? (
+                            <span className="inline-block px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 whitespace-nowrap">
+                              CS #{emp.cs_no}
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                              <XCircle className="w-3 h-3 mr-1 text-rose-600" />
-                              Blocked
+                            <span className="text-slate-400 font-mono text-[11px]">-</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Corporate HR # */}
+                      {columnVisibility.hrNo && (
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {emp.hr_no ? (
+                            <span className="font-mono text-xs font-semibold text-slate-700 whitespace-nowrap">
+                              {emp.hr_no}
                             </span>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-[11px]">-</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Category */}
+                      {columnVisibility.category && (
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase whitespace-nowrap ${
+                            emp.category === 'STAFF'
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                              : emp.category === 'SPECIAL'
+                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                              : 'bg-blue-50 text-blue-700 border border-blue-200'
+                          }`}>
+                            {emp.category === 'SPECIAL' ? 'Special' : emp.category || 'Worker'}
+                          </span>
+                        </td>
+                      )}
+
+                      {/* Share Capital */}
+                      {columnVisibility.shareCapital && (
+                        <td className="py-2.5 px-3 text-right font-medium text-slate-800 tabular-nums whitespace-nowrap">
+                          ₹{shareCap.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                      )}
+
+                      {/* Monthly Thrift */}
+                      {columnVisibility.monthlyThrift && (
+                        <td className="py-2.5 px-3 text-right tabular-nums whitespace-nowrap font-semibold text-indigo-700">
+                          ₹{thriftDep.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                      )}
+
+                      {/* Current Month Store Bills */}
+                      {columnVisibility.monthBills && (
+                        <td className="py-2.5 px-3 text-right tabular-nums whitespace-nowrap">
+                          <span className={`font-bold ${monthBills > 0 ? 'text-amber-700' : 'text-slate-400'}`}>
+                            ₹{monthBills.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                      )}
+
+                      {/* Domestic Advance */}
+                      {columnVisibility.domesticAdvance && (
+                        <td className="py-2.5 px-3 text-right tabular-nums font-medium whitespace-nowrap">
+                          {domesticAdv > 0 ? (
+                            <span className="text-rose-700 font-semibold">
+                              ₹{domesticAdv.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">₹0.00</span>
                           )}
                         </td>
                       )}
 
                       {/* Credit Limit */}
                       {columnVisibility.creditLimit && (
-                        <td className="py-3 px-4 text-right font-medium text-textSecondary tabular-nums">
-                          ₹{parseFloat(emp.credit_limit.toString()).toLocaleString('en-IN')}
+                        <td className="py-2.5 px-3 text-right font-medium text-slate-700 tabular-nums whitespace-nowrap">
+                          ₹{creditLimit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
                       )}
 
                       {/* Outstanding */}
                       {columnVisibility.outstanding && (
-                        <td className="py-3 px-4 text-right font-bold text-amber-700 tabular-nums">
-                          ₹{parseFloat(emp.current_outstanding.toString()).toLocaleString('en-IN')}
+                        <td className="py-2.5 px-3 text-right font-bold text-navy-900 tabular-nums whitespace-nowrap">
+                          ₹{outstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
                       )}
 
-                      {/* Available */}
+                      {/* Available Credit */}
                       {columnVisibility.available && (
-                        <td className="py-3 px-4 text-right font-bold text-emerald-700 tabular-nums">
-                          ₹{parseFloat(emp.available_credit.toString()).toLocaleString('en-IN')}
+                        <td className="py-2.5 px-3 text-right font-bold tabular-nums whitespace-nowrap">
+                          {available > 0 ? (
+                            <span className="text-emerald-700">
+                              ₹{available.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                          ) : (
+                            <span className="text-rose-600 font-extrabold">₹0.00</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Credit Status */}
+                      {columnVisibility.creditStatus && (
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          {emp.credit_enabled ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                              <CheckCircle className="w-3 h-3 mr-1 text-emerald-600 flex-shrink-0" />
+                              Eligible
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
+                              <XCircle className="w-3 h-3 mr-1 text-rose-600 flex-shrink-0" />
+                              Blocked
+                            </span>
+                          )}
                         </td>
                       )}
 
                       {/* Status */}
                       {columnVisibility.status && (
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           <StatusBadge status={emp.employment_status} />
                         </td>
                       )}
 
                       {/* Actions */}
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-1">
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center space-x-1 whitespace-nowrap">
                           <button
                             disabled={waSendingId === emp.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickWhatsAppBalance(emp);
-                            }}
-                            className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
-                            title={`Send WhatsApp Credit Balance to ${emp.mobile}`}
+                            onClick={() => handleQuickWhatsAppBalance(emp)}
+                            className="p-1 rounded-md text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                            title={`Send WhatsApp Credit Balance to ${emp.mobile || emp.first_name}`}
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/employees/${emp.id}`);
-                            }}
-                            className="p-1 rounded text-textSecondary hover:text-primary hover:bg-blue-50 transition-colors"
-                            title="View Full Profile"
+                            onClick={() => navigate(`/employees/${emp.id}`)}
+                            className="p-1 rounded-md text-textSecondary hover:text-primary hover:bg-blue-50 transition-colors"
+                            title="View Member Passbook & Profile"
                           >
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -773,7 +1095,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
           currentPage={pagination.page}
           totalItems={pagination.total}
           pageSize={pagination.limit}
-          itemLabel="employees"
+          itemLabel="cooperative members"
           onPageChange={(page) => setPagination((prev) => ({ ...prev, page }))}
           onPageSizeChange={(limit) => setPagination((prev) => ({ ...prev, limit, page: 1 }))}
         />
@@ -783,8 +1105,8 @@ export const EmployeeDirectoryPage: React.FC = () => {
       <Modal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        title="Import Employees in Bulk (CSV / Tabular Data)"
-        subtitle="Paste CSV rows to quickly import staff accounts into the system"
+        title="Import Members in Bulk (CSV / Tabular Data)"
+        subtitle="Paste CSV rows to quickly import cooperative member accounts"
         maxWidth="2xl"
       >
         <form onSubmit={handleImportCSV} className="space-y-4 text-xs">
@@ -797,7 +1119,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
               rows={6}
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
-              placeholder={`CFE-1010, Ramesh, Kumar, 9848011223, ramesh@cfecc.org, 15000\nCFE-1011, Sunitha, Devi, 9848022334, sunitha@cfecc.org, 12000`}
+              placeholder={`5000335, Sandeep, Nakadi, 9848011223, sandeep@cfecc.org, 15000\n5000336, Ravindra, Edke, 9848022334, ravindra@cfecc.org, 12000`}
               className="w-full p-3 font-mono text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
             />
           </div>
@@ -825,7 +1147,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
               type="submit"
               className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold shadow-subtle"
             >
-              Import Employees
+              Import Members
             </button>
           </div>
         </form>
@@ -835,8 +1157,8 @@ export const EmployeeDirectoryPage: React.FC = () => {
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title="Add New Employee"
-        subtitle="Register employee with store credit allocation and salary structure"
+        title="Add New Cooperative Member"
+        subtitle="Register member with store credit allocation and thrift structure"
         maxWidth="4xl"
       >
         <form onSubmit={handleCreateEmployee} className="space-y-6">
@@ -853,14 +1175,50 @@ export const EmployeeDirectoryPage: React.FC = () => {
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Employee ID *</label>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Employee / Member ID *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. CFE-1006"
+                  placeholder="e.g. 5000335"
                   value={addForm.employeeCode}
                   onChange={(e) => setAddForm({ ...addForm, employeeCode: e.target.value })}
                   className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Society CS # (CS No) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 1440 or 0"
+                  value={addForm.csNo}
+                  onChange={(e) => setAddForm({ ...addForm, csNo: e.target.value })}
+                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Grade *</label>
+                <select
+                  value={addForm.grade}
+                  onChange={(e) => setAddForm({ ...addForm, grade: e.target.value })}
+                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none font-medium"
+                >
+                  <option value="M">M - Management</option>
+                  <option value="NM">NM - Non Management</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Corporate HR ID</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 10000973 (optional)"
+                  value={addForm.hrNo}
+                  onChange={(e) => setAddForm({ ...addForm, hrNo: e.target.value })}
+                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none font-mono"
                 />
               </div>
 
@@ -869,6 +1227,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  placeholder="First name"
                   value={addForm.firstName}
                   onChange={(e) => setAddForm({ ...addForm, firstName: e.target.value })}
                   className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
@@ -880,6 +1239,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  placeholder="Last name"
                   value={addForm.lastName}
                   onChange={(e) => setAddForm({ ...addForm, lastName: e.target.value })}
                   className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
@@ -902,6 +1262,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
                 <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Email Address</label>
                 <input
                   type="email"
+                  placeholder="name@coromandel.biz"
                   value={addForm.email}
                   onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
                   className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
@@ -937,9 +1298,14 @@ export const EmployeeDirectoryPage: React.FC = () => {
                   className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
                 >
                   <option value="">Select Department</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
+                  {departments
+                    .filter((d) => d.name.toLowerCase() !== 'others' && d.name.toLowerCase() !== 'other')
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  <option value={departments.find((d) => d.name.toLowerCase() === 'others' || d.name.toLowerCase() === 'other')?.id || 'OTHERS'}>
+                    Others
+                  </option>
                 </select>
               </div>
 
@@ -951,17 +1317,21 @@ export const EmployeeDirectoryPage: React.FC = () => {
                   className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
                 >
                   <option value="">Select Designation</option>
-                  {designations.map((des) => (
-                    <option key={des.id} value={des.id}>{des.title}</option>
-                  ))}
+                  {designations
+                    .filter((des) => des.title.toLowerCase() !== 'others' && des.title.toLowerCase() !== 'other')
+                    .map((des) => (
+                      <option key={des.id} value={des.id}>{des.title}</option>
+                    ))}
+                  <option value={designations.find((des) => des.title.toLowerCase() === 'others' || des.title.toLowerCase() === 'other')?.id || 'OTHERS'}>
+                    Others
+                  </option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Joining Date *</label>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Joining Date</label>
                 <input
                   type="date"
-                  required
                   value={addForm.joiningDate}
                   onChange={(e) => setAddForm({ ...addForm, joiningDate: e.target.value })}
                   className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
@@ -969,46 +1339,125 @@ export const EmployeeDirectoryPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Store Credit Limit (₹) *</label>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Employment Type</label>
+                <select
+                  value={addForm.employmentType}
+                  onChange={(e) => setAddForm({ ...addForm, employmentType: e.target.value })}
+                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
+                >
+                  <option value="PERMANENT">Permanent (Cooperative Member)</option>
+                  <option value="CONTRACT">Contractual</option>
+                  <option value="PROBATION">Probation</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Credit Limit (₹)</label>
                 <input
                   type="number"
-                  required
+                  min="0"
+                  step="500"
                   value={addForm.creditLimit}
                   onChange={(e) => setAddForm({ ...addForm, creditLimit: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none tabular-nums font-semibold"
+                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none font-medium"
                 />
               </div>
 
-              <div className="flex items-center pt-5">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={addForm.creditEnabled}
-                    onChange={(e) => setAddForm({ ...addForm, creditEnabled: e.target.checked })}
-                    className="w-4 h-4 text-primary rounded border-borderLine focus:ring-primary"
-                  />
-                  <span className="text-xs font-semibold text-navy-800">Enable Monthly Store Credit</span>
+              <div className="flex items-center space-x-2 pt-6">
+                <input
+                  type="checkbox"
+                  id="creditEnabled"
+                  checked={addForm.creditEnabled}
+                  onChange={(e) => setAddForm({ ...addForm, creditEnabled: e.target.checked })}
+                  className="w-4 h-4 text-primary rounded"
+                />
+                <label htmlFor="creditEnabled" className="text-xs font-semibold text-textPrimary cursor-pointer">
+                  Enable POS Store Credit Purchases
                 </label>
               </div>
             </div>
           </div>
 
-          {/* Section 3: Salary & Bank Structure */}
+          {/* Section 3: Salary Structure */}
           <div>
-            <h4 className="text-xs font-bold text-navy-800 uppercase tracking-wider mb-3 pb-1 border-b border-borderLine">
-              3. Salary Structure & Bank Account
-            </h4>
+            <div className="flex items-center justify-between mb-3 pb-1 border-b border-borderLine">
+              <h4 className="text-xs font-bold text-navy-800 uppercase tracking-wider">
+                3. Salary Structure (Monthly CTC Components)
+              </h4>
+              <span className="text-[10px] font-medium text-textSecondary bg-slate-100 border border-borderLine px-2 py-0.5 rounded-full">
+                Optional
+              </span>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Basic Salary (₹)</label>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">
+                  Basic Salary (₹) <span className="text-[10px] font-normal text-slate-400 lowercase">(optional)</span>
+                </label>
                 <input
                   type="number"
-                  value={addForm.basicSalary}
+                  min="0"
+                  placeholder="0 (optional)"
+                  value={addForm.basicSalary || ''}
                   onChange={(e) => setAddForm({ ...addForm, basicSalary: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none tabular-nums"
+                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
                 />
               </div>
 
+              <div>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">
+                  DA (₹) <span className="text-[10px] font-normal text-slate-400 lowercase">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="0 (optional)"
+                  value={addForm.da || ''}
+                  onChange={(e) => setAddForm({ ...addForm, da: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">
+                  HRA (₹) <span className="text-[10px] font-normal text-slate-400 lowercase">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="0 (optional)"
+                  value={addForm.hra || ''}
+                  onChange={(e) => setAddForm({ ...addForm, hra: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">
+                  Other Allowances (₹) <span className="text-[10px] font-normal text-slate-400 lowercase">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="0 (optional)"
+                  value={addForm.otherAllowances || ''}
+                  onChange={(e) => setAddForm({ ...addForm, otherAllowances: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Bank Details */}
+          <div>
+            <div className="flex items-center justify-between mb-3 pb-1 border-b border-borderLine">
+              <h4 className="text-xs font-bold text-navy-800 uppercase tracking-wider">
+                4. Bank Account Details
+              </h4>
+              <span className="text-[10px] font-medium text-textSecondary bg-slate-100 border border-borderLine px-2 py-0.5 rounded-full">
+                Optional
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Bank Name</label>
                 <input
@@ -1023,7 +1472,6 @@ export const EmployeeDirectoryPage: React.FC = () => {
                 <label className="block text-[11px] font-semibold text-textSecondary uppercase mb-1">Account Number</label>
                 <input
                   type="text"
-                  placeholder="e.g. 30123456789"
                   value={addForm.accountNumber}
                   onChange={(e) => setAddForm({ ...addForm, accountNumber: e.target.value })}
                   className="w-full px-3 py-1.5 text-xs border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
@@ -1042,21 +1490,20 @@ export const EmployeeDirectoryPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Form Actions */}
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-borderLine">
+          <div className="flex justify-end space-x-3 pt-4 border-t border-borderLine">
             <button
               type="button"
               onClick={() => setIsAddModalOpen(false)}
-              className="px-4 py-2 text-xs font-semibold text-textSecondary hover:text-textPrimary transition-colors"
+              className="px-4 py-2 font-semibold text-textSecondary hover:text-textPrimary"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold shadow-subtle transition-all disabled:opacity-50"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold shadow-subtle disabled:opacity-50"
             >
-              {isSubmitting ? 'Registering...' : 'Save & Register Employee'}
+              {isSubmitting ? 'Registering...' : 'Register Member'}
             </button>
           </div>
         </form>

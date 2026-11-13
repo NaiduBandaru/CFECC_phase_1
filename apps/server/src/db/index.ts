@@ -494,7 +494,8 @@ async function ensureTablesCreated() {
       accepted_qty NUMERIC(12, 3) NOT NULL,
       rejected_qty NUMERIC(12, 3) NOT NULL DEFAULT 0.000,
       unit_cost NUMERIC(12, 2) NOT NULL,
-      rejection_reason TEXT
+      rejection_reason TEXT,
+      expiry_date DATE
     );
 
     CREATE TABLE IF NOT EXISTS purchase_invoices (
@@ -715,6 +716,7 @@ async function ensureTablesCreated() {
 
     -- Cooperative Society Enhancements (FoxPro Real Data Migration)
     ALTER TABLE employees ADD COLUMN IF NOT EXISTS cs_no TEXT;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS grade TEXT;
     ALTER TABLE employees ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'WORKER';
     ALTER TABLE employees ADD COLUMN IF NOT EXISTS hr_no TEXT;
     ALTER TABLE employees ADD COLUMN IF NOT EXISTS share_capital NUMERIC(12, 2) DEFAULT 0.00;
@@ -774,6 +776,32 @@ async function ensureTablesCreated() {
 
     -- Vendors optional phone
     ALTER TABLE vendors ALTER COLUMN phone DROP NOT NULL;
+
+    -- Goods Receipt items expiry date tracking & safe schema alignment
+    ALTER TABLE goods_receipt_items ADD COLUMN IF NOT EXISTS expiry_date DATE;
+    ALTER TABLE goods_receipt_items ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE goods_receipt_items ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+    ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_invoice_number TEXT;
+
+    -- High-Performance Dashboard & Reporting Indexes
+    CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_purchase_orders_order_date ON purchase_orders(order_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_payments_payment_date ON payments(payment_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_recovery_records_recovered_at ON recovery_records(recovered_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_items_current_stock ON items(current_stock);
+    CREATE INDEX IF NOT EXISTS idx_items_category_id ON items(category_id);
+    CREATE INDEX IF NOT EXISTS idx_items_is_active ON items(is_active);
+
+    -- Ensure 'Others' department and designation exist
+    INSERT INTO departments (code, name, is_active)
+    VALUES ('OTHERS', 'Others', TRUE)
+    ON CONFLICT (code) DO NOTHING;
+
+    INSERT INTO designations (department_id, title, is_active)
+    SELECT d.id, 'Others', TRUE
+    FROM departments d
+    WHERE d.code = 'OTHERS'
+    AND NOT EXISTS (SELECT 1 FROM designations WHERE title = 'Others');
   `;
 
   await executeScript(ddl);

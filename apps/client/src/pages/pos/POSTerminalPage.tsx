@@ -324,9 +324,20 @@ export const POSTerminalPage: React.FC = () => {
     setCheckoutError(null);
     const existing = cart.find((c) => c.itemId === product.id);
 
+    const b1Qty = parseFloat(String((product as any).batch1_qty || 0));
+    const b2Qty = parseFloat(String((product as any).batch2_qty || 0));
+    const b1Rate = parseFloat(String((product as any).batch1_rate || 0));
+    const b2Rate = parseFloat(String((product as any).batch2_rate || 0));
+    const baseSelling = parseFloat(String(product.selling_price || 0));
+    const activeSellingPrice = b1Qty > 0
+      ? (b1Rate > 0 ? b1Rate : baseSelling)
+      : b2Qty > 0
+        ? (b2Rate > 0 ? b2Rate : baseSelling)
+        : baseSelling;
+
     const effectivePrice = selectedEmployee
-      ? parseFloat(product.employee_price)
-      : parseFloat(product.selling_price);
+      ? (parseFloat(product.employee_price) || activeSellingPrice)
+      : activeSellingPrice;
 
     if (existing) {
       setCart(
@@ -343,11 +354,11 @@ export const POSTerminalPage: React.FC = () => {
           name: product.name,
           unitCode: product.unit_code || 'PCS',
           unitPrice: effectivePrice,
-          employeePrice: parseFloat(product.employee_price),
-          sellingPrice: parseFloat(product.selling_price),
+          employeePrice: parseFloat(product.employee_price) || activeSellingPrice,
+          sellingPrice: activeSellingPrice,
           quantity: 1,
           taxRate: parseFloat(product.tax_rate || '0'),
-          currentStock: parseFloat(product.current_stock || '0'),
+          currentStock: parseFloat(String((product as any).batch1_qty || 0)) + parseFloat(String((product as any).batch2_qty || 0)),
         },
       ]);
     }
@@ -760,7 +771,7 @@ export const POSTerminalPage: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
               {filteredProducts.map((p) => {
-                const stock = parseFloat(p.current_stock || '0');
+                const stock = parseFloat(String((p as any).batch1_qty || 0)) + parseFloat(String((p as any).batch2_qty || 0));
                 const minStock = parseFloat(p.min_stock || '0');
                 const hasStock = stock > 0;
                 const isLow = hasStock && stock <= minStock;

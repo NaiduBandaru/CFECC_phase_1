@@ -127,17 +127,13 @@ export function App() {
               path="items"
               element={
                 <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
-                  <ItemsInventoryHubPage defaultTab="catalog" />
+                  <ItemsInventoryHubPage />
                 </RoleRoute>
               }
             />
             <Route
               path="pricing"
-              element={
-                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
-                  <ItemsInventoryHubPage defaultTab="pricing" />
-                </RoleRoute>
-              }
+              element={<Navigate to="/items" replace />}
             />
             <Route
               path="vendors"
@@ -173,11 +169,7 @@ export function App() {
             />
             <Route
               path="inventory"
-              element={
-                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
-                  <ItemsInventoryHubPage defaultTab="stock" />
-                </RoleRoute>
-              }
+              element={<Navigate to="/items" replace />}
             />
             <Route
               path="billing"

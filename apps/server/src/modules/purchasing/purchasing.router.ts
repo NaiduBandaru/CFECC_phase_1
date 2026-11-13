@@ -32,6 +32,7 @@ const receiveGrnSchema = z.object({
     acceptedQty: z.number().nonnegative(),
     rejectedQty: z.number().nonnegative().default(0),
     unitCost: z.number().nonnegative(),
+    expiryDate: z.string().optional().nullable(),
     rejectionReason: z.string().optional().nullable(),
   })).min(1, 'At least one item must be received'),
 });
@@ -65,7 +66,9 @@ purchasingRouter.get('/orders', authenticateToken, async (req: Request, res: Res
       whereClauses.push(`(
         LOWER(po.po_number) LIKE '%${q}%' OR 
         LOWER(v.name) LIKE '%${q}%' OR 
-        LOWER(v.vendor_code) LIKE '%${q}%'
+        LOWER(v.vendor_code) LIKE '%${q}%' OR
+        LOWER(COALESCE(po.notes, '')) LIKE '%${q}%' OR
+        LOWER(COALESCE(pi.invoice_number, '')) LIKE '%${q}%'
       )`);
     }
 
@@ -76,9 +79,18 @@ purchasingRouter.get('/orders', authenticateToken, async (req: Request, res: Res
         po.*, 
         v.name as vendor_name, 
         v.vendor_code,
+        v.gstin as vendor_gstin,
+        v.state as vendor_state,
+        v.city as vendor_city,
+        gr.id as grn_id,
+        gr.grn_number,
+        gr.receipt_date as grn_date,
+        pi.invoice_number as vendor_invoice_number,
         (SELECT CAST(COUNT(*) AS INTEGER) FROM purchase_order_items poi WHERE poi.po_id = po.id) as item_count
       FROM purchase_orders po
       JOIN vendors v ON po.vendor_id = v.id
+      LEFT JOIN goods_receipts gr ON gr.po_id = po.id
+      LEFT JOIN purchase_invoices pi ON pi.grn_id = gr.id
       WHERE ${whereSql}
       ORDER BY po.order_date DESC, po.id DESC;
     `);
@@ -109,7 +121,12 @@ purchasingRouter.get('/orders/:id', authenticateToken, async (req: Request, res:
         poi.*,
         i.name as item_name,
         i.item_code,
-        u.code as unit_code
+        u.code as unit_code,
+        COALESCE(i.selling_price, i.batch1_rate, 0) as sale_price,
+        COALESCE(i.selling_price, i.batch1_rate, 0) as mrp,
+        COALESCE(i.cgst_rate, 0) as cgst_rate,
+        COALESCE(i.sgst_rate, 0) as sgst_rate,
+        COALESCE(i.igst_rate, 0) as igst_rate
       FROM purchase_order_items poi
       JOIN items i ON poi.item_id = i.id
       LEFT JOIN units u ON i.unit_id = u.id
@@ -267,24 +284,74 @@ purchasingRouter.get('/receipts/:id', authenticateToken, async (req: Request, re
       return res.status(404).json({ success: false, message: 'Goods Receipt Note not found' });
     }
 
-    const itemsRes = await executeRawSql(`
-      SELECT 
-        gri.*,
-        i.name as item_name,
-        i.item_code,
-        u.code as unit_code,
-        (gri.accepted_qty * gri.unit_cost) as total_accepted_cost
-      FROM goods_receipt_items gri
-      JOIN items i ON gri.item_id = i.id
-      LEFT JOIN units u ON i.unit_id = u.id
-      WHERE gri.grn_id = ${grnId};
-    `);
+    let itemsRows: any[] = [];
+    try {
+      const itemsRes = await executeRawSql(`
+        SELECT 
+          gri.*,
+          i.name as item_name,
+          i.item_code,
+          u.code as unit_code,
+          COALESCE(gri.unit_cost, i.purchase_price, 0) as purchase_cost,
+          COALESCE(i.selling_price, i.batch1_rate, 0) as sale_price,
+          COALESCE(i.selling_price, i.batch1_rate, 0) as mrp,
+          COALESCE(i.cgst_rate, 0) as cgst_rate,
+          COALESCE(i.sgst_rate, 0) as sgst_rate,
+          COALESCE(i.igst_rate, 0) as igst_rate,
+          COALESCE(i.tax_rate, 0) as tax_rate,
+          COALESCE(gri.expiry_date, i.batch1_expiry, i.batch2_expiry) as expiry_date,
+          (gri.accepted_qty * gri.unit_cost) as total_accepted_cost
+        FROM goods_receipt_items gri
+        JOIN items i ON gri.item_id = i.id
+        LEFT JOIN units u ON i.unit_id = u.id
+        WHERE gri.grn_id = ${grnId};
+      `);
+      itemsRows = itemsRes.rows;
+    } catch (err: any) {
+      if (err?.code === '42703' || err?.message?.includes('expiry_date')) {
+        // Auto-heal schema on database if column missing
+        try {
+          await executeRawSql(`ALTER TABLE goods_receipt_items ADD COLUMN IF NOT EXISTS expiry_date DATE;`);
+        } catch {}
+
+        const fallbackRes = await executeRawSql(`
+          SELECT 
+            gri.id,
+            gri.grn_id,
+            gri.item_id,
+            gri.received_qty,
+            gri.accepted_qty,
+            gri.rejected_qty,
+            gri.unit_cost,
+            gri.rejection_reason,
+            i.name as item_name,
+            i.item_code,
+            u.code as unit_code,
+            COALESCE(gri.unit_cost, i.purchase_price, 0) as purchase_cost,
+            COALESCE(i.selling_price, i.batch1_rate, 0) as sale_price,
+            COALESCE(i.selling_price, i.batch1_rate, 0) as mrp,
+            COALESCE(i.cgst_rate, 0) as cgst_rate,
+            COALESCE(i.sgst_rate, 0) as sgst_rate,
+            COALESCE(i.igst_rate, 0) as igst_rate,
+            COALESCE(i.tax_rate, 0) as tax_rate,
+            COALESCE(i.batch1_expiry, i.batch2_expiry) as expiry_date,
+            (gri.accepted_qty * gri.unit_cost) as total_accepted_cost
+          FROM goods_receipt_items gri
+          JOIN items i ON gri.item_id = i.id
+          LEFT JOIN units u ON i.unit_id = u.id
+          WHERE gri.grn_id = ${grnId};
+        `);
+        itemsRows = fallbackRes.rows;
+      } else {
+        throw err;
+      }
+    }
 
     return res.json({
       success: true,
       data: {
         ...grnRes.rows[0],
-        items: itemsRes.rows,
+        items: itemsRows,
       },
     });
   } catch (err) {
@@ -317,6 +384,10 @@ purchasingRouter.post('/receipts', authenticateToken, requireRole('SUPER_ADMIN',
     let grnTotalAcceptedAmount = 0;
     let grnTaxAmount = 0;
 
+    try {
+      await executeRawSql(`ALTER TABLE goods_receipt_items ADD COLUMN IF NOT EXISTS expiry_date DATE;`);
+    } catch {}
+
     for (const itm of body.items) {
       const acceptedQty = itm.acceptedQty;
       const unitCost = itm.unitCost;
@@ -324,31 +395,74 @@ purchasingRouter.post('/receipts', authenticateToken, requireRole('SUPER_ADMIN',
 
       await executeRawSql(`
         INSERT INTO goods_receipt_items (
-          grn_id, item_id, received_qty, accepted_qty, rejected_qty, unit_cost, rejection_reason
+          grn_id, item_id, received_qty, accepted_qty, rejected_qty, unit_cost, expiry_date, rejection_reason
         ) VALUES (
           ${grnId}, ${itm.itemId}, ${itm.receivedQty.toFixed(3)},
           ${acceptedQty.toFixed(3)}, ${itm.rejectedQty.toFixed(3)},
           ${unitCost.toFixed(2)},
+          ${itm.expiryDate ? `'${itm.expiryDate}'` : 'NULL'},
           ${itm.rejectionReason ? `'${itm.rejectionReason.replace(/'/g, "''")}'` : 'NULL'}
         );
       `);
 
       if (acceptedQty > 0) {
-        // Fetch current stock & tax rate
-        const itemRes = await executeRawSql(`SELECT current_stock, tax_rate FROM items WHERE id = ${itm.itemId}`);
-        const prevStock = parseFloat(itemRes.rows[0]?.current_stock || '0');
-        const taxRate = parseFloat(itemRes.rows[0]?.tax_rate || '0');
+        // Fetch current stock, batch balances, & tax rate
+        const itemRes = await executeRawSql(`SELECT * FROM items WHERE id = ${itm.itemId}`);
+        const dbItem = itemRes.rows[0];
+        const prevStock = parseFloat(dbItem?.current_stock || '0');
+        const taxRate = parseFloat(dbItem?.tax_rate || '0');
         const newStock = prevStock + acceptedQty;
 
         const lineTax = lineCost * (taxRate / 100);
         grnTotalAcceptedAmount += lineCost;
         grnTaxAmount += lineTax;
 
-        // Update items stock and last purchase price
+        const b1Qty = parseFloat(dbItem?.batch1_qty || '0');
+        const b1Rate = parseFloat(dbItem?.batch1_rate || dbItem?.selling_price || '0');
+        const pRate1 = parseFloat(dbItem?.purchase_rate1 || dbItem?.purchase_price || '0');
+        const b2Qty = parseFloat(dbItem?.batch2_qty || '0');
+
+        let newB1Qty = b1Qty;
+        let newB1Rate = b1Rate;
+        let newPRate1 = pRate1;
+        let newB1Expiry = dbItem?.batch1_expiry ? String(dbItem.batch1_expiry).split('T')[0] : null;
+        let newB2Qty = b2Qty;
+        let newB2Rate = parseFloat(dbItem?.batch2_rate || '0');
+        let newPRate2 = parseFloat(dbItem?.purchase_rate2 || '0');
+        let newB2Expiry = dbItem?.batch2_expiry ? String(dbItem.batch2_expiry).split('T')[0] : null;
+
+        // FoxPro Goods Inward Logic (str2.prg lines 924-930):
+        // If Batch 1 is 0 (shelf empty), new stock fills Batch 1 directly!
+        // If Batch 1 has stock, new stock is queued into Batch 2 behind Batch 1!
+        if (b1Qty <= 0) {
+          newB1Qty = acceptedQty;
+          newPRate1 = unitCost;
+          newB1Rate = b1Rate > 0 ? b1Rate : unitCost;
+          if (itm.expiryDate) newB1Expiry = itm.expiryDate;
+        } else {
+          newB2Qty = b2Qty + acceptedQty;
+          newPRate2 = unitCost;
+          newB2Rate = newB2Rate > 0 ? newB2Rate : (b1Rate > 0 ? b1Rate : unitCost);
+          if (itm.expiryDate) newB2Expiry = itm.expiryDate;
+        }
+
+        const newStockVal = (newB1Qty * newB1Rate) + (newB2Qty * newB2Rate);
+
+        // Update items stock and batches
         await executeRawSql(`
           UPDATE items SET
             current_stock = ${newStock.toFixed(3)},
+            batch1_qty = ${newB1Qty.toFixed(3)},
+            batch1_rate = ${newB1Rate.toFixed(2)},
+            purchase_rate1 = ${newPRate1.toFixed(2)},
+            batch1_expiry = ${newB1Expiry ? `'${newB1Expiry}'` : 'NULL'},
+            batch2_qty = ${newB2Qty.toFixed(3)},
+            batch2_rate = ${newB2Rate.toFixed(2)},
+            purchase_rate2 = ${newPRate2.toFixed(2)},
+            batch2_expiry = ${newB2Expiry ? `'${newB2Expiry}'` : 'NULL'},
             purchase_price = ${unitCost.toFixed(2)},
+            selling_price = ${newB1Rate.toFixed(2)},
+            stock_value = ${newStockVal.toFixed(2)},
             updated_at = NOW()
           WHERE id = ${itm.itemId};
         `);
@@ -464,6 +578,8 @@ purchasingRouter.get('/invoices', authenticateToken, async (req: Request, res: R
         pi.*,
         v.name as vendor_name,
         v.vendor_code,
+        v.gstin as vendor_gstin,
+        v.state as vendor_state,
         gr.grn_number,
         (pi.total_amount - pi.paid_amount) as balance_due,
         CASE WHEN pi.due_date < CURRENT_DATE AND pi.status != 'PAID' THEN TRUE ELSE FALSE END as is_overdue

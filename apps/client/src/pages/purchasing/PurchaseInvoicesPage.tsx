@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../lib/api.js';
 import { Vendor, GoodsReceipt } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
@@ -11,6 +11,8 @@ import {
   Clock,
   Eye,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 const formatDate = (dateStr?: string | null) => {
@@ -42,20 +44,26 @@ export const PurchaseInvoicesPage: React.FC = () => {
   });
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Filters
+  // Filters & Pagination
   const [search, setSearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [vendorFilter, setVendorFilter] = useState<string>('ALL');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25);
 
   // Register Invoice Modal
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [formVendorId, setFormVendorId] = useState('');
+  const [formVendorSearch, setFormVendorSearch] = useState('');
+  const [isFormVendorSearchOpen, setIsFormVendorSearchOpen] = useState(false);
   const [formInvNum, setFormInvNum] = useState('');
   const [formGrnId, setFormGrnId] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [formDueDate, setFormDueDate] = useState('');
   const [formSubtotal, setFormSubtotal] = useState<number>(0);
-  const [formTax, setFormTax] = useState<number>(0);
+  const [formCgst, setFormCgst] = useState<number>(0);
+  const [formSgst, setFormSgst] = useState<number>(0);
+  const [formIgst, setFormIgst] = useState<number>(0);
   const [formTotal, setFormTotal] = useState<number>(0);
   const [formNotes, setFormNotes] = useState('');
 
@@ -80,32 +88,37 @@ export const PurchaseInvoicesPage: React.FC = () => {
     fetchInitialData();
   }, []);
 
+  // Reset page when filter changes
   useEffect(() => {
-    fetchInvoices();
+    setCurrentPage(1);
   }, [search, statusFilter, vendorFilter]);
 
   const fetchInitialData = async () => {
     try {
-      const [vRes, rRes] = await Promise.all([
+      setLoading(true);
+      const [vRes, rRes, iRes] = await Promise.all([
         api.get('/vendors'),
         api.get('/purchasing/receipts'),
+        api.get('/purchasing/invoices'),
       ]);
       if (vRes.data.success) setVendors(vRes.data.data);
       if (rRes.data.success) setReceipts(rRes.data.data);
+      if (iRes.data.success) {
+        setInvoices(iRes.data.data);
+        if (iRes.data.summary) {
+          setSummary(iRes.data.summary);
+        }
+      }
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   const fetchInvoices = async () => {
     try {
-      setLoading(true);
-      const params = new URLSearchParams({
-        status: statusFilter,
-        vendorId: vendorFilter,
-        search,
-      });
-      const res = await api.get(`/purchasing/invoices?${params.toString()}`);
+      const res = await api.get('/purchasing/invoices');
       if (res.data.success) {
         setInvoices(res.data.data);
         if (res.data.summary) {
@@ -114,8 +127,6 @@ export const PurchaseInvoicesPage: React.FC = () => {
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -129,6 +140,9 @@ export const PurchaseInvoicesPage: React.FC = () => {
     setIsSubmitting(true);
     setError(null);
     try {
+      const calculatedTax = formCgst + formSgst + formIgst;
+      const finalTotal = formTotal > 0 ? formTotal : (formSubtotal + calculatedTax);
+
       const res = await api.post('/purchasing/invoices', {
         vendorId: parseInt(formVendorId, 10),
         invoiceNumber: formInvNum,
@@ -136,16 +150,21 @@ export const PurchaseInvoicesPage: React.FC = () => {
         invoiceDate: formDate,
         dueDate: formDueDate || null,
         subtotal: formSubtotal,
-        taxAmount: formTax,
-        totalAmount: formTotal || formSubtotal + formTax,
+        taxAmount: calculatedTax,
+        totalAmount: finalTotal,
         notes: formNotes || null,
       });
 
       if (res.data.success) {
         setIsRegisterModalOpen(false);
+        setFormVendorId('');
+        setFormVendorSearch('');
         setFormInvNum('');
+        setFormGrnId('');
         setFormSubtotal(0);
-        setFormTax(0);
+        setFormCgst(0);
+        setFormSgst(0);
+        setFormIgst(0);
         setFormTotal(0);
         fetchInvoices();
       }
@@ -208,8 +227,92 @@ export const PurchaseInvoicesPage: React.FC = () => {
     }
   };
 
+  // Helper for Tax Breakdown based on Vendor State/GSTIN
+  const getInvoiceTax = (inv: any) => {
+    const sub = parseFloat(inv.subtotal?.toString() || '0');
+    const tax = parseFloat(inv.tax_amount?.toString() || '0');
+    const total = parseFloat(inv.total_amount?.toString() || '0');
+    const paid = parseFloat(inv.paid_amount?.toString() || '0');
+    const balance = Math.max(0, total - paid);
+    const gstin = inv.vendor_gstin?.trim() || '';
+    const isInter = gstin && !gstin.startsWith('37');
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+
+    if (tax > 0) {
+      if (isInter) {
+        igst = tax;
+      } else {
+        cgst = tax / 2;
+        sgst = tax / 2;
+      }
+    }
+
+    return { sub, tax, cgst, sgst, igst, total, paid, balance, isInter };
+  };
+
+  // Instant In-Memory Filtered Invoices (0ms typing latency)
+  const filteredInvoices = useMemo(() => {
+    let result = invoices;
+    if (statusFilter !== 'ALL') {
+      result = result.filter((inv) => inv.status === statusFilter);
+    }
+    if (vendorFilter !== 'ALL') {
+      result = result.filter((inv) => inv.vendor_id?.toString() === vendorFilter);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (inv) =>
+          inv.system_bill_number?.toLowerCase().includes(q) ||
+          inv.invoice_number?.toLowerCase().includes(q) ||
+          inv.vendor_name?.toLowerCase().includes(q) ||
+          inv.vendor_code?.toLowerCase().includes(q) ||
+          (inv.vendor_gstin && inv.vendor_gstin.toLowerCase().includes(q)) ||
+          (inv.grn_number && inv.grn_number.toLowerCase().includes(q)) ||
+          (inv.notes && inv.notes.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [invoices, statusFilter, vendorFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
+
+  const paginatedInvoices = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredInvoices.slice(start, start + pageSize);
+  }, [filteredInvoices, currentPage, pageSize]);
+
+  // Aggregate Tax Summary across filtered invoices
+  const invoiceTaxSummary = useMemo(() => {
+    let subtotal = 0;
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let totalTax = 0;
+    let totalAmount = 0;
+    let totalPaid = 0;
+    let totalBalance = 0;
+
+    filteredInvoices.forEach((inv) => {
+      const t = getInvoiceTax(inv);
+      subtotal += t.sub;
+      cgst += t.cgst;
+      sgst += t.sgst;
+      igst += t.igst;
+      totalTax += t.tax;
+      totalAmount += t.total;
+      totalPaid += t.paid;
+      totalBalance += t.balance;
+    });
+
+    return { subtotal, cgst, sgst, igst, totalTax, totalAmount, totalPaid, totalBalance };
+  }, [filteredInvoices]);
+
   const handleExportCSV = () => {
-    if (invoices.length === 0) {
+    if (filteredInvoices.length === 0) {
       alert('No invoices to export.');
       return;
     }
@@ -219,38 +322,50 @@ export const PurchaseInvoicesPage: React.FC = () => {
       'Vendor Invoice Number',
       'Supplier Name',
       'Supplier Code',
+      'Vendor GSTIN',
+      'Tax Jurisdiction',
       'GRN Reference',
       'Invoice Date',
       'Due Date',
-      'Subtotal (₹)',
-      'Tax (₹)',
-      'Total Amount (₹)',
-      'Paid Amount (₹)',
-      'Balance Due (₹)',
+      'Subtotal (INR)',
+      'CGST (INR)',
+      'SGST (INR)',
+      'IGST (INR)',
+      'Total GST (INR)',
+      'Total Invoiced (INR)',
+      'Paid Amount (INR)',
+      'Balance Due (INR)',
       'Payment Status',
     ];
 
-    const rows = invoices.map((i: any) => [
-      `"${i.system_bill_number}"`,
-      `"${i.invoice_number}"`,
-      `"${i.vendor_name}"`,
-      `"${i.vendor_code}"`,
-      `"${i.grn_number || 'Direct'}"`,
-      `"${i.invoice_date}"`,
-      `"${i.due_date || ''}"`,
-      parseFloat(i.subtotal.toString()).toFixed(2),
-      parseFloat(i.tax_amount.toString()).toFixed(2),
-      parseFloat(i.total_amount.toString()).toFixed(2),
-      parseFloat(i.paid_amount.toString()).toFixed(2),
-      (parseFloat(i.total_amount.toString()) - parseFloat(i.paid_amount.toString())).toFixed(2),
-      `"${i.status}"`,
-    ]);
+    const rows = filteredInvoices.map((i: any) => {
+      const t = getInvoiceTax(i);
+      return [
+        `"${i.system_bill_number}"`,
+        `"${i.invoice_number}"`,
+        `"${(i.vendor_name || '').replace(/"/g, '""')}"`,
+        `"${i.vendor_code}"`,
+        `"${i.vendor_gstin || ''}"`,
+        `"${t.isInter ? 'Inter-State (IGST)' : 'Intra-State AP (CGST+SGST)'}"`,
+        `"${i.grn_number || 'Direct'}"`,
+        `"${formatDate(i.invoice_date)}"`,
+        `"${formatDate(i.due_date)}"`,
+        t.sub.toFixed(2),
+        t.cgst.toFixed(2),
+        t.sgst.toFixed(2),
+        t.igst.toFixed(2),
+        t.tax.toFixed(2),
+        t.total.toFixed(2),
+        t.paid.toFixed(2),
+        t.balance.toFixed(2),
+        `"${i.status}"`,
+      ].join(',');
+    });
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
+    link.setAttribute('href', encodedUri);
     link.setAttribute('download', `cfecc_purchase_invoices_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
@@ -375,55 +490,91 @@ export const PurchaseInvoicesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Purchase Invoices Register Table with Standard Format and Auto Screen Adjust */}
-      <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col">
-        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px]">
-          <table className="w-full text-left text-xs border-collapse min-w-[1050px]">
-            <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
+      {/* Purchase Invoices Register Table with Standard Format and Horizontal Scroller */}
+      <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col space-y-2 p-4">
+        {/* Horizontal Scroll Guide & GST Banner */}
+        <div className="flex items-center justify-between text-[11px] text-textSecondary bg-slate-50/80 px-3.5 py-2 rounded-lg border border-borderLine">
+          <div className="flex items-center space-x-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>
+              Detailed Accounts Payable Register with <strong>CGST + SGST (Intra-State AP - 37)</strong> & <strong>IGST (Inter-State)</strong> breakdown
+            </span>
+          </div>
+          <div className="text-slate-500 hidden sm:flex items-center space-x-1 text-[11px] font-medium">
+            <span>Scroll horizontally &harr; to view all tax & payment columns comfortably</span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px] border border-borderLine rounded-lg scrollbar-thin">
+          <table className="w-full text-left text-xs border-collapse min-w-[1700px]">
+            <thead className="sticky top-0 z-20 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
               <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                <th className="py-3 px-4">System Bill #</th>
-                <th className="py-3 px-4">Vendor Bill #</th>
-                <th className="py-3 px-4">Supplier / Agency</th>
-                <th className="py-3 px-4">GRN Ref</th>
-                <th className="py-3 px-4">Invoice Date</th>
-                <th className="py-3 px-4">Due Date</th>
-                <th className="py-3 px-4 text-right">Total Amount</th>
-                <th className="py-3 px-4 text-right">Paid Amount</th>
-                <th className="py-3 px-4 text-right">Balance Due</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4 text-center">Actions</th>
+                <th className="py-3 px-3.5 sticky left-0 z-30 bg-slate-100 min-w-[130px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] border-r border-borderLine">
+                  System Bill #
+                </th>
+                <th className="py-3 px-3 min-w-[120px]">Vendor Bill #</th>
+                <th className="py-3 px-3 min-w-[200px]">Supplier / Agency</th>
+                <th className="py-3 px-3 min-w-[150px]">Vendor GSTIN</th>
+                <th className="py-3 px-3 min-w-[120px]">GRN Ref</th>
+                <th className="py-3 px-3 min-w-[105px]">Invoice Date</th>
+                <th className="py-3 px-3 min-w-[105px]">Due Date</th>
+                <th className="py-3 px-3 text-right min-w-[120px]">Taxable Subtotal</th>
+                <th className="py-3 px-3 text-right min-w-[95px] text-blue-700 bg-blue-50/50">CGST (₹)</th>
+                <th className="py-3 px-3 text-right min-w-[95px] text-indigo-700 bg-indigo-50/50">SGST (₹)</th>
+                <th className="py-3 px-3 text-right min-w-[95px] text-purple-700 bg-purple-50/50">IGST (₹)</th>
+                <th className="py-3 px-3 text-right min-w-[105px] text-navy-800 bg-slate-200/50">Total GST</th>
+                <th className="py-3 px-3 text-right min-w-[125px]">Total Invoiced</th>
+                <th className="py-3 px-3 text-right min-w-[115px] text-emerald-700">Paid Amount</th>
+                <th className="py-3 px-3 text-right min-w-[115px]">Balance Due</th>
+                <th className="py-3 px-3 text-center min-w-[100px]">Status</th>
+                <th className="py-3 px-3.5 text-center sticky right-0 z-30 bg-slate-100 min-w-[125px] shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.08)] border-l border-borderLine">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLine">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-textSecondary">
+                  <td colSpan={17} className="py-8 text-center text-textSecondary">
                     <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
                     <div>Loading purchase invoices...</div>
                   </td>
                 </tr>
-              ) : invoices.length === 0 ? (
+              ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-textSecondary">
+                  <td colSpan={17} className="py-8 text-center text-textSecondary">
                     <Receipt className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                     <div>No purchase invoices found matching filter criteria.</div>
                   </td>
                 </tr>
               ) : (
-                invoices.map((inv: any) => {
-                  const balance = parseFloat(inv.total_amount.toString()) - parseFloat(inv.paid_amount.toString());
+                paginatedInvoices.map((inv: any) => {
+                  const t = getInvoiceTax(inv);
                   return (
                     <tr key={inv.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-navy-800">{inv.system_bill_number}</td>
-
-                      <td className="py-3 px-4 font-mono text-textSecondary font-medium">{inv.invoice_number}</td>
-
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-navy-800">{inv.vendor_name}</div>
-                        <div className="text-[11px] text-textSecondary font-mono">{inv.vendor_code}</div>
+                      {/* Sticky System Bill # */}
+                      <td className="py-3 px-3.5 font-mono font-bold text-navy-800 sticky left-0 z-10 bg-white/95 backdrop-blur-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] border-r border-borderLine">
+                        {inv.system_bill_number}
                       </td>
 
-                      <td className="py-3 px-4 font-mono text-textSecondary">
+                      {/* Vendor Bill # */}
+                      <td className="py-3 px-3 font-mono text-textSecondary font-semibold">
+                        {inv.invoice_number}
+                      </td>
+
+                      {/* Supplier / Agency */}
+                      <td className="py-3 px-3">
+                        <div className="font-bold text-navy-800">{inv.vendor_name}</div>
+                        <div className="text-[11px] text-textSecondary font-mono">Code: {inv.vendor_code}</div>
+                      </td>
+
+                      {/* Vendor GSTIN */}
+                      <td className="py-3 px-3 font-mono text-textSecondary text-[11px]">
+                        {inv.vendor_gstin || '37AAAAA0000A1Z5'}
+                      </td>
+
+                      {/* GRN Ref */}
+                      <td className="py-3 px-3 font-mono text-textSecondary">
                         {inv.grn_number ? (
                           <span className="text-emerald-700 font-semibold">{inv.grn_number}</span>
                         ) : (
@@ -431,9 +582,13 @@ export const PurchaseInvoicesPage: React.FC = () => {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-textSecondary whitespace-nowrap">{formatDate(inv.invoice_date)}</td>
+                      {/* Invoice Date */}
+                      <td className="py-3 px-3 text-textSecondary whitespace-nowrap font-medium">
+                        {formatDate(inv.invoice_date)}
+                      </td>
 
-                      <td className="py-3 px-4 whitespace-nowrap">
+                      {/* Due Date */}
+                      <td className="py-3 px-3 whitespace-nowrap">
                         <span className={inv.is_overdue ? 'text-rose-600 font-bold' : 'text-textSecondary'}>
                           {formatDate(inv.due_date)}
                         </span>
@@ -442,21 +597,62 @@ export const PurchaseInvoicesPage: React.FC = () => {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-right font-bold text-navy-800 tabular-nums">
-                        {formatCurrency(inv.total_amount)}
+                      {/* Taxable Subtotal */}
+                      <td className="py-3 px-3 text-right font-medium text-slate-800 tabular-nums">
+                        {formatCurrency(t.sub)}
                       </td>
 
-                      <td className="py-3 px-4 text-right font-medium text-emerald-700 tabular-nums">
-                        {formatCurrency(inv.paid_amount)}
+                      {/* CGST */}
+                      <td className="py-3 px-3 text-right tabular-nums bg-blue-50/30">
+                        {t.cgst > 0 ? (
+                          <span className="font-bold text-blue-800">{formatCurrency(t.cgst)}</span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </td>
 
-                      <td className="py-3 px-4 text-right font-bold tabular-nums">
-                        <span className={balance > 0 ? 'text-rose-600' : 'text-emerald-700'}>
-                          {formatCurrency(balance)}
+                      {/* SGST */}
+                      <td className="py-3 px-3 text-right tabular-nums bg-indigo-50/30">
+                        {t.sgst > 0 ? (
+                          <span className="font-bold text-indigo-800">{formatCurrency(t.sgst)}</span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+
+                      {/* IGST */}
+                      <td className="py-3 px-3 text-right tabular-nums bg-purple-50/30">
+                        {t.igst > 0 ? (
+                          <span className="font-bold text-purple-800">{formatCurrency(t.igst)}</span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+
+                      {/* Total GST */}
+                      <td className="py-3 px-3 text-right tabular-nums font-bold text-navy-800 bg-slate-100/50">
+                        {t.tax > 0 ? formatCurrency(t.tax) : '-'}
+                      </td>
+
+                      {/* Total Invoiced Amount */}
+                      <td className="py-3 px-3 text-right font-bold text-navy-800 tabular-nums">
+                        {formatCurrency(t.total)}
+                      </td>
+
+                      {/* Paid Amount */}
+                      <td className="py-3 px-3 text-right font-medium text-emerald-700 tabular-nums">
+                        {formatCurrency(t.paid)}
+                      </td>
+
+                      {/* Balance Due */}
+                      <td className="py-3 px-3 text-right font-bold tabular-nums">
+                        <span className={t.balance > 0 ? 'text-rose-600' : 'text-emerald-700'}>
+                          {formatCurrency(t.balance)}
                         </span>
                       </td>
 
-                      <td className="py-3 px-4 text-center">
+                      {/* Status */}
+                      <td className="py-3 px-3 text-center">
                         <span
                           className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             inv.status === 'PAID'
@@ -470,7 +666,8 @@ export const PurchaseInvoicesPage: React.FC = () => {
                         </span>
                       </td>
 
-                      <td className="py-3 px-4 text-center">
+                      {/* Sticky Actions */}
+                      <td className="py-3 px-3.5 text-center sticky right-0 z-10 bg-white/95 backdrop-blur-xs shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.06)] border-l border-borderLine">
                         <div className="flex items-center justify-center space-x-1.5">
                           <button
                             title="View Invoice & Match Details"
@@ -486,7 +683,7 @@ export const PurchaseInvoicesPage: React.FC = () => {
                               className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-primary text-white text-[11px] font-semibold hover:bg-primary-hover shadow-subtle"
                             >
                               <CreditCard className="w-3 h-3" />
-                              <span>Pay Bill</span>
+                              <span>Pay</span>
                             </button>
                           )}
                         </div>
@@ -499,29 +696,137 @@ export const PurchaseInvoicesPage: React.FC = () => {
           </table>
         </div>
 
-        {/* Standard Floating Summary Footer */}
-        <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
-          <div>
-            Showing <span className="font-bold text-navy-800 font-mono">{invoices.length}</span> purchase invoices
-          </div>
-          <div className="flex items-center space-x-3 text-[11px]">
-            <span className="text-slate-600 font-medium font-mono">
-              Total Invoiced: ₹{invoices.reduce((acc: number, inv: any) => acc + parseFloat(inv.total_amount?.toString() || '0'), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        {/* Pagination Toolbar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1 pb-1 text-xs text-textSecondary px-1">
+          <div className="flex items-center space-x-2">
+            <span>Showing</span>
+            <span className="font-bold text-navy-800 font-mono">
+              {filteredInvoices.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
             </span>
-            <span className="text-slate-400">&bull;</span>
-            <span className="text-rose-700 font-medium font-mono font-bold">
-              Outstanding AP: ₹{invoices.reduce((acc: number, inv: any) => acc + (parseFloat(inv.total_amount?.toString() || '0') - parseFloat(inv.paid_amount?.toString() || '0')), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <span>to</span>
+            <span className="font-bold text-navy-800 font-mono">
+              {Math.min(currentPage * pageSize, filteredInvoices.length)}
+            </span>
+            <span>of</span>
+            <span className="font-bold text-navy-800 font-mono">{filteredInvoices.length}</span>
+            <span>purchase invoices</span>
+            {filteredInvoices.length !== invoices.length && (
+              <span className="text-[11px] text-primary font-mono">(filtered from {invoices.length} total)</span>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-1.5">
+              <span>Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(parseInt(e.target.value, 10));
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1 bg-white border border-borderLine rounded text-xs focus:outline-none"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={250}>250</option>
+              </select>
+            </div>
+
+            <div className="flex items-center space-x-1">
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(1)}
+                className="px-2 py-1 rounded border border-borderLine bg-white hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium text-[11px]"
+                title="First Page"
+              >
+                &laquo;
+              </button>
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 rounded border border-borderLine bg-white hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium text-[11px] flex items-center space-x-1"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-3 h-3" />
+                <span>Prev</span>
+              </button>
+              <span className="px-2 font-mono font-bold text-navy-800 text-[11px]">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="px-2.5 py-1 rounded border border-borderLine bg-white hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium text-[11px] flex items-center space-x-1"
+                title="Next Page"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                className="px-2 py-1 rounded border border-borderLine bg-white hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium text-[11px]"
+                title="Last Page"
+              >
+                &raquo;
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Standard Floating Summary Footer with Full Tax Breakdown */}
+        <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-3 flex flex-col md:flex-row items-start md:items-center justify-between text-xs text-textSecondary select-none gap-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <div>
+              Taxable: <strong className="text-navy-800 font-mono">{formatCurrency(invoiceTaxSummary.subtotal)}</strong>
+            </div>
+            <div className="hidden lg:block text-slate-300">|</div>
+            <div className="text-blue-700">
+              CGST: <strong className="font-mono">{formatCurrency(invoiceTaxSummary.cgst)}</strong>
+            </div>
+            <div className="hidden lg:block text-slate-300">|</div>
+            <div className="text-indigo-700">
+              SGST: <strong className="font-mono">{formatCurrency(invoiceTaxSummary.sgst)}</strong>
+            </div>
+            <div className="hidden lg:block text-slate-300">|</div>
+            <div className="text-purple-700">
+              IGST: <strong className="font-mono">{formatCurrency(invoiceTaxSummary.igst)}</strong>
+            </div>
+            <div className="hidden lg:block text-slate-300">|</div>
+            <div className="text-navy-800">
+              Total GST: <strong className="font-mono font-bold">{formatCurrency(invoiceTaxSummary.totalTax)}</strong>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 text-xs self-end md:self-auto">
+            <span className="text-navy-900 font-bold">
+              Total Invoiced:{' '}
+              <strong className="text-navy-900 font-mono text-sm font-black">
+                {formatCurrency(invoiceTaxSummary.totalAmount)}
+              </strong>
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className="text-rose-700 font-bold">
+              Outstanding AP:{' '}
+              <strong className="text-rose-700 font-mono text-sm font-black">
+                {formatCurrency(invoiceTaxSummary.totalBalance)}
+              </strong>
             </span>
           </div>
         </div>
       </div>
 
-      {/* Register Purchase Invoice Modal */}
+      {/* Register Purchase Invoice Modal with Searchable Vendor & CGST/SGST/IGST */}
       <Modal
         isOpen={isRegisterModalOpen}
         onClose={() => setIsRegisterModalOpen(false)}
         title="Register Vendor Purchase Invoice"
-        subtitle="Book supplier bill into accounts payable with 3-way GRN matching"
+        subtitle="Book supplier bill into accounts payable with automated tax calculations & 3-way GRN matching"
         maxWidth="2xl"
       >
         <form onSubmit={handleRegisterInvoice} className="space-y-4 text-xs">
@@ -532,19 +837,90 @@ export const PurchaseInvoicesPage: React.FC = () => {
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            {/* Searchable Vendor Selector */}
+            <div className="relative">
               <label className="block font-semibold text-textSecondary uppercase mb-1">Select Supplier / Vendor *</label>
-              <select
-                required
-                value={formVendorId}
-                onChange={(e) => setFormVendorId(e.target.value)}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
-              >
-                <option value="">Select Vendor</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>{v.name} ({v.vendor_code})</option>
-                ))}
-              </select>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-textSecondary absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search vendor by name, code..."
+                  value={
+                    isFormVendorSearchOpen
+                      ? formVendorSearch
+                      : formVendorId
+                        ? `${vendors.find((v) => v.id.toString() === formVendorId)?.name} (${vendors.find((v) => v.id.toString() === formVendorId)?.vendor_code})`
+                        : ''
+                  }
+                  onFocus={() => {
+                    setIsFormVendorSearchOpen(true);
+                    setFormVendorSearch('');
+                  }}
+                  onChange={(e) => {
+                    setFormVendorSearch(e.target.value);
+                    setIsFormVendorSearchOpen(true);
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setIsFormVendorSearchOpen(false), 200);
+                  }}
+                  className="w-full pl-8 pr-7 py-1.5 border border-borderLine rounded-lg bg-white font-medium focus:outline-none focus:ring-1 focus:ring-primary text-xs"
+                />
+                {formVendorId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormVendorId('');
+                      setFormVendorSearch('');
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 font-bold"
+                    title="Clear selected vendor"
+                  >
+                    &times;
+                  </button>
+                )}
+              </div>
+
+              {isFormVendorSearchOpen && (
+                <div className="absolute z-50 left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white border border-borderLine rounded-lg shadow-xl divide-y divide-slate-100 min-w-[280px]">
+                  {vendors
+                    .filter(
+                      (v) =>
+                        !formVendorSearch.trim() ||
+                        v.name.toLowerCase().includes(formVendorSearch.toLowerCase()) ||
+                        v.vendor_code.toLowerCase().includes(formVendorSearch.toLowerCase()) ||
+                        (v.gstin && v.gstin.toLowerCase().includes(formVendorSearch.toLowerCase()))
+                    )
+                    .slice(0, 30)
+                    .map((v) => {
+                      const isAP = v.gstin?.startsWith('37');
+                      return (
+                        <div
+                          key={v.id}
+                          onMouseDown={() => {
+                            setFormVendorId(v.id.toString());
+                            setIsFormVendorSearchOpen(false);
+                            setFormVendorSearch('');
+                          }}
+                          className="p-2 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition-colors text-xs"
+                        >
+                          <div>
+                            <div className="font-bold text-navy-800">{v.name}</div>
+                            <div className="text-[10px] text-textSecondary font-mono">
+                              Code: <strong>{v.vendor_code}</strong> &bull; GSTIN: {v.gstin || 'Unregistered'}
+                            </div>
+                          </div>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                              isAP ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-purple-50 text-purple-700 border border-purple-200'
+                            }`}
+                          >
+                            {isAP ? 'Intra-State AP' : 'Inter-State'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
 
             <div>
@@ -555,7 +931,7 @@ export const PurchaseInvoicesPage: React.FC = () => {
                 placeholder="Supplier's printed invoice number"
                 value={formInvNum}
                 onChange={(e) => setFormInvNum(e.target.value)}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none font-mono"
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-white focus:outline-none font-mono"
               />
             </div>
 
@@ -564,7 +940,7 @@ export const PurchaseInvoicesPage: React.FC = () => {
               <select
                 value={formGrnId}
                 onChange={(e) => setFormGrnId(e.target.value)}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-white focus:outline-none"
               >
                 <option value="">Direct Bill (No GRN)</option>
                 {receipts.map((r) => (
@@ -580,7 +956,7 @@ export const PurchaseInvoicesPage: React.FC = () => {
                 required
                 value={formDate}
                 onChange={(e) => setFormDate(e.target.value)}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-white focus:outline-none"
               />
             </div>
 
@@ -590,16 +966,16 @@ export const PurchaseInvoicesPage: React.FC = () => {
                 type="date"
                 value={formDueDate}
                 onChange={(e) => setFormDueDate(e.target.value)}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-white focus:outline-none"
               />
             </div>
           </div>
 
           <div className="pt-3 border-t border-borderLine">
-            <h4 className="font-bold text-navy-800 uppercase mb-2">Financial Amounts (₹)</h4>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block font-semibold text-textSecondary uppercase mb-1">Subtotal (Excl. Tax)</label>
+            <h4 className="font-bold text-navy-800 uppercase mb-2">Financial & GST Tax Amounts (₹)</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 items-end">
+              <div className="col-span-2 sm:col-span-2">
+                <label className="block font-semibold text-textSecondary uppercase text-[10px] mb-1">Subtotal (Excl. Tax)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -608,37 +984,73 @@ export const PurchaseInvoicesPage: React.FC = () => {
                   onChange={(e) => {
                     const sub = parseFloat(e.target.value) || 0;
                     setFormSubtotal(sub);
-                    setFormTotal(sub + formTax);
+                    setFormTotal(sub + formCgst + formSgst + formIgst);
                   }}
-                  className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none tabular-nums"
+                  className="w-full px-2.5 py-1.5 border border-borderLine rounded-lg bg-white focus:outline-none tabular-nums text-xs"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-textSecondary uppercase mb-1">GST Tax Amount</label>
+                <label className="block font-semibold text-blue-700 uppercase text-[10px] mb-1">CGST (₹)</label>
                 <input
                   type="number"
                   step="0.01"
-                  value={formTax}
+                  value={formCgst}
                   onChange={(e) => {
-                    const tax = parseFloat(e.target.value) || 0;
-                    setFormTax(tax);
-                    setFormTotal(formSubtotal + tax);
+                    const cgst = parseFloat(e.target.value) || 0;
+                    setFormCgst(cgst);
+                    setFormTotal(formSubtotal + cgst + formSgst + formIgst);
                   }}
-                  className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none tabular-nums"
+                  className="w-full px-2 py-1.5 border border-blue-200 rounded-lg bg-blue-50/40 text-blue-900 tabular-nums text-xs font-bold"
+                  placeholder="0.00"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-navy-800 uppercase mb-1">Total Invoiced Amount</label>
+                <label className="block font-semibold text-indigo-700 uppercase text-[10px] mb-1">SGST (₹)</label>
                 <input
                   type="number"
                   step="0.01"
-                  required
-                  value={formTotal}
-                  onChange={(e) => setFormTotal(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-1.5 border border-blue-300 rounded-lg bg-blue-50/50 font-bold text-navy-800 tabular-nums text-sm focus:bg-white focus:outline-none"
+                  value={formSgst}
+                  onChange={(e) => {
+                    const sgst = parseFloat(e.target.value) || 0;
+                    setFormSgst(sgst);
+                    setFormTotal(formSubtotal + formCgst + sgst + formIgst);
+                  }}
+                  className="w-full px-2 py-1.5 border border-indigo-200 rounded-lg bg-indigo-50/40 text-indigo-900 tabular-nums text-xs font-bold"
+                  placeholder="0.00"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-purple-700 uppercase text-[10px] mb-1">IGST (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formIgst}
+                  onChange={(e) => {
+                    const igst = parseFloat(e.target.value) || 0;
+                    setFormIgst(igst);
+                    setFormTotal(formSubtotal + formCgst + formSgst + igst);
+                  }}
+                  className="w-full px-2 py-1.5 border border-purple-200 rounded-lg bg-purple-50/40 text-purple-900 tabular-nums text-xs font-bold"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 p-3 bg-blue-50/60 border border-blue-200 rounded-lg flex items-center justify-between">
+              <div>
+                <span className="text-textSecondary text-[10px] uppercase font-bold block">Total GST:</span>
+                <span className="font-mono font-bold text-navy-800 text-xs">
+                  ₹{(formCgst + formSgst + formIgst).toFixed(2)}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-textSecondary text-[10px] uppercase font-bold block">Grand Total Invoiced:</span>
+                <span className="font-mono font-black text-primary text-sm">
+                  ₹{(formSubtotal + formCgst + formSgst + formIgst).toFixed(2)}
+                </span>
               </div>
             </div>
           </div>
@@ -650,7 +1062,7 @@ export const PurchaseInvoicesPage: React.FC = () => {
               placeholder="e.g. Terms 30 days, transport freight included"
               value={formNotes}
               onChange={(e) => setFormNotes(e.target.value)}
-              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-white focus:outline-none text-xs"
             />
           </div>
 

@@ -9,8 +9,12 @@ export const employeesRouter = Router();
 // Validation Schemas
 const createEmployeeSchema = z.object({
   employeeCode: z.string().min(1, 'Employee code is required'),
+  csNo: z.string().optional().nullable(),
+  grade: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  hrNo: z.string().optional().nullable(),
   firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
+  lastName: z.string().optional().default('.'),
   dateOfBirth: z.string().optional().nullable(),
   gender: z.string().optional().nullable(),
   mobile: z.string().min(10, 'Valid 10-digit mobile number is required'),
@@ -45,6 +49,7 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
       status,
       category,
       creditEligibility,
+      balanceFilter,
       page = '1',
       limit = '10',
       sortBy = 'e.id',
@@ -62,6 +67,7 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
       whereClauses.push(`(
         LOWER(e.employee_code) LIKE '%${q}%' OR 
         LOWER(COALESCE(e.cs_no, '')) LIKE '%${q}%' OR
+        LOWER(COALESCE(e.hr_no, '')) LIKE '%${q}%' OR
         LOWER(e.first_name) LIKE '%${q}%' OR 
         LOWER(e.last_name) LIKE '%${q}%' OR 
         LOWER(COALESCE(e.mobile, '')) LIKE '%${q}%' OR
@@ -86,6 +92,14 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
       whereClauses.push(`e.credit_enabled = ${isEligible ? 'TRUE' : 'FALSE'}`);
     }
 
+    if (balanceFilter === 'WITH_DUES') {
+      whereClauses.push(`e.current_outstanding > 0`);
+    } else if (balanceFilter === 'ZERO_BALANCE') {
+      whereClauses.push(`e.current_outstanding = 0`);
+    } else if (balanceFilter === 'MAXED_OUT') {
+      whereClauses.push(`e.available_credit <= 0`);
+    }
+
     const whereSql = whereClauses.join(' AND ');
 
     // Count total
@@ -97,7 +111,7 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
     // Fetch records
     const listResult = await executeRawSql(`
       SELECT 
-        e.id, e.employee_code, e.cs_no, e.category, e.hr_no,
+        e.id, e.employee_code, e.cs_no, e.grade, e.category, e.hr_no,
         e.first_name, e.last_name, e.date_of_birth, e.gender, e.profile_image_url,
         e.mobile, e.alternate_mobile, e.email, e.current_address, e.permanent_address,
         e.share_capital, e.cum_thrift, e.thrift_deposit, e.domestic_balance, e.old_domestic_balance,
@@ -133,12 +147,92 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
 // 2. Department & Designation lookups
 employeesRouter.get('/departments', authenticateToken, async (req: Request, res: Response, next) => {
   try {
-    const depts = await executeRawSql(`SELECT * FROM departments WHERE is_active = TRUE ORDER BY name ASC`);
-    const desigs = await executeRawSql(`SELECT * FROM designations WHERE is_active = TRUE ORDER BY title ASC`);
+    // Ensure 'Others' department and designation exist in database
+    await executeRawSql(`
+      INSERT INTO departments (code, name, is_active)
+      VALUES ('OTHERS', 'Others', TRUE)
+      ON CONFLICT (code) DO NOTHING;
+    `).catch(() => {});
+
+    await executeRawSql(`
+      INSERT INTO designations (department_id, title, is_active)
+      SELECT d.id, 'Others', TRUE
+      FROM departments d
+      WHERE d.code = 'OTHERS'
+      AND NOT EXISTS (SELECT 1 FROM designations WHERE UPPER(title) = 'OTHERS');
+    `).catch(() => {});
+
+    const depts = await executeRawSql(`
+      SELECT * FROM departments 
+      WHERE is_active = TRUE 
+      ORDER BY CASE WHEN UPPER(name) = 'OTHERS' THEN 1 ELSE 0 END, name ASC
+    `);
+
+    const desigs = await executeRawSql(`
+      SELECT * FROM designations 
+      WHERE is_active = TRUE 
+      ORDER BY CASE WHEN UPPER(title) = 'OTHERS' THEN 1 ELSE 0 END, title ASC
+    `);
+
+    let deptList: any[] = depts.rows ? [...depts.rows] : [];
+    let desigList: any[] = desigs.rows ? [...desigs.rows] : [];
+
+    if (!deptList.some((d: any) => d.name.toLowerCase() === 'others')) {
+      deptList.push({ id: 9999, code: 'OTHERS', name: 'Others', is_active: true });
+    }
+    if (!desigList.some((d: any) => d.title.toLowerCase() === 'others')) {
+      desigList.push({ id: 9999, title: 'Others', is_active: true });
+    }
+
     return res.json({
       success: true,
-      departments: depts.rows,
-      designations: desigs.rows,
+      departments: deptList,
+      designations: desigList,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 2b. Cooperative Members Summary KPIs
+employeesRouter.get('/summary', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const summaryResult = await executeRawSql(`
+      SELECT 
+        COUNT(*) as total_members,
+        COUNT(*) FILTER (WHERE category = 'WORKER') as workers_count,
+        COUNT(*) FILTER (WHERE category = 'STAFF') as staff_count,
+        COUNT(*) FILTER (WHERE category = 'SPECIAL') as special_count,
+        COALESCE(SUM(share_capital), 0) as total_share_capital,
+        COALESCE(SUM(cum_thrift), 0) as total_cum_thrift,
+        COALESCE(SUM(thrift_deposit), 0) as total_monthly_thrift,
+        COALESCE(SUM(current_month_bills), 0) as total_month_bills,
+        COALESCE(SUM(domestic_balance), 0) as total_domestic_advance,
+        COALESCE(SUM(festival_advance_balance), 0) as total_festival_advance,
+        COALESCE(SUM(current_outstanding), 0) as total_outstanding,
+        COALESCE(SUM(credit_limit), 0) as total_credit_limit,
+        COALESCE(SUM(available_credit), 0) as total_available_credit
+      FROM employees;
+    `);
+
+    const row = summaryResult.rows[0] || {};
+    return res.json({
+      success: true,
+      data: {
+        totalMembers: parseInt(row.total_members || '0', 10),
+        workersCount: parseInt(row.workers_count || '0', 10),
+        staffCount: parseInt(row.staff_count || '0', 10),
+        specialCount: parseInt(row.special_count || '0', 10),
+        totalShareCapital: parseFloat(row.total_share_capital || '0'),
+        totalCumThrift: parseFloat(row.total_cum_thrift || '0'),
+        totalMonthlyThrift: parseFloat(row.total_monthly_thrift || '0'),
+        totalMonthBills: parseFloat(row.total_month_bills || '0'),
+        totalDomesticAdvance: parseFloat(row.total_domestic_advance || '0'),
+        totalFestivalAdvance: parseFloat(row.total_festival_advance || '0'),
+        totalOutstanding: parseFloat(row.total_outstanding || '0'),
+        totalCreditLimit: parseFloat(row.total_credit_limit || '0'),
+        totalAvailableCredit: parseFloat(row.total_available_credit || '0'),
+      },
     });
   } catch (err) {
     next(err);
@@ -299,17 +393,22 @@ employeesRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PAYR
     }
 
     const availableCredit = body.creditLimit;
+    const effectiveCategory = body.category || (body.grade === 'M' ? 'STAFF' : body.grade === 'NM' ? 'WORKER' : 'SPECIAL');
 
     const insertResult = await executeRawSql(`
       INSERT INTO employees (
-        employee_code, first_name, last_name, date_of_birth, gender,
+        employee_code, cs_no, grade, category, hr_no, first_name, last_name, date_of_birth, gender,
         mobile, alternate_mobile, email, current_address, permanent_address,
         department_id, designation_id, joining_date, employment_type,
         employment_status, credit_enabled, credit_limit, current_outstanding, available_credit
       ) VALUES (
         '${body.employeeCode.replace(/'/g, "''")}',
+        ${body.csNo ? `'${body.csNo.replace(/'/g, "''")}'` : 'NULL'},
+        ${body.grade ? `'${body.grade.replace(/'/g, "''")}'` : 'NULL'},
+        '${effectiveCategory.replace(/'/g, "''")}',
+        ${body.hrNo ? `'${body.hrNo.replace(/'/g, "''")}'` : 'NULL'},
         '${body.firstName.replace(/'/g, "''")}',
-        '${body.lastName.replace(/'/g, "''")}',
+        '${(body.lastName || '.').replace(/'/g, "''")}',
         ${body.dateOfBirth ? `'${body.dateOfBirth}'` : 'NULL'},
         ${body.gender ? `'${body.gender}'` : 'NULL'},
         '${body.mobile.replace(/'/g, "''")}',
@@ -388,6 +487,10 @@ employeesRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'HR_PA
       UPDATE employees SET
         first_name = '${body.firstName.replace(/'/g, "''")}',
         last_name = '${body.lastName.replace(/'/g, "''")}',
+        cs_no = ${body.csNo !== undefined ? (body.csNo ? `'${body.csNo.replace(/'/g, "''")}'` : 'NULL') : 'cs_no'},
+        grade = ${body.grade !== undefined ? (body.grade ? `'${body.grade.replace(/'/g, "''")}'` : 'NULL') : 'grade'},
+        category = ${body.category ? `'${body.category.replace(/'/g, "''")}'` : (body.grade === 'M' ? "'STAFF'" : body.grade === 'NM' ? "'WORKER'" : body.grade === 'Other' ? "'SPECIAL'" : 'category')},
+        hr_no = ${body.hrNo !== undefined ? (body.hrNo ? `'${body.hrNo.replace(/'/g, "''")}'` : 'NULL') : 'hr_no'},
         mobile = '${body.mobile.replace(/'/g, "''")}',
         alternate_mobile = ${body.alternateMobile ? `'${body.alternateMobile.replace(/'/g, "''")}'` : 'NULL'},
         email = ${body.email ? `'${body.email.replace(/'/g, "''")}'` : 'NULL'},

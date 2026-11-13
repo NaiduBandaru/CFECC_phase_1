@@ -14,7 +14,6 @@ import {
   ArrowUp,
   ArrowDown,
   Download,
-  Upload,
   History,
   Edit2,
   SlidersHorizontal,
@@ -50,16 +49,32 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
   // Column Visibility
   const [showColumnDropdown, setShowColumnDropdown] = useState<boolean>(false);
   const [visibleColumns, setVisibleColumns] = useState({
-    category: true,
-    barcodeSku: true,
     hsn: true,
+    batch1: true,
+    batch2: true,
     purchasePrice: true,
     sellingPrice: true,
-    employeePrice: true,
     stockLevel: true,
-    tax: true,
+    stockValue: true,
+    cgst: true,
+    sgst: true,
+    igst: true,
     status: true,
   });
+
+  const columnLabels: Record<string, string> = {
+    hsn: 'HSN Code',
+    batch1: 'Batch 1 (Rate & Qty)',
+    batch2: 'Batch 2 (Rate & Qty)',
+    purchasePrice: 'Purchase Cost (PRATE)',
+    sellingPrice: 'Selling Rate (SRATE)',
+    stockLevel: 'Stock QTY (Balance)',
+    stockValue: 'Stock Value (₹)',
+    cgst: 'CGST %',
+    sgst: 'SGST %',
+    igst: 'IGST %',
+    status: 'Active Status',
+  };
 
   // Modals
   const [isAddEditModalOpen, setIsAddEditModalOpen] = useState<boolean>(false);
@@ -108,12 +123,6 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
   const [stickerCopies, setStickerCopies] = useState<number>(2);
   const [stickerFormat, setStickerFormat] = useState<'ROLL_50x25' | 'A4_24' | 'A4_30'>('ROLL_50x25');
   const [barcodeTargetItems, setBarcodeTargetItems] = useState<Item[]>([]);
-
-  // CSV Import Modal
-  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
-  const [csvText, setCsvText] = useState<string>('');
-  const [importing, setImporting] = useState<boolean>(false);
-  const [importResult, setImportResult] = useState<{ message?: string; count?: number } | null>(null);
 
   // Form Submission
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -174,11 +183,11 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
   const openCreateModal = () => {
     setEditingItem(null);
     setItemForm({
-      itemCode: `ITM-${String(items.length + 1).padStart(3, '0')}`,
+      itemCode: '',
       name: '',
       categoryId: categories[0]?.id?.toString() || '',
       subcategory: '',
-      brand: 'CFECC',
+      brand: '',
       description: '',
       unitId: units[0]?.id?.toString() || '',
       sku: '',
@@ -386,40 +395,36 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
     const headers = [
       'Item Code',
       'Item Name',
-      'Category',
-      'Subcategory',
-      'Brand',
-      'Unit',
-      'Barcode',
-      'SKU',
       'HSN Code',
-      'Purchase Price',
-      'Selling Price',
-      'Employee Price',
+      'Batch 1 Rate',
+      'Batch 1 Qty',
+      'Batch 2 Rate',
+      'Batch 2 Qty',
+      'Purchase Cost',
+      'Selling Rate',
       'Current Stock',
-      'Min Stock',
-      'Reorder Level',
-      'Tax %',
+      'Stock Value',
+      'CGST %',
+      'SGST %',
+      'IGST %',
       'Status',
     ];
 
     const rows = items.map((i) => [
       `"${i.item_code}"`,
       `"${i.name.replace(/"/g, '""')}"`,
-      `"${i.category_name || ''}"`,
-      `"${i.subcategory || ''}"`,
-      `"${i.brand || ''}"`,
-      `"${i.unit_code || ''}"`,
-      `"${i.barcode || ''}"`,
-      `"${i.sku || ''}"`,
       `"${i.hsn_code || ''}"`,
-      parseFloat(i.purchase_price.toString()).toFixed(2),
-      parseFloat(i.selling_price.toString()).toFixed(2),
-      parseFloat(i.employee_price.toString()).toFixed(2),
-      parseFloat(i.current_stock.toString()).toFixed(3),
-      parseFloat(i.min_stock.toString()).toFixed(3),
-      parseFloat(i.reorder_level.toString()).toFixed(3),
-      parseFloat(i.tax_rate.toString()).toFixed(2),
+      parseFloat(String(i.batch1_rate || i.selling_price || 0)).toFixed(2),
+      parseFloat(String(i.batch1_qty || 0)).toFixed(3),
+      parseFloat(String(i.batch2_rate || 0)).toFixed(2),
+      parseFloat(String(i.batch2_qty || 0)).toFixed(3),
+      parseFloat(String(i.purchase_rate1 || i.purchase_price || 0)).toFixed(2),
+      parseFloat(String(i.selling_price || i.batch1_rate || 0)).toFixed(2),
+      parseFloat(String(i.current_stock || 0)).toFixed(3),
+      parseFloat(String(i.stock_value || 0)).toFixed(2),
+      parseFloat(String(i.cgst_rate || 0)).toFixed(2),
+      parseFloat(String(i.sgst_rate || 0)).toFixed(2),
+      parseFloat(String(i.igst_rate || 0)).toFixed(2),
       i.is_active ? 'Active' : 'Inactive',
     ]);
 
@@ -434,64 +439,46 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
     document.body.removeChild(link);
   };
 
-  const handleImportCSV = async () => {
-    if (!csvText.trim()) {
-      alert('Please paste CSV content.');
-      return;
+  const renderBatchExpiry = (expiryDate?: string | null) => {
+    if (!expiryDate) return null;
+    const raw = String(expiryDate).split('T')[0];
+    const parts = raw.split('-');
+    if (parts.length !== 3) return null;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const expDate = new Date(year, month, day);
+    if (isNaN(expDate.getTime())) return null;
+
+    const formatted = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expDate.setHours(0, 0, 0, 0);
+    const diffTime = expDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return (
+        <div className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 mt-1 whitespace-nowrap" title={`Expired on ${formatted}`}>
+          <span>⛔ Exp: {formatted}</span>
+        </div>
+      );
     }
 
-    setImporting(true);
-    setImportResult(null);
-
-    try {
-      const lines = csvText.trim().split('\n');
-      if (lines.length < 2) {
-        alert('CSV must contain a header line and at least one data row.');
-        setImporting(false);
-        return;
-      }
-
-      const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/"/g, ''));
-      const parsedItems = [];
-
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        const values = line.split(',').map((v) => v.trim().replace(/^"|"$/g, ''));
-        const obj: any = {};
-        headers.forEach((h, idx) => {
-          obj[h] = values[idx] || '';
-        });
-
-        parsedItems.push({
-          item_code: obj['item code'] || obj['item_code'] || obj['code'] || '',
-          name: obj['item name'] || obj['name'] || '',
-          category: obj['category'] || '',
-          subcategory: obj['subcategory'] || '',
-          brand: obj['brand'] || 'CFECC',
-          unit: obj['unit'] || 'PCS',
-          barcode: obj['barcode'] || '',
-          sku: obj['sku'] || '',
-          hsn_code: obj['hsn code'] || obj['hsn_code'] || '',
-          purchase_price: parseFloat(obj['purchase price'] || obj['purchase_price'] || '0'),
-          selling_price: parseFloat(obj['selling price'] || obj['selling_price'] || '0'),
-          employee_price: parseFloat(obj['employee price'] || obj['employee_price'] || '0'),
-          min_stock: parseFloat(obj['min stock'] || obj['min_stock'] || '5'),
-          reorder_level: parseFloat(obj['reorder level'] || obj['reorder_level'] || '10'),
-          tax_rate: parseFloat(obj['tax %'] || obj['tax_rate'] || '0'),
-        });
-      }
-
-      const res = await api.post('/items/import', { items: parsedItems });
-      if (res.data.success) {
-        setImportResult({ message: res.data.message, count: parsedItems.length });
-        fetchItems();
-      }
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'CSV Import failed. Check format.');
-    } finally {
-      setImporting(false);
+    if (diffDays <= 30) {
+      return (
+        <div className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 mt-1 whitespace-nowrap" title={`Expiring in ${diffDays} days (${formatted})`}>
+          <span>⚠️ Exp: {formatted}</span>
+        </div>
+      );
     }
+
+    return (
+      <div className="text-[10px] text-slate-500 font-mono mt-0.5 whitespace-nowrap" title={`Expiry: ${formatted}`}>
+        Exp: {formatted}
+      </div>
+    );
   };
 
   return (
@@ -515,14 +502,6 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-surface border border-borderLine text-textSecondary text-xs font-semibold hover:bg-slate-50 transition-colors shadow-subtle"
-          >
-            <Upload className="w-3.5 h-3.5 text-primary" />
-            <span>Import CSV</span>
-          </button>
-
-          <button
             onClick={handleExportCSV}
             className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-surface border border-borderLine text-textSecondary text-xs font-semibold hover:bg-slate-50 transition-colors shadow-subtle"
           >
@@ -536,14 +515,6 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
           >
             <FolderPlus className="w-3.5 h-3.5 text-navy-800" />
             <span>Categories & Units</span>
-          </button>
-
-          <button
-            onClick={openCreateModal}
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors shadow-subtle"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Store Item</span>
           </button>
         </div>
       </div>
@@ -566,8 +537,8 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
             <button
               onClick={() => setLowStockOnly(!lowStockOnly)}
               className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${lowStockOnly
-                  ? 'bg-amber-50 text-amber-800 border-amber-300'
-                  : 'bg-surface text-textSecondary border-borderLine hover:bg-slate-50'
+                ? 'bg-amber-50 text-amber-800 border-amber-300'
+                : 'bg-surface text-textSecondary border-borderLine hover:bg-slate-50'
                 }`}
             >
               <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
@@ -577,8 +548,8 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
             <button
               onClick={() => setIncludeInactive(!includeInactive)}
               className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${includeInactive
-                  ? 'bg-slate-200 text-navy-800 border-slate-300'
-                  : 'bg-surface text-textSecondary border-borderLine hover:bg-slate-50'
+                ? 'bg-slate-200 text-navy-800 border-slate-300'
+                : 'bg-surface text-textSecondary border-borderLine hover:bg-slate-50'
                 }`}
             >
               <span>{includeInactive ? 'Showing Inactive' : 'Active Only'}</span>
@@ -595,16 +566,16 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
               </button>
 
               {showColumnDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white border border-borderLine rounded-lg shadow-lg z-20 p-2 space-y-1 text-xs">
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-borderLine rounded-lg shadow-lg z-20 p-2 space-y-1 text-xs">
                   {Object.entries(visibleColumns).map(([key, isVis]) => (
-                    <label key={key} className="flex items-center space-x-2 px-2 py-1 hover:bg-slate-50 rounded cursor-pointer capitalize">
+                    <label key={key} className="flex items-center space-x-2 px-2 py-1 hover:bg-slate-50 rounded cursor-pointer">
                       <input
                         type="checkbox"
                         checked={isVis}
                         onChange={() => setVisibleColumns({ ...visibleColumns, [key]: !isVis })}
                         className="rounded border-borderLine text-primary focus:ring-primary"
                       />
-                      <span>{key.replace(/([A-Z])/g, ' $1')}</span>
+                      <span>{columnLabels[key] || key}</span>
                     </label>
                   ))}
                 </div>
@@ -618,8 +589,8 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
           <button
             onClick={() => setCategoryId('ALL')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${categoryId === 'ALL'
-                ? 'bg-navy-800 text-white'
-                : 'bg-slate-100 text-textSecondary hover:text-textPrimary'
+              ? 'bg-navy-800 text-white'
+              : 'bg-slate-100 text-textSecondary hover:text-textPrimary'
               }`}
           >
             All Categories ({items.length})
@@ -629,8 +600,8 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
               key={c.id}
               onClick={() => setCategoryId(c.id.toString())}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${categoryId === c.id.toString()
-                  ? 'bg-navy-800 text-white'
-                  : 'bg-slate-100 text-textSecondary hover:text-textPrimary'
+                ? 'bg-navy-800 text-white'
+                : 'bg-slate-100 text-textSecondary hover:text-textPrimary'
                 }`}
             >
               {c.name}
@@ -688,11 +659,24 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
                   </button>
                 </th>
                 <th
+                  onClick={() => handleSort('item_code')}
+                  className="py-3 px-3 cursor-pointer hover:text-navy-800 whitespace-nowrap"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Item Code</span>
+                    {sortBy === 'item_code' ? (
+                      sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    )}
+                  </div>
+                </th>
+                <th
                   onClick={() => handleSort('name')}
                   className="py-3 px-4 cursor-pointer hover:text-navy-800"
                 >
                   <div className="flex items-center space-x-1">
-                    <span>Item Details</span>
+                    <span>Item Name</span>
                     {sortBy === 'name' ? (
                       sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
                     ) : (
@@ -700,12 +684,13 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
                     )}
                   </div>
                 </th>
-                {visibleColumns.category && <th className="py-3 px-4">Category & Unit</th>}
-                {visibleColumns.barcodeSku && <th className="py-3 px-4">Barcode / SKU</th>}
+                {visibleColumns.hsn && <th className="py-3 px-3">HSN Code</th>}
+                {visibleColumns.batch1 && <th className="py-3 px-3 text-right">Batch 1 (Rate / Qty / Exp)</th>}
+                {visibleColumns.batch2 && <th className="py-3 px-3 text-right">Batch 2 (Rate / Qty / Exp)</th>}
                 {visibleColumns.purchasePrice && (
                   <th
                     onClick={() => handleSort('purchase_price')}
-                    className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                    className="py-3 px-3 text-right cursor-pointer hover:text-navy-800"
                   >
                     <div className="flex items-center justify-end space-x-1">
                       <span>Purchase Cost</span>
@@ -718,24 +703,11 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
                 {visibleColumns.sellingPrice && (
                   <th
                     onClick={() => handleSort('selling_price')}
-                    className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                    className="py-3 px-3 text-right cursor-pointer hover:text-navy-800"
                   >
                     <div className="flex items-center justify-end space-x-1">
-                      <span>Standard Selling</span>
+                      <span>Selling Rate</span>
                       {sortBy === 'selling_price' && (
-                        sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
-                      )}
-                    </div>
-                  </th>
-                )}
-                {visibleColumns.employeePrice && (
-                  <th
-                    onClick={() => handleSort('employee_price')}
-                    className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
-                  >
-                    <div className="flex items-center justify-end space-x-1">
-                      <span>Employee Price</span>
-                      {sortBy === 'employee_price' && (
                         sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
                       )}
                     </div>
@@ -744,40 +716,81 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
                 {visibleColumns.stockLevel && (
                   <th
                     onClick={() => handleSort('current_stock')}
-                    className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                    className="py-3 px-3 text-right cursor-pointer hover:text-navy-800"
                   >
                     <div className="flex items-center justify-end space-x-1">
-                      <span>Stock Level</span>
+                      <span>Stock QTY</span>
                       {sortBy === 'current_stock' && (
                         sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
                       )}
                     </div>
                   </th>
                 )}
-                {visibleColumns.tax && <th className="py-3 px-4 text-center">Tax %</th>}
-                {visibleColumns.status && <th className="py-3 px-4 text-center">Status</th>}
-                <th className="py-3 px-4 text-center">Actions</th>
+                {visibleColumns.stockValue && (
+                  <th
+                    onClick={() => handleSort('stock_value')}
+                    className="py-3 px-3 text-right cursor-pointer hover:text-navy-800"
+                  >
+                    <div className="flex items-center justify-end space-x-1">
+                      <span>Stock Value (₹)</span>
+                      {sortBy === 'stock_value' && (
+                        sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.cgst && <th className="py-3 px-2 text-center">CGST %</th>}
+                {visibleColumns.sgst && <th className="py-3 px-2 text-center">SGST %</th>}
+                {visibleColumns.igst && <th className="py-3 px-2 text-center font-bold text-blue-900 bg-blue-50/70">IGST %</th>}
+                {visibleColumns.status && <th className="py-3 px-3 text-center">Status</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLine">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-textSecondary">
+                  <td colSpan={14} className="py-8 text-center text-textSecondary">
                     <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
                     <div>Loading store items...</div>
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-textSecondary">
+                  <td colSpan={14} className="py-8 text-center text-textSecondary">
                     <Package className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                     <div>No items found matching filter criteria.</div>
                   </td>
                 </tr>
               ) : (
                 items.map((item) => {
-                  const isLow = parseFloat(String(item.current_stock || 0)) <= parseFloat(String(item.min_stock || 0));
+                  const b1Qty = parseFloat(String(item.batch1_qty || 0));
+                  const b2Qty = parseFloat(String(item.batch2_qty || 0));
+                  const effectiveStock = b1Qty + b2Qty;
+                  const isLow = effectiveStock <= parseFloat(String(item.min_stock || 0));
                   const isSelected = selectedIds.includes(item.id);
+                  const sellingRate = parseFloat(String(item.selling_price || item.batch1_rate || 0));
+                  const b1Rate = parseFloat(String(item.batch1_rate || 0)) || sellingRate;
+                  const b2Rate = parseFloat(String(item.batch2_rate || 0)) || sellingRate;
+                  const effectiveStockValue = (b1Qty * b1Rate) + (b2Qty * b2Rate);
+
+                  // Active Selling Rate & Purchase Cost follow FIFO:
+                  // 1) If Batch 1 has stock, Batch 1 is being actively sold.
+                  // 2) If Batch 1 is 0 and Batch 2 has stock, Batch 2 is the active stock in store.
+                  // 3) If out of stock, use catalog reference prices.
+                  const activeSellingRate = b1Qty > 0
+                    ? b1Rate
+                    : b2Qty > 0
+                      ? b2Rate
+                      : sellingRate;
+
+                  const pRate1 = parseFloat(String(item.purchase_rate1 || 0));
+                  const pRate2 = parseFloat(String(item.purchase_rate2 || 0));
+                  const basePur = parseFloat(String(item.purchase_price || 0));
+
+                  const activePurchaseCost = b1Qty > 0
+                    ? (pRate1 > 0 ? pRate1 : basePur)
+                    : b2Qty > 0
+                      ? (pRate2 > 0 ? pRate2 : basePur)
+                      : (basePur > 0 ? basePur : (pRate1 > 0 ? pRate1 : pRate2));
                   return (
                     <tr key={item.id} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-blue-50/40' : ''}`}>
                       <td className="py-3 px-3 text-center">
@@ -786,85 +799,115 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
                         </button>
                       </td>
 
+                      <td className="py-3 px-3 font-mono font-bold whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-primary text-xs">
+                          {item.item_code}
+                        </span>
+                      </td>
+
                       <td className="py-3 px-4">
                         <div className="font-bold text-navy-800">{item.name}</div>
-                        <div className="text-[11px] text-textSecondary font-mono flex items-center space-x-1.5 mt-0.5">
-                          <span>{item.item_code}</span>
-                          <span>&bull;</span>
-                          <span>{item.brand || 'CFECC'}</span>
-                          {item.subcategory && (
+                        <div className="text-[11px] text-textSecondary flex items-center space-x-1.5 mt-0.5">
+                          {/* <span>{item.category_name || item.brand || 'CFECC'}</span> */}
+                          {item.unit_code && (
                             <>
                               <span>&bull;</span>
-                              <span className="text-slate-500">{item.subcategory}</span>
+                              <span className="text-slate-500 font-mono">{item.unit_code}</span>
                             </>
                           )}
                         </div>
                       </td>
 
-                      {visibleColumns.category && (
-                        <td className="py-3 px-4">
-                          <span className="font-medium text-textPrimary">{item.category_name || 'General'}</span>
-                          <div className="text-[11px] text-textSecondary">{item.unit_name ? `${item.unit_name} (${item.unit_code})` : item.unit_code}</div>
+                      {visibleColumns.hsn && (
+                        <td className="py-3 px-3">
+                          <span className="font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px] font-semibold border border-slate-200">
+                            {item.hsn_code || '-'}
+                          </span>
                         </td>
                       )}
 
-                      {visibleColumns.barcodeSku && (
-                        <td className="py-3 px-4 font-mono text-textSecondary">
-                          {item.barcode ? (
-                            <span className="flex items-center space-x-1">
-                              <Barcode className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{item.barcode}</span>
-                            </span>
-                          ) : item.sku ? (
-                            <span>{item.sku}</span>
+                      {visibleColumns.batch1 && (
+                        <td className="py-3 px-3 text-right font-mono tabular-nums">
+                          <div className="font-bold text-navy-900">
+                            ₹{parseFloat(String(item.batch1_rate || item.selling_price || 0)).toFixed(2)}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            Qty: {parseFloat(String(item.batch1_qty || 0)).toFixed(1)}
+                          </div>
+                          {renderBatchExpiry(item.batch1_expiry)}
+                        </td>
+                      )}
+
+                      {visibleColumns.batch2 && (
+                        <td className="py-3 px-3 text-right font-mono tabular-nums">
+                          {parseFloat(String(item.batch2_rate || 0)) > 0 || parseFloat(String(item.batch2_qty || 0)) > 0 ? (
+                            <>
+                              <div className="font-bold text-amber-800">
+                                ₹{parseFloat(String(item.batch2_rate || 0)).toFixed(2)}
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                Qty: {parseFloat(String(item.batch2_qty || 0)).toFixed(1)}
+                              </div>
+                              {renderBatchExpiry(item.batch2_expiry)}
+                            </>
                           ) : (
-                            '-'
+                            <span className="text-slate-400">-</span>
                           )}
                         </td>
                       )}
 
                       {visibleColumns.purchasePrice && (
-                        <td className="py-3 px-4 text-right font-medium text-textSecondary tabular-nums">
-                          ₹{parseFloat(String(item.purchase_price || 0)).toFixed(2)}
+                        <td className="py-3 px-3 text-right font-medium text-textSecondary font-mono tabular-nums">
+                          ₹{activePurchaseCost.toFixed(2)}
                         </td>
                       )}
 
                       {visibleColumns.sellingPrice && (
-                        <td className="py-3 px-4 text-right font-semibold text-navy-800 tabular-nums">
-                          ₹{parseFloat(String(item.selling_price || 0)).toFixed(2)}
-                        </td>
-                      )}
-
-                      {visibleColumns.employeePrice && (
-                        <td className="py-3 px-4 text-right tabular-nums">
-                          <span className="inline-block px-2 py-0.5 rounded font-bold bg-blue-50 text-primary border border-blue-200">
-                            ₹{parseFloat(String(item.employee_price || 0)).toFixed(2)}
-                          </span>
+                        <td className="py-3 px-3 text-right font-bold text-navy-900 font-mono tabular-nums">
+                          ₹{activeSellingRate.toFixed(2)}
                         </td>
                       )}
 
                       {visibleColumns.stockLevel && (
-                        <td className="py-3 px-4 text-right tabular-nums">
+                        <td className="py-3 px-3 text-right tabular-nums">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded font-bold ${isLow
-                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                : 'bg-emerald-50 text-emerald-700'
+                            className={`inline-flex items-center px-2 py-0.5 rounded font-bold font-mono text-xs ${isLow
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : 'bg-emerald-50 text-emerald-700'
                               }`}
                           >
                             {isLow && <AlertTriangle className="w-3 h-3 mr-1 text-rose-600" />}
-                            {parseFloat(String(item.current_stock || 0)).toFixed(1)} {item.unit_code}
+                            {effectiveStock.toFixed(1)}
                           </span>
                         </td>
                       )}
 
-                      {visibleColumns.tax && (
-                        <td className="py-3 px-4 text-center font-medium text-textSecondary">
-                          {parseFloat(String(item.tax_rate || 0))}%
+                      {visibleColumns.stockValue && (
+                        <td className="py-3 px-3 text-right font-mono text-slate-700 tabular-nums">
+                          ₹{effectiveStockValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      )}
+
+                      {visibleColumns.cgst && (
+                        <td className="py-3 px-2 text-center font-mono text-slate-700 tabular-nums text-xs">
+                          {parseFloat(String(item.cgst_rate || 0)).toFixed(2)}%
+                        </td>
+                      )}
+
+                      {visibleColumns.sgst && (
+                        <td className="py-3 px-2 text-center font-mono text-slate-700 tabular-nums text-xs">
+                          {parseFloat(String(item.sgst_rate || 0)).toFixed(2)}%
+                        </td>
+                      )}
+
+                      {visibleColumns.igst && (
+                        <td className="py-3 px-2 text-center font-mono font-bold text-blue-900 bg-blue-50/50 tabular-nums text-xs">
+                          {parseFloat(String(item.igst_rate || 0)).toFixed(2)}%
                         </td>
                       )}
 
                       {visibleColumns.status && (
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-3 px-3 text-center">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${item.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
                               }`}
@@ -873,32 +916,6 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
                           </span>
                         </td>
                       )}
-
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-1.5">
-                          <button
-                            title="Print Barcode Stickers"
-                            onClick={() => handleOpenSingleBarcodePrint(item)}
-                            className="p-1 hover:bg-slate-100 rounded text-textSecondary hover:text-navy-800 transition-colors"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            title="Edit Item & Pricing"
-                            onClick={() => openEditModal(item)}
-                            className="p-1 hover:bg-slate-100 rounded text-textSecondary hover:text-primary transition-colors"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            title="Price Revision History"
-                            onClick={() => openPriceHistory(item)}
-                            className="p-1 hover:bg-slate-100 rounded text-textSecondary hover:text-navy-800 transition-colors"
-                          >
-                            <History className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   );
                 })
@@ -916,254 +933,15 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
           <div className="flex items-center space-x-3 text-[11px]">
             <span className="flex items-center space-x-1 text-emerald-700 font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>In Stock: {items.filter((i) => parseFloat(String(i.current_stock || 0)) > 0).length}</span>
+              <span>In Stock: {items.filter((i) => (parseFloat(String(i.batch1_qty || 0)) + parseFloat(String(i.batch2_qty || 0))) > 0).length}</span>
             </span>
             <span className="flex items-center space-x-1 text-rose-700 font-medium">
               <span className="w-2 h-2 rounded-full bg-rose-500" />
-              <span>Low Stock: {items.filter((i) => parseFloat(String(i.current_stock || 0)) <= parseFloat(String(i.min_stock || 0))).length}</span>
+              <span>Low Stock: {items.filter((i) => (parseFloat(String(i.batch1_qty || 0)) + parseFloat(String(i.batch2_qty || 0))) <= parseFloat(String(i.min_stock || 0))).length}</span>
             </span>
           </div>
         </div>
       </div>
-
-      {/* Add / Edit Item Modal */}
-      <Modal
-        isOpen={isAddEditModalOpen}
-        onClose={() => setIsAddEditModalOpen(false)}
-        title={editingItem ? `Edit Item: ${editingItem.name}` : 'Add New Store Item'}
-        subtitle="Configure item codes, dual pricing and inventory control thresholds"
-        maxWidth="2xl"
-      >
-        <form onSubmit={handleSaveItem} className="space-y-4 text-xs">
-          {formError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-status-danger rounded-lg">
-              {formError}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-semibold text-textSecondary uppercase mb-1">Item Code *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. ITM-011"
-                value={itemForm.itemCode}
-                disabled={!!editingItem}
-                onChange={(e) => setItemForm({ ...itemForm, itemCode: e.target.value })}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none disabled:opacity-60"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-textSecondary uppercase mb-1">Item Name *</label>
-              <input
-                type="text"
-                required
-                placeholder="Item Name & Specification"
-                value={itemForm.name}
-                onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-textSecondary uppercase mb-1">Category</label>
-              <select
-                value={itemForm.categoryId}
-                onChange={(e) => setItemForm({ ...itemForm, categoryId: e.target.value })}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
-              >
-                <option value="">Select Category</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-textSecondary uppercase mb-1">Subcategory</label>
-              <input
-                type="text"
-                placeholder="e.g. Grains, Dairy, Beverages"
-                value={itemForm.subcategory}
-                onChange={(e) => setItemForm({ ...itemForm, subcategory: e.target.value })}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-textSecondary uppercase mb-1">Unit of Measurement</label>
-              <select
-                value={itemForm.unitId}
-                onChange={(e) => setItemForm({ ...itemForm, unitId: e.target.value })}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
-              >
-                <option value="">Select Unit</option>
-                {units.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.code})</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-textSecondary uppercase mb-1">Brand</label>
-              <input
-                type="text"
-                placeholder="Manufacturer or Brand"
-                value={itemForm.brand}
-                onChange={(e) => setItemForm({ ...itemForm, brand: e.target.value })}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-textSecondary uppercase mb-1">Barcode</label>
-              <input
-                type="text"
-                placeholder="Scan or Enter EAN"
-                value={itemForm.barcode}
-                onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-textSecondary uppercase mb-1">HSN Code</label>
-              <input
-                type="text"
-                placeholder="e.g. 1006.30"
-                value={itemForm.hsnCode}
-                onChange={(e) => setItemForm({ ...itemForm, hsnCode: e.target.value })}
-                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none font-mono"
-              />
-            </div>
-          </div>
-
-          {/* Dual Pricing Section */}
-          <div className="pt-3 border-t border-borderLine">
-            <h4 className="font-bold text-navy-800 uppercase mb-2">Dual Pricing Configuration (₹)</h4>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block font-semibold text-textSecondary uppercase mb-1">Purchase Cost</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={itemForm.purchasePrice}
-                  onChange={(e) => setItemForm({ ...itemForm, purchasePrice: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none tabular-nums"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-textSecondary uppercase mb-1">Standard Retail Price</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={itemForm.sellingPrice}
-                  onChange={(e) => setItemForm({ ...itemForm, sellingPrice: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none tabular-nums font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-primary uppercase mb-1">Subsidized Employee Price</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={itemForm.employeePrice}
-                  onChange={(e) => setItemForm({ ...itemForm, employeePrice: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-1.5 border border-blue-300 rounded-lg bg-blue-50/50 focus:bg-white focus:outline-none tabular-nums font-bold text-primary"
-                />
-              </div>
-            </div>
-
-            {editingItem && (
-              <div className="mt-3">
-                <label className="block font-semibold text-textSecondary uppercase mb-1">Price Change Reason (for Audit Log)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Vendor price hike, Monthly revision"
-                  value={itemForm.priceChangeReason}
-                  onChange={(e) => setItemForm({ ...itemForm, priceChangeReason: e.target.value })}
-                  className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Stock Thresholds and Tax */}
-          <div className="pt-3 border-t border-borderLine">
-            <h4 className="font-bold text-navy-800 uppercase mb-2">Inventory Control & Tax</h4>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block font-semibold text-textSecondary uppercase mb-1">Min Stock Warning</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={itemForm.minStock}
-                  onChange={(e) => setItemForm({ ...itemForm, minStock: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none tabular-nums"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-textSecondary uppercase mb-1">Reorder Level</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={itemForm.reorderLevel}
-                  onChange={(e) => setItemForm({ ...itemForm, reorderLevel: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none tabular-nums"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-textSecondary uppercase mb-1">GST Tax Rate %</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={itemForm.taxRate}
-                  onChange={(e) => setItemForm({ ...itemForm, taxRate: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none tabular-nums"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between pt-4 border-t border-borderLine">
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={itemForm.isActive}
-                onChange={(e) => setItemForm({ ...itemForm, isActive: e.target.checked })}
-                className="rounded border-borderLine text-primary focus:ring-primary"
-              />
-              <span className="font-semibold text-navy-800">Item is Active for Sales & Purchasing</span>
-            </label>
-
-            <div className="flex items-center space-x-3">
-              <button
-                type="button"
-                onClick={() => setIsAddEditModalOpen(false)}
-                className="px-4 py-2 font-semibold text-textSecondary hover:text-textPrimary"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold transition-all shadow-subtle disabled:opacity-50"
-              >
-                {isSubmitting ? 'Saving...' : editingItem ? 'Update Store Item' : 'Save Store Item'}
-              </button>
-            </div>
-          </div>
-        </form>
-      </Modal>
 
       {/* Price History Modal */}
       <Modal
@@ -1265,8 +1043,8 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
             <button
               onClick={() => setCatUnitTab('CATEGORIES')}
               className={`pb-2 px-3 font-semibold transition-colors ${catUnitTab === 'CATEGORIES'
-                  ? 'border-b-2 border-primary text-primary font-bold'
-                  : 'text-textSecondary hover:text-textPrimary'
+                ? 'border-b-2 border-primary text-primary font-bold'
+                : 'text-textSecondary hover:text-textPrimary'
                 }`}
             >
               Item Categories ({categories.length})
@@ -1274,8 +1052,8 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
             <button
               onClick={() => setCatUnitTab('UNITS')}
               className={`pb-2 px-3 font-semibold transition-colors ${catUnitTab === 'UNITS'
-                  ? 'border-b-2 border-primary text-primary font-bold'
-                  : 'text-textSecondary hover:text-textPrimary'
+                ? 'border-b-2 border-primary text-primary font-bold'
+                : 'text-textSecondary hover:text-textPrimary'
                 }`}
             >
               Units of Measurement ({units.length})
@@ -1387,63 +1165,6 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
               className="px-4 py-2 font-semibold text-textSecondary hover:text-textPrimary"
             >
               Done
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* CSV Bulk Import Modal */}
-      <Modal
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        title="Bulk Import Store Items (CSV)"
-        subtitle="Import commodities in bulk with automatic category and unit resolution"
-        maxWidth="2xl"
-      >
-        <div className="space-y-4 text-xs">
-          <div className="bg-slate-50 p-3 rounded-lg border border-borderLine">
-            <div className="font-bold text-navy-800 mb-1">Expected CSV Header Format:</div>
-            <code className="text-[11px] font-mono text-primary block bg-white p-2 rounded border border-borderLine">
-              item_code,name,category,brand,unit,purchase_price,selling_price,employee_price,min_stock,reorder_level,tax_rate,barcode,hsn_code
-            </code>
-            <p className="text-[10px] text-textSecondary mt-1.5">
-              Items matching existing item_code will update their master attributes. New codes will create new store items.
-            </p>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-textSecondary uppercase mb-1">Paste CSV Data</label>
-            <textarea
-              rows={8}
-              value={csvText}
-              onChange={(e) => setCsvText(e.target.value)}
-              placeholder={`item_code,name,category,brand,unit,purchase_price,selling_price,employee_price,min_stock,reorder_level,tax_rate,barcode,hsn_code
-ITM-011,Sunpure Sunflower Oil 1L,OILS,Sunpure,LTR,110.00,135.00,120.00,20,40,5.00,8901234567890,1512.19
-ITM-012,Tata Salt Crystal 1kg,GROCERY,Tata,KG,20.00,28.00,22.00,50,100,0.00,8901234567891,2501.00`}
-              className="w-full p-2.5 border border-borderLine rounded-lg bg-slate-50 font-mono text-[11px] focus:bg-white focus:outline-none"
-            />
-          </div>
-
-          {importResult && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center space-x-2">
-              <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span>{importResult.message}</span>
-            </div>
-          )}
-
-          <div className="flex items-center justify-end space-x-3 pt-3 border-t border-borderLine">
-            <button
-              onClick={() => setIsImportModalOpen(false)}
-              className="px-4 py-2 font-semibold text-textSecondary hover:text-textPrimary"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleImportCSV}
-              disabled={importing || !csvText.trim()}
-              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold transition-all shadow-subtle disabled:opacity-50"
-            >
-              {importing ? 'Processing Import...' : 'Import Data'}
             </button>
           </div>
         </div>

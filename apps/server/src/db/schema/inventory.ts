@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, numeric } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, timestamp, boolean, integer, numeric, date } from 'drizzle-orm/pg-core';
 
 export const itemCategories = pgTable('item_categories', {
   id: serial('id').primaryKey(),
@@ -39,12 +39,15 @@ export const items = pgTable('items', {
   // Dual-Batch Inventory & Pricing (FoxPro FIFO)
   batch1Qty: numeric('batch1_qty', { precision: 12, scale: 3 }).default('0.000').notNull(),
   batch1Rate: numeric('batch1_rate', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  batch1Expiry: date('batch1_expiry'),
   batch2Qty: numeric('batch2_qty', { precision: 12, scale: 3 }).default('0.000').notNull(),
   batch2Rate: numeric('batch2_rate', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  batch2Expiry: date('batch2_expiry'),
   purchaseRate1: numeric('purchase_rate1', { precision: 12, scale: 2 }).default('0.00').notNull(),
   purchaseRate2: numeric('purchase_rate2', { precision: 12, scale: 2 }).default('0.00').notNull(),
   cgstRate: numeric('cgst_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
   sgstRate: numeric('sgst_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
+  igstRate: numeric('igst_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
   vatRate: numeric('vat_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
   physicalQty: numeric('physical_qty', { precision: 12, scale: 3 }).default('0.000').notNull(),
   stockValue: numeric('stock_value', { precision: 12, scale: 2 }).default('0.00').notNull(),

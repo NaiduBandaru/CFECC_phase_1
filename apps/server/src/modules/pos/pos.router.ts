@@ -249,7 +249,7 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
     // 5. Insert line items & update inventory with Dual-Batch FIFO Logic
     for (const itm of items) {
       const itemRes = await executeRawSql(`
-        SELECT id, item_code, name, current_stock, batch1_qty, batch1_rate, batch2_qty, batch2_rate,
+        SELECT id, item_code, name, current_stock, batch1_qty, batch1_rate, batch1_expiry, batch2_qty, batch2_rate, batch2_expiry,
                purchase_price, purchase_rate1, purchase_rate2, cgst_rate, sgst_rate, vat_rate, tax_rate
         FROM items WHERE id = ${itm.itemId}
       `);
@@ -338,12 +338,47 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
         `);
       }
 
+      // FoxPro FIFO Batch Rollover:
+      // If Batch 1 is exhausted (newB1Qty <= 0) and Batch 2 has remaining stock (newB2Qty > 0),
+      // Batch 2 immediately rolls over to refill Batch 1!
+      let finalB1Qty = newB1Qty;
+      let finalB1Rate = b1Rate;
+      let finalPRate1 = parseFloat(dbItem?.purchase_rate1 || dbItem?.purchase_price || '0');
+      let finalB1Expiry = dbItem?.batch1_expiry ? String(dbItem.batch1_expiry).split('T')[0] : null;
+      let finalB2Qty = newB2Qty;
+      let finalB2Rate = b2Rate;
+      let finalPRate2 = parseFloat(dbItem?.purchase_rate2 || '0');
+      let finalB2Expiry = dbItem?.batch2_expiry ? String(dbItem.batch2_expiry).split('T')[0] : null;
+
+      if (finalB1Qty <= 0 && finalB2Qty > 0) {
+        finalB1Qty = finalB2Qty;
+        finalB1Rate = finalB2Rate > 0 ? finalB2Rate : finalB1Rate;
+        finalPRate1 = finalPRate2 > 0 ? finalPRate2 : finalPRate1;
+        finalB1Expiry = finalB2Expiry;
+        finalB2Qty = 0;
+        finalB2Rate = 0;
+        finalPRate2 = 0;
+        finalB2Expiry = null;
+      }
+
+      const newStockVal = (finalB1Qty * finalB1Rate) + (finalB2Qty * finalB2Rate);
+
       // Decrement stock & batch balances in items
       await executeRawSql(`
         UPDATE items SET
           current_stock = ${newStock.toFixed(3)},
-          batch1_qty = ${newB1Qty.toFixed(3)},
-          batch2_qty = ${newB2Qty.toFixed(3)},
+          batch1_qty = ${finalB1Qty.toFixed(3)},
+          batch1_rate = ${finalB1Rate.toFixed(2)},
+          purchase_rate1 = ${finalPRate1.toFixed(2)},
+          batch1_expiry = ${finalB1Expiry ? `'${finalB1Expiry}'` : 'NULL'},
+          batch2_qty = ${finalB2Qty.toFixed(3)},
+          batch2_rate = ${finalB2Rate.toFixed(2)},
+          purchase_rate2 = ${finalPRate2.toFixed(2)},
+          batch2_expiry = ${finalB2Expiry ? `'${finalB2Expiry}'` : 'NULL'},
+          selling_price = ${finalB1Rate.toFixed(2)},
+          employee_price = ${finalB1Rate.toFixed(2)},
+          purchase_price = ${finalPRate1.toFixed(2)},
+          stock_value = ${newStockVal.toFixed(2)},
           updated_at = NOW()
         WHERE id = ${itm.itemId};
       `);

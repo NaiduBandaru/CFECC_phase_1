@@ -134,12 +134,15 @@ async function migrateDatabase(db, dbLabel) {
 
     ALTER TABLE items ADD COLUMN IF NOT EXISTS batch1_qty NUMERIC(12, 3) DEFAULT 0.000;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS batch1_rate NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS batch1_expiry DATE;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS batch2_qty NUMERIC(12, 3) DEFAULT 0.000;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS batch2_rate NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS batch2_expiry DATE;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS purchase_rate1 NUMERIC(12, 2) DEFAULT 0.00;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS purchase_rate2 NUMERIC(12, 2) DEFAULT 0.00;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS cgst_rate NUMERIC(5, 2) DEFAULT 0.00;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS sgst_rate NUMERIC(5, 2) DEFAULT 0.00;
+    ALTER TABLE items ADD COLUMN IF NOT EXISTS igst_rate NUMERIC(5, 2) DEFAULT 0.00;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS vat_rate NUMERIC(5, 2) DEFAULT 0.00;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS physical_qty NUMERIC(12, 3) DEFAULT 0.000;
     ALTER TABLE items ADD COLUMN IF NOT EXISTS stock_value NUMERIC(12, 2) DEFAULT 0.00;
@@ -197,29 +200,54 @@ async function migrateDatabase(db, dbLabel) {
       seenItemCodes.add(itemCode);
 
       const name = r.SNAME.trim() || `Item ${itemCode}`;
-      const qty1 = parseFloat(r.SQTY1) || 0;
-      const rate1 = parseFloat(r.SRATE1) || 0;
-      const qty2 = parseFloat(r.SQTY2) || 0;
-      const rate2 = parseFloat(r.SRATE2) || 0;
-      const prate1 = parseFloat(r.PRATE1) || 0;
-      const prate2 = parseFloat(r.PRATE2) || 0;
-      const totalQty = parseFloat(r.QTY) || 0;
-      const stockVal = parseFloat(r.VALUE) || 0;
-      const purVal = parseFloat(r.PURVAL) || 0;
+      let qty1 = parseFloat(r.SQTY1) || 0;
+      let rate1 = parseFloat(r.SRATE1) || 0;
+      let qty2 = parseFloat(r.SQTY2) || 0;
+      let rate2 = parseFloat(r.SRATE2) || 0;
+      let prate1 = parseFloat(r.PRATE1) || 0;
+      let prate2 = parseFloat(r.PRATE2) || 0;
+
+      // FoxPro FIFO Rollover rule (str2.prg line 501: if sqty1 = 0 and sqty2 # 0):
+      // When Batch 1 is exhausted, Batch 2 immediately rolls over to refill Batch 1
+      if (qty1 === 0 && qty2 > 0) {
+        qty1 = qty2;
+        rate1 = rate2 > 0 ? rate2 : rate1;
+        prate1 = prate2 > 0 ? prate2 : prate1;
+        qty2 = 0;
+        rate2 = 0;
+        prate2 = 0;
+      }
+      const rawQty = parseFloat(r.QTY) || 0;
+      const batchQtySum = qty1 + qty2;
+      const totalQty = batchQtySum;
+      const sellingPrice = (qty1 > 0 && rate1 > 0)
+        ? rate1
+        : (qty2 > 0 && rate2 > 0)
+          ? rate2
+          : (rate1 > 0 ? rate1 : (rate2 > 0 ? rate2 : 0));
+      const purchasePrice = (qty1 > 0 && prate1 > 0)
+        ? prate1
+        : (qty2 > 0 && prate2 > 0)
+          ? prate2
+          : (prate1 > 0 ? prate1 : (prate2 > 0 ? prate2 : 0));
+      const b1Rate = rate1 > 0 ? rate1 : sellingPrice;
+      const b2Rate = rate2 > 0 ? rate2 : sellingPrice;
+      const stockVal = Math.round(((qty1 * b1Rate) + (qty2 * b2Rate)) * 100) / 100;
+      const purVal = Math.round(((qty1 * (prate1 || purchasePrice)) + (qty2 * (prate2 || purchasePrice))) * 100) / 100;
       const hsn = r.HSNNO.trim() || null;
       const cgst = parseFloat(r.CGST) || 0;
       const sgst = parseFloat(r.SGST) || 0;
       const vat = parseFloat(r.VAT) || 0;
+      // In Indian GST: IGST = CGST + SGST (never tagged to legacy VAT)
+      const igst = (cgst + sgst) > 0 ? (cgst + sgst) : 0.00;
       const rol = parseFloat(r.ROL) || 10;
-      const sellingPrice = rate1 > 0 ? rate1 : (rate2 > 0 ? rate2 : 0);
-      const purchasePrice = prate1 > 0 ? prate1 : (prate2 > 0 ? prate2 : 0);
-      const taxRate = (cgst + sgst) > 0 ? (cgst + sgst) : vat;
+      const taxRate = (cgst + sgst) > 0 ? (cgst + sgst) : 0.00;
 
       placeholders.push(`(
         $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++},
         $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++},
         $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++},
-        $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++},
+        $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++},
         $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, true, NOW()
       )`);
 
@@ -227,7 +255,7 @@ async function migrateDatabase(db, dbLabel) {
         itemCode, name, purchasePrice, sellingPrice, sellingPrice,
         totalQty, 5, rol, taxRate, hsn,
         qty1, rate1, qty2, rate2,
-        prate1, prate2, cgst, sgst, vat,
+        prate1, prate2, cgst, sgst, igst, vat,
         totalQty, stockVal, purVal
       );
       itemsInserted++;
@@ -239,7 +267,7 @@ async function migrateDatabase(db, dbLabel) {
           item_code, name, purchase_price, selling_price, employee_price,
           current_stock, min_stock, reorder_level, tax_rate, hsn_code,
           batch1_qty, batch1_rate, batch2_qty, batch2_rate,
-          purchase_rate1, purchase_rate2, cgst_rate, sgst_rate, vat_rate,
+          purchase_rate1, purchase_rate2, cgst_rate, sgst_rate, igst_rate, vat_rate,
           physical_qty, stock_value, purchase_valuation, is_active, updated_at
         ) VALUES ${placeholders.join(', ')}
         ON CONFLICT (item_code) DO UPDATE SET
@@ -259,6 +287,7 @@ async function migrateDatabase(db, dbLabel) {
           purchase_rate2 = EXCLUDED.purchase_rate2,
           cgst_rate = EXCLUDED.cgst_rate,
           sgst_rate = EXCLUDED.sgst_rate,
+          igst_rate = EXCLUDED.igst_rate,
           vat_rate = EXCLUDED.vat_rate,
           physical_qty = EXCLUDED.physical_qty,
           stock_value = EXCLUDED.stock_value,
@@ -479,8 +508,8 @@ async function migrateDatabase(db, dbLabel) {
   const empCodeToId = new Map(empRows.map(e => [e.employee_code, e]));
   const csNoToId = new Map(empRows.filter(e => e.cs_no).map(e => [e.cs_no, e]));
 
-  // STEP 5: Ingest Real Inward Purchase Invoices (PURMAST.DBF)
-  console.log('\n[Step 5/7] Ingesting Real Supplier Inward Purchases (PURMAST.DBF)...');
+  // STEP 5: Ingest Real Inward Purchases, POs, and GRNs (PURMAST.DBF & PURDETL.DBF)
+  console.log('\n[Step 5/7] Ingesting Real Supplier Inward Purchases, POs & GRNs (PURMAST.DBF & PURDETL.DBF)...');
   const purPath = path.join(FOXPRO_DIR, 'PURMAST.DBF');
   let purchasesInserted = 0;
 
@@ -490,11 +519,93 @@ async function migrateDatabase(db, dbLabel) {
 
     // Filter to year 2026 records or recent active bills
     const activePurchases = purRecords.filter(r => (r.BILLDATE || '').startsWith('2026') || r._index > purRecords.length - 1000);
-    console.log(`Ingesting ${activePurchases.length} operational 2026 purchase bills...`);
+    console.log(`Ingesting ${activePurchases.length} operational purchase orders, GRNs & bills...`);
 
     const PUR_BATCH_SIZE = 50;
     const defaultVendorId = vendRows[0]?.id || 1;
+    const activeBillCodes = new Set(activePurchases.map(p => p.BILLCODE.trim()));
 
+    // 5a. Purchase Orders
+    for (let i = 0; i < activePurchases.length; i += PUR_BATCH_SIZE) {
+      const chunk = activePurchases.slice(i, i + PUR_BATCH_SIZE);
+      const values = [];
+      const placeholders = [];
+      let paramIdx = 1;
+
+      for (const p of chunk) {
+        const billCode = p.BILLCODE.trim() || String(p._index);
+        const poNum = `PO-${billCode.padStart(5, '0')}`;
+        const vendCode = p.VENDOR.trim();
+        const vendorId = vendorMap.get(vendCode) || defaultVendorId;
+        const invNo = p.INVNO.trim() || billCode;
+
+        let invDate = '2026-03-15';
+        if (p.BILLDATE && p.BILLDATE.length === 8 && /^\d+$/.test(p.BILLDATE)) {
+          invDate = `${p.BILLDATE.slice(0, 4)}-${p.BILLDATE.slice(4, 6)}-${p.BILLDATE.slice(6, 8)}`;
+        }
+
+        const subtotal = parseFloat(p.GROSSAMT) || 0;
+        const taxAmt = parseFloat(p.TAX) || 0;
+        const totalAmt = parseFloat(p.INVAMT) || (subtotal + taxAmt);
+
+        placeholders.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, 'COMPLETED', $${paramIdx++}, NOW())`);
+        values.push(poNum, vendorId, invDate, invDate, subtotal, taxAmt, totalAmt, `Invoice: ${invNo}`);
+      }
+
+      if (placeholders.length > 0) {
+        await db.query(`
+          INSERT INTO purchase_orders (
+            po_number, vendor_id, order_date, expected_delivery_date, subtotal, tax_amount, total_amount, status, notes, created_at
+          ) VALUES ${placeholders.join(', ')}
+          ON CONFLICT (po_number) DO NOTHING;
+        `, values);
+      }
+    }
+
+    const createdPos = await db.query('SELECT id, po_number, vendor_id FROM purchase_orders', []);
+    const poRows = createdPos.rows || (Array.isArray(createdPos) ? createdPos[0]?.rows : []) || [];
+    const poMap = new Map(poRows.map(p => [p.po_number, p]));
+
+    // 5b. Goods Receipts (GRN)
+    for (let i = 0; i < activePurchases.length; i += PUR_BATCH_SIZE) {
+      const chunk = activePurchases.slice(i, i + PUR_BATCH_SIZE);
+      const values = [];
+      const placeholders = [];
+      let paramIdx = 1;
+
+      for (const p of chunk) {
+        const billCode = p.BILLCODE.trim() || String(p._index);
+        const poNum = `PO-${billCode.padStart(5, '0')}`;
+        const grnNum = `GRN-${billCode.padStart(5, '0')}`;
+        const po = poMap.get(poNum);
+        const vendorId = po?.vendor_id || defaultVendorId;
+        const poId = po?.id || null;
+        const invNo = p.INVNO.trim() || billCode;
+
+        let invDate = '2026-03-15';
+        if (p.BILLDATE && p.BILLDATE.length === 8 && /^\d+$/.test(p.BILLDATE)) {
+          invDate = `${p.BILLDATE.slice(0, 4)}-${p.BILLDATE.slice(4, 6)}-${p.BILLDATE.slice(6, 8)}`;
+        }
+
+        placeholders.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, 'AP 31 TT 9999', 'VERIFIED', $${paramIdx++}, NOW())`);
+        values.push(grnNum, poId, vendorId, invDate, invNo, `Verified inward receipt for Bill ${invNo}`);
+      }
+
+      if (placeholders.length > 0) {
+        await db.query(`
+          INSERT INTO goods_receipts (
+            grn_number, po_id, vendor_id, receipt_date, delivery_challan_number, vehicle_number, status, notes, created_at
+          ) VALUES ${placeholders.join(', ')}
+          ON CONFLICT (grn_number) DO NOTHING;
+        `, values);
+      }
+    }
+
+    const createdGrns = await db.query('SELECT id, grn_number FROM goods_receipts', []);
+    const grnRows = createdGrns.rows || (Array.isArray(createdGrns) ? createdGrns[0]?.rows : []) || [];
+    const grnMap = new Map(grnRows.map(g => [g.grn_number, g.id]));
+
+    // 5c. Purchase Invoices
     for (let i = 0; i < activePurchases.length; i += PUR_BATCH_SIZE) {
       const chunk = activePurchases.slice(i, i + PUR_BATCH_SIZE);
       const values = [];
@@ -504,6 +615,8 @@ async function migrateDatabase(db, dbLabel) {
       for (const p of chunk) {
         const billCode = p.BILLCODE.trim() || String(p._index);
         const sysBillNo = `PINV-${billCode.padStart(5, '0')}`;
+        const grnNum = `GRN-${billCode.padStart(5, '0')}`;
+        const grnId = grnMap.get(grnNum) || null;
         const invNo = p.INVNO.trim() || billCode;
         const vendCode = p.VENDOR.trim();
         const vendorId = vendorMap.get(vendCode) || defaultVendorId;
@@ -519,13 +632,12 @@ async function migrateDatabase(db, dbLabel) {
         const status = 'PAID';
 
         placeholders.push(`(
-          $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++},
-          $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++},
-          $${paramIdx++}, NOW()
+          $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++},
+          $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, NOW()
         )`);
 
         values.push(
-          invNo, sysBillNo, vendorId, invDate,
+          invNo, sysBillNo, vendorId, grnId, invDate,
           subtotal, taxAmt, totalAmt, totalAmt, status
         );
         purchasesInserted++;
@@ -534,11 +646,12 @@ async function migrateDatabase(db, dbLabel) {
       if (placeholders.length > 0) {
         const queryText = `
           INSERT INTO purchase_invoices (
-            invoice_number, system_bill_number, vendor_id, invoice_date,
+            invoice_number, system_bill_number, vendor_id, grn_id, invoice_date,
             subtotal, tax_amount, total_amount, paid_amount, status, created_at
           ) VALUES ${placeholders.join(', ')}
           ON CONFLICT (system_bill_number) DO UPDATE SET
             invoice_number = EXCLUDED.invoice_number,
+            grn_id = EXCLUDED.grn_id,
             subtotal = EXCLUDED.subtotal,
             tax_amount = EXCLUDED.tax_amount,
             total_amount = EXCLUDED.total_amount,
@@ -548,7 +661,68 @@ async function migrateDatabase(db, dbLabel) {
         await db.query(queryText, values);
       }
     }
-    console.log(`✓ Ingested ${purchasesInserted} real inward purchase bills into purchase_invoices.`);
+    console.log(`✓ Ingested ${purchasesInserted} real purchase orders, GRNs & bills.`);
+
+    // 5d. Ingest Order Items & GRN Items from PURDETL.DBF
+    const detlPath = path.join(FOXPRO_DIR, 'PURDETL.DBF');
+    if (fs.existsSync(detlPath)) {
+      const itemDbRes = await db.query('SELECT id, item_code FROM items', []);
+      const itemRows = itemDbRes.rows || (Array.isArray(itemDbRes) ? itemDbRes[0]?.rows : []) || [];
+      const itemMap = new Map(itemRows.map(it => [it.item_code, it.id]));
+      const defaultItemId = itemRows[0]?.id || 1;
+
+      const detlRecords = parseDbf(detlPath);
+      const activeDetails = detlRecords.filter(d => activeBillCodes.has(d.BILLCODE.trim()));
+      const PO_ITEM_BATCH = 200;
+
+      for (let i = 0; i < activeDetails.length; i += PO_ITEM_BATCH) {
+        const chunk = activeDetails.slice(i, i + PO_ITEM_BATCH);
+        const poItemValues = [];
+        const poPlaceholders = [];
+        const grnItemValues = [];
+        const grnPlaceholders = [];
+        let pIdx = 1;
+        let gIdx = 1;
+
+        for (const d of chunk) {
+          const billCode = d.BILLCODE.trim();
+          const poNum = `PO-${billCode.padStart(5, '0')}`;
+          const grnNum = `GRN-${billCode.padStart(5, '0')}`;
+          const po = poMap.get(poNum);
+          const grnId = grnMap.get(grnNum);
+          if (!po || !grnId) continue;
+
+          const itemCode = d.ITEMCODE.trim();
+          const itemId = itemMap.get(itemCode) || defaultItemId;
+          const qty = parseFloat(d.QTY) || 1;
+          const purRate = parseFloat(d.PURRATE) || 0;
+          const amt = parseFloat(d.AMT) || (qty * purRate);
+
+          poPlaceholders.push(`($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, 0, 0, $${pIdx++})`);
+          poItemValues.push(po.id, itemId, qty, qty, purRate, amt);
+
+          grnPlaceholders.push(`($${gIdx++}, $${gIdx++}, $${gIdx++}, $${gIdx++}, 0, $${gIdx++})`);
+          grnItemValues.push(grnId, itemId, qty, qty, purRate);
+        }
+
+        if (poPlaceholders.length > 0) {
+          await db.query(`
+            INSERT INTO purchase_order_items (
+              po_id, item_id, ordered_qty, received_qty, unit_price, tax_rate, tax_amount, total_price
+            ) VALUES ${poPlaceholders.join(', ')};
+          `, poItemValues);
+        }
+
+        if (grnPlaceholders.length > 0) {
+          await db.query(`
+            INSERT INTO goods_receipt_items (
+              grn_id, item_id, received_qty, accepted_qty, rejected_qty, unit_cost
+            ) VALUES ${grnPlaceholders.join(', ')};
+          `, grnItemValues);
+        }
+      }
+      console.log('✓ Ingested all line items for POs and GRNs.');
+    }
   }
 
   // STEP 6: Ingest Real POS Store Sales & Member Ledger Postings (TRNMAST.DBF)

@@ -52,6 +52,7 @@ export const goodsReceiptItems = pgTable('goods_receipt_items', {
   acceptedQty: numeric('accepted_qty', { precision: 12, scale: 3 }).notNull(),
   rejectedQty: numeric('rejected_qty', { precision: 12, scale: 3 }).default('0.000').notNull(),
   unitCost: numeric('unit_cost', { precision: 12, scale: 2 }).notNull(),
+  expiryDate: date('expiry_date'),
   rejectionReason: text('rejection_reason'),
 });
 
