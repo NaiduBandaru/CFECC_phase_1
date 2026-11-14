@@ -142,7 +142,7 @@ inventoryRouter.get('/adjustments', authenticateToken, async (req: Request, res:
   try {
     const { limit = '100' } = req.query;
     const limitNum = parseInt(limit as string, 10) || 100;
-    const data = getLegacyStockAdjustments(limitNum);
+    const data = await getLegacyStockAdjustments(limitNum);
 
     // Also fetch live manual adjustments from stock_movements
     const liveMovements = await executeRawSql(`

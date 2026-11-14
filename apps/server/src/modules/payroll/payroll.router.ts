@@ -228,7 +228,7 @@ payrollRouter.get('/historical-archive', authenticateToken, async (req: Request,
     const pageNum = parseInt(page as string, 10) || 1;
     const limitNum = parseInt(limit as string, 10) || 50;
 
-    const data = getHistoricalRecoveryArchive(monthCode as string, search as string, pageNum, limitNum);
+    const data = await getHistoricalRecoveryArchive(monthCode as string, search as string, pageNum, limitNum);
     return res.json(data);
   } catch (err) {
     next(err);
@@ -619,7 +619,7 @@ payrollRouter.get('/historical-archive', authenticateToken, async (req: Request,
     const pageNum = parseInt(page as string, 10) || 1;
     const limitNum = parseInt(limit as string, 10) || 50;
 
-    const data = getHistoricalRecoveryArchive(monthCode as string, search as string, pageNum, limitNum);
+    const data = await getHistoricalRecoveryArchive(monthCode as string, search as string, pageNum, limitNum);
     return res.json(data);
   } catch (err) {
     next(err);

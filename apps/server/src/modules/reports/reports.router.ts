@@ -385,7 +385,7 @@ reportsRouter.get('/purchases/gst-itc', authenticateToken, async (req: Request, 
 reportsRouter.get('/gst-slab-summary', authenticateToken, async (req: Request, res: Response, next) => {
   try {
     const { monthCode } = req.query;
-    const summary = getVatGstSlabSummary(monthCode as string);
+    const summary = await getVatGstSlabSummary(monthCode as string);
     return res.json(summary);
   } catch (err) {
     next(err);
