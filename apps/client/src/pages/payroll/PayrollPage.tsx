@@ -16,8 +16,10 @@ import {
   MessageSquare,
   AlertCircle,
   User,
+  History,
 } from 'lucide-react';
 import { PayrollPeriod, PayrollEntry, RecoveryRecord } from '../../types/index.js';
+import { HistoricalRecoveryArchive } from './HistoricalRecoveryArchive.js';
 
 const formatCurrency = (val: number | string | undefined | null) => {
   const num = parseFloat((val ?? 0).toString());
@@ -25,11 +27,11 @@ const formatCurrency = (val: number | string | undefined | null) => {
 };
 
 interface PayrollPageProps {
-  initialTab?: 'PAYROLL' | 'RECOVERY';
+  initialTab?: 'PAYROLL' | 'RECOVERY' | 'ARCHIVE';
 }
 
 export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL' }) => {
-  const [activeTab, setActiveTab] = useState<'PAYROLL' | 'RECOVERY'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'PAYROLL' | 'RECOVERY' | 'ARCHIVE'>(initialTab);
 
   // Payroll Period State
   const [periods, setPeriods] = useState<PayrollPeriod[]>([]);
@@ -322,24 +324,34 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
     document.body.removeChild(link);
   };
 
-  const handleExportSchedule = async (format: 'csv' | 'excel' | 'dbf') => {
+  const handleExportSchedule = async (format: 'csv' | 'excel' | 'dbf' | 'sup' | 'nm') => {
     if (!selectedPeriodId) return;
     try {
       const res = await api.get(`/payroll/export-recovery-schedule?periodId=${selectedPeriodId}&format=${format}`, {
         responseType: 'blob',
       });
-      const blob = new Blob([res.data], {
-        type: format === 'dbf'
-          ? 'application/x-dbf'
-          : format === 'excel'
-          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-          : 'text/csv',
-      });
+      const mime = format === 'dbf'
+        ? 'application/x-dbf'
+        : format === 'excel'
+        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : (format === 'sup' || format === 'nm')
+        ? 'text/plain'
+        : 'text/csv';
+      const blob = new Blob([res.data], { type: mime });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const ext = format === 'dbf' ? 'DBF' : format === 'excel' ? 'xlsx' : 'csv';
-      link.setAttribute('download', `CFECC_PAYROLL_${activePeriod?.month_year || '2026-03'}.${ext}`);
+      const periodTag = activePeriod?.month_year.replace('-', '') || '202603';
+      const filename = format === 'sup'
+        ? `SUP_${periodTag}.DAT`
+        : format === 'nm'
+        ? `NM_${periodTag}.DAT`
+        : format === 'dbf'
+        ? `CFECC_PAYROLL_${activePeriod?.month_year || '2026-03'}.DBF`
+        : format === 'excel'
+        ? `CFECC_Store_Recovery_Advice_${activePeriod?.month_year || '2026-03'}.xlsx`
+        : `CFECC_Store_Recovery_Schedule_${activePeriod?.month_year || '2026-03'}.csv`;
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -407,6 +419,16 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
           >
             <Receipt className="w-3.5 h-3.5 text-amber-600" />
             <span>Store Recovery Records ({recoveryRecords.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('ARCHIVE')}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${activeTab === 'ARCHIVE'
+                ? 'bg-white text-navy-800 shadow-xs'
+                : 'text-textSecondary hover:text-navy-800'
+              }`}
+          >
+            <History className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Historical Recovery Ledger (STRDED.DBF)</span>
           </button>
         </div>
       </div>
@@ -558,6 +580,22 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                     title="Export standard PAYROLL.DBF for live FoxPro system"
                   >
                     FoxPro (DBF)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExportSchedule('sup')}
+                    className="px-2 py-1 text-xs font-bold text-purple-700 hover:text-purple-900 hover:bg-white rounded transition-colors"
+                    title="Export CIL Management staff fixed-width text file (SUP.DAT)"
+                  >
+                    CIL Mgmt (SUP)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExportSchedule('nm')}
+                    className="px-2 py-1 text-xs font-bold text-blue-700 hover:text-blue-900 hover:bg-white rounded transition-colors"
+                    title="Export CIL Non-Management / Worker fixed-width text file (NM.DAT)"
+                  >
+                    CIL Worker (NM)
                   </button>
                 </div>
 
@@ -897,6 +935,9 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
           </div>
         </div>
       )}
+
+      {/* TAB 3: HISTORICAL RECOVERY LEDGER ARCHIVE (STRDED.DBF) */}
+      {activeTab === 'ARCHIVE' && <HistoricalRecoveryArchive />}
 
       {/* New Payroll Cycle Modal */}
       <Modal

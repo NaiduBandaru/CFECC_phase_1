@@ -155,6 +155,7 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
       items, // array of { itemId, quantity, unitPrice, discountAmount, taxRate }
       paymentMode = 'EMPLOYEE_CREDIT', // 'EMPLOYEE_CREDIT', 'CASH', 'UPI', 'SPLIT'
       notes,
+      couponAmount = 0,
     } = req.body;
 
     if (!items || items.length === 0) {
@@ -176,6 +177,9 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
       totalDiscount += discount;
       totalTax += tax;
     }
+
+    const couponDeduction = Math.min(Math.max(0, parseFloat(couponAmount) || 0), subtotal + totalTax);
+    totalDiscount += couponDeduction;
 
     const totalAmount = Math.round((subtotal - totalDiscount + totalTax) * 100) / 100;
 
@@ -228,6 +232,10 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
     const activeShiftId = openShiftRes.rows[0]?.id || null;
 
     // 4. Record sale
+    const finalNotes = couponDeduction > 0
+      ? (notes ? `${notes} [Meal Coupon: ₹${couponDeduction.toFixed(2)}]` : `Meal Coupon: ₹${couponDeduction.toFixed(2)}`)
+      : (notes || null);
+
     const saleRes = await executeRawSql(`
       INSERT INTO sales (
         shift_id, invoice_number, sale_type, employee_id, customer_name, customer_mobile,
@@ -240,7 +248,7 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
         ${customerMobile ? `'${customerMobile.replace(/'/g, "''")}'` : 'NULL'},
         ${subtotal.toFixed(2)}, ${totalDiscount.toFixed(2)}, ${totalTax.toFixed(2)}, ${totalAmount.toFixed(2)},
         '${paymentMode}', 'COMPLETED', ${req.user?.id || 'NULL'},
-        ${notes ? `'${notes.replace(/'/g, "''")}'` : 'NULL'}
+        ${finalNotes ? `'${finalNotes.replace(/'/g, "''")}'` : 'NULL'}
       ) RETURNING id;
     `);
 
@@ -440,6 +448,7 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
         totalAmount,
         subtotal,
         discountAmount: totalDiscount,
+        couponAmount: couponDeduction,
         taxAmount: totalTax,
         paymentMode,
         employeeName: employeeData ? `${employeeData.first_name} ${employeeData.last_name}` : customerName,

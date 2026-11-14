@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { executeRawSql } from '../../db/index.js';
 import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
+import { getHistoricalRecoveryArchive } from '../../lib/foxproData.js';
 
 export const payrollRouter = Router();
 
@@ -165,6 +166,32 @@ payrollRouter.get('/export-recovery-schedule', authenticateToken, async (req: Re
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="CFECC_Store_Recovery_Advice_${period.month_year}.xlsx"`);
       return res.send(excelBuf);
+    } else if (format === 'sup' || format === 'supdata') {
+      // CIL Management Corporate Payroll SDF File (SUP<MMYY>.DAT)
+      const supRows = rows.filter(r => r.CATEGORY === 'STAFF' || r.CATEGORY === '1');
+      const lines = supRows.map(r => {
+        const empCode = String(r.EMPCODE || '').padEnd(8, ' ').slice(0, 8);
+        const cat = '1';
+        const csNo = String(parseInt(r.CSNO || '0', 10) || 0).padStart(4, ' ').slice(-4);
+        const ded = Math.max(0, parseFloat(r.STORE_DEDUCTION) || 0).toFixed(2).padStart(10, ' ').slice(-10);
+        return `${empCode}${cat}${csNo}${ded}`;
+      });
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="SUP_${period.month_year.replace('-', '')}.DAT"`);
+      return res.send(lines.join('\r\n'));
+    } else if (format === 'nm' || format === 'nmdata') {
+      // CIL Non-Management / Worker Corporate Payroll SDF File (NM<MMYY>.DAT)
+      const nmRows = rows.filter(r => r.CATEGORY !== 'STAFF' && r.CATEGORY !== '1');
+      const lines = nmRows.map(r => {
+        const empCode = String(r.EMPCODE || '').padEnd(8, ' ').slice(0, 8);
+        const cat = r.CATEGORY === 'SPECIAL' ? '3' : '2';
+        const csNo = String(parseInt(r.CSNO || '0', 10) || 0).padStart(4, ' ').slice(-4);
+        const ded = Math.max(0, parseFloat(r.STORE_DEDUCTION) || 0).toFixed(2).padStart(10, ' ').slice(-10);
+        return `${empCode}${cat}${csNo}${ded}`;
+      });
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="NM_${period.month_year.replace('-', '')}.DAT"`);
+      return res.send(lines.join('\r\n'));
     } else {
       // CSV format: [EMPCODE, CSNO, NAME, CATEGORY, STORE_DEDUCTION]
       const headers = ['EMPCODE', 'CSNO', 'NAME', 'CATEGORY', 'STORE_DEDUCTION', 'BILLS', 'DOMESTIC', 'FESTIVAL', 'THRIFT'];
@@ -189,6 +216,20 @@ payrollRouter.get('/export-recovery-schedule', authenticateToken, async (req: Re
       res.setHeader('Content-Disposition', `attachment; filename="CFECC_Store_Recovery_Schedule_${period.month_year}.csv"`);
       return res.send(csvLines.join('\r\n'));
     }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4c. Historical Payroll Recovery Ledger Archive (STRDED.DBF)
+payrollRouter.get('/historical-archive', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { monthCode, search = '', page = '1', limit = '50' } = req.query;
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 50;
+
+    const data = getHistoricalRecoveryArchive(monthCode as string, search as string, pageNum, limitNum);
+    return res.json(data);
   } catch (err) {
     next(err);
   }
@@ -516,6 +557,32 @@ payrollRouter.get('/export-recovery-schedule', authenticateToken, async (req: Re
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="CFECC_Store_Recovery_Advice_${period.month_year}.xlsx"`);
       return res.send(excelBuf);
+    } else if (format === 'sup' || format === 'supdata') {
+      // CIL Management Corporate Payroll SDF File (SUP<MMYY>.DAT)
+      const supRows = rows.filter(r => r.CATEGORY === 'STAFF' || r.CATEGORY === '1');
+      const lines = supRows.map(r => {
+        const empCode = String(r.EMPCODE || '').padEnd(8, ' ').slice(0, 8);
+        const cat = '1';
+        const csNo = String(parseInt(r.CSNO || '0', 10) || 0).padStart(4, ' ').slice(-4);
+        const ded = Math.max(0, parseFloat(r.STORE_DEDUCTION) || 0).toFixed(2).padStart(10, ' ').slice(-10);
+        return `${empCode}${cat}${csNo}${ded}`;
+      });
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="SUP_${period.month_year.replace('-', '')}.DAT"`);
+      return res.send(lines.join('\r\n'));
+    } else if (format === 'nm' || format === 'nmdata') {
+      // CIL Non-Management / Worker Corporate Payroll SDF File (NM<MMYY>.DAT)
+      const nmRows = rows.filter(r => r.CATEGORY !== 'STAFF' && r.CATEGORY !== '1');
+      const lines = nmRows.map(r => {
+        const empCode = String(r.EMPCODE || '').padEnd(8, ' ').slice(0, 8);
+        const cat = r.CATEGORY === 'SPECIAL' ? '3' : '2';
+        const csNo = String(parseInt(r.CSNO || '0', 10) || 0).padStart(4, ' ').slice(-4);
+        const ded = Math.max(0, parseFloat(r.STORE_DEDUCTION) || 0).toFixed(2).padStart(10, ' ').slice(-10);
+        return `${empCode}${cat}${csNo}${ded}`;
+      });
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="NM_${period.month_year.replace('-', '')}.DAT"`);
+      return res.send(lines.join('\r\n'));
     } else {
       // CSV format: [EMPCODE, CSNO, NAME, CATEGORY, STORE_DEDUCTION]
       const headers = ['EMPCODE', 'CSNO', 'NAME', 'CATEGORY', 'STORE_DEDUCTION', 'BILLS', 'DOMESTIC', 'FESTIVAL', 'THRIFT'];
@@ -540,6 +607,20 @@ payrollRouter.get('/export-recovery-schedule', authenticateToken, async (req: Re
       res.setHeader('Content-Disposition', `attachment; filename="CFECC_Store_Recovery_Schedule_${period.month_year}.csv"`);
       return res.send(csvLines.join('\r\n'));
     }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4c. Historical Payroll Recovery Ledger Archive (STRDED.DBF)
+payrollRouter.get('/historical-archive', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { monthCode, search = '', page = '1', limit = '50' } = req.query;
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 50;
+
+    const data = getHistoricalRecoveryArchive(monthCode as string, search as string, pageNum, limitNum);
+    return res.json(data);
   } catch (err) {
     next(err);
   }

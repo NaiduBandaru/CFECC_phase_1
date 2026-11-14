@@ -20,6 +20,7 @@ import {
   GrnReportItem,
   GstItcReportItem,
 } from '../../types/index.js';
+import { Gstr3bSlabReport } from './Gstr3bSlabReport.js';
 
 const formatCurrency = (val: number | string | undefined | null) => {
   const num = parseFloat((val ?? 0).toString());
@@ -36,7 +37,7 @@ export const ReportsPage: React.FC = () => {
 
   // Purchase Sub-Report State
   const [purchaseSubReport, setPurchaseSubReport] = useState<
-    'register' | 'vendor-summary' | 'item-summary' | 'grn-register' | 'gst-itc'
+    'register' | 'vendor-summary' | 'item-summary' | 'grn-register' | 'gst-itc' | 'gstr3b-slab'
   >('register');
 
   // Filter States for Purchase Reports
@@ -449,9 +450,20 @@ export const ReportsPage: React.FC = () => {
             >
               5. GST Input Tax Credit (ITC - GSTR-2B)
             </button>
+            <button
+              onClick={() => setPurchaseSubReport('gstr3b-slab')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                purchaseSubReport === 'gstr3b-slab'
+                  ? 'bg-navy-800 text-white shadow-xs'
+                  : 'bg-surface text-textSecondary border border-borderLine hover:text-navy-800 hover:bg-slate-50'
+              }`}
+            >
+              6. GSTR-3B Tax Return Summary (VAT.DBF)
+            </button>
           </div>
 
-          {/* Filtering Bar */}
+          {/* Filtering Bar (Only for sub-reports 1-5, as GSTR-3B has its own monthly slab selector) */}
+          {purchaseSubReport !== 'gstr3b-slab' && (
           <div className="bg-surface p-3.5 rounded-cfecc border border-borderLine shadow-subtle flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="flex items-center space-x-1.5">
@@ -565,6 +577,7 @@ export const ReportsPage: React.FC = () => {
               </div>
             )}
           </div>
+          )}
 
           {/* Sub-Report 1: Inward Purchase Invoices Register */}
           {purchaseSubReport === 'register' && (
@@ -1101,6 +1114,11 @@ export const ReportsPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Sub-Report 6: GSTR-3B Slab-Wise Summary (VAT.DBF) */}
+          {purchaseSubReport === 'gstr3b-slab' && (
+            <Gstr3bSlabReport />
+          )}
         </div>
       )}
 
@@ -1289,6 +1307,11 @@ export const ReportsPage: React.FC = () => {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Sub-Report 6: GSTR-3B Slab-Wise Summary (VAT.DBF) */}
+          {purchaseSubReport === 'gstr3b-slab' && (
+            <Gstr3bSlabReport />
           )}
         </div>
       )}

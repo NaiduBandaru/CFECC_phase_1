@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
 import { authenticateToken, requireRole } from '../../middleware/auth.js';
 import { logAudit } from '../../middleware/audit.js';
+import { getLegacyStockAdjustments } from '../../lib/foxproData.js';
 
 export const inventoryRouter = Router();
 
@@ -131,6 +132,41 @@ inventoryRouter.post('/adjust', authenticateToken, requireRole('SUPER_ADMIN', 'S
     });
 
     return res.json({ success: true, message: 'Stock adjusted successfully', newStock });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4. Stock Adjustments & Damage Register (Legacy & Live)
+inventoryRouter.get('/adjustments', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { limit = '100' } = req.query;
+    const limitNum = parseInt(limit as string, 10) || 100;
+    const data = getLegacyStockAdjustments(limitNum);
+
+    // Also fetch live manual adjustments from stock_movements
+    const liveMovements = await executeRawSql(`
+      SELECT 
+        sm.id, sm.created_at as date, sm.quantity, sm.unit_cost, sm.balance_after, sm.notes as reason,
+        sm.movement_type,
+        i.item_code, i.name as item_name,
+        u.code as unit_code,
+        usr.full_name as user_name
+      FROM stock_movements sm
+      JOIN items i ON sm.item_id = i.id
+      LEFT JOIN units u ON i.unit_id = u.id
+      LEFT JOIN users usr ON sm.created_by = usr.id
+      WHERE sm.reference_type = 'MANUAL_ADJUSTMENT'
+      ORDER BY sm.created_at DESC
+      LIMIT ${limitNum};
+    `);
+
+    return res.json({
+      success: true,
+      liveAdjustments: liveMovements.rows || [],
+      legacyAdjustments: data.adjustments || [],
+      totalLegacy: data.total || 0,
+    });
   } catch (err) {
     next(err);
   }

@@ -24,6 +24,7 @@ import {
   CreditCard,
   ShieldCheck,
   RotateCcw,
+  Zap,
 } from 'lucide-react';
 
 interface MembersSummary {
@@ -120,6 +121,13 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const [importText, setImportText] = useState('');
   const [importResult, setImportResult] = useState<any | null>(null);
 
+  // Quick Balance Enquiry Modal State (SALBAL.DBF lookup)
+  const [isQuickLookupOpen, setIsQuickLookupOpen] = useState(false);
+  const [quickLookupQuery, setQuickLookupQuery] = useState('');
+  const [quickLookupResults, setQuickLookupResults] = useState<Employee[]>([]);
+  const [selectedQuickMember, setSelectedQuickMember] = useState<Employee | null>(null);
+  const [isSearchingQuick, setIsSearchingQuick] = useState(false);
+
   const [waSendingId, setWaSendingId] = useState<number | null>(null);
 
   const navigate = useNavigate();
@@ -180,6 +188,31 @@ export const EmployeeDirectoryPage: React.FC = () => {
       console.error('Failed to fetch employees', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQuickSearch = async (val: string) => {
+    setQuickLookupQuery(val);
+    const query = val.trim();
+    if (!query) {
+      setQuickLookupResults([]);
+      setSelectedQuickMember(null);
+      return;
+    }
+    try {
+      setIsSearchingQuick(true);
+      const res = await api.get(`/employees?search=${encodeURIComponent(query)}&limit=8`);
+      if (res.data.success) {
+        const list = res.data.data || [];
+        setQuickLookupResults(list);
+        if (list.length === 1) {
+          setSelectedQuickMember(list[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Quick lookup search error:', err);
+    } finally {
+      setIsSearchingQuick(false);
     }
   };
 
@@ -478,6 +511,21 @@ export const EmployeeDirectoryPage: React.FC = () => {
           >
             <Download className="w-3.5 h-3.5 text-textSecondary" />
             <span>Export ({selectedIds.length > 0 ? selectedIds.length : 'All'})</span>
+          </button>
+
+          {/* Quick Member Balance Enquiry */}
+          <button
+            onClick={() => {
+              setIsQuickLookupOpen(true);
+              setQuickLookupQuery('');
+              setQuickLookupResults([]);
+              setSelectedQuickMember(null);
+            }}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-subtle hover:shadow-md"
+            title="Fast Member Credit & Outstanding Balance Lookup (SALBAL.DBF)"
+          >
+            <Zap className="w-3.5 h-3.5 fill-white" />
+            <span>Balance Enquiry</span>
           </button>
 
           {/* Add Member */}
@@ -1151,6 +1199,192 @@ export const EmployeeDirectoryPage: React.FC = () => {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Quick Member Balance Enquiry Modal (Legacy SALBAL.DBF Lookup) */}
+      <Modal
+        isOpen={isQuickLookupOpen}
+        onClose={() => setIsQuickLookupOpen(false)}
+        title="Member Balance Enquiry & Credit Verification"
+        subtitle="Instant lookup by CS #, Employee ID, or Name for available credit balance, monthly bills, and thrift"
+        maxWidth="2xl"
+      >
+        <div className="space-y-4 text-xs">
+          {/* Search Box */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Search by CS #, Employee Code, or Name (e.g. 1440, 5000335, Sandeep)..."
+              value={quickLookupQuery}
+              onChange={(e) => handleQuickSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border-2 border-primary/30 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:border-primary transition-colors"
+            />
+            {isSearchingQuick && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">Searching...</span>
+            )}
+          </div>
+
+          {/* Search Results Dropdown / Picker if multiple */}
+          {quickLookupResults.length > 1 && (
+            <div className="border border-borderLine rounded-xl max-h-40 overflow-y-auto divide-y divide-borderLine bg-slate-50/50">
+              {quickLookupResults.map((emp) => (
+                <div
+                  key={emp.id}
+                  onClick={() => setSelectedQuickMember(emp)}
+                  className={`p-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors ${
+                    selectedQuickMember?.id === emp.id ? 'bg-primary/10 border-l-4 border-primary font-bold' : ''
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="font-mono text-xs font-bold text-navy-800">CS #{emp.cs_no || '0'}</span>
+                    <span className="text-slate-400">&bull;</span>
+                    <span className="font-semibold text-slate-800">{emp.first_name} {emp.last_name}</span>
+                    <span className="text-[10px] text-slate-500 font-mono">({emp.employee_code})</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold text-emerald-700 font-mono">
+                      ₹{parseFloat((emp.available_credit as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} Avail
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Detailed Member Balance Card */}
+          {selectedQuickMember ? (
+            <div className="bg-slate-50 rounded-xl p-4 border border-borderLine space-y-4">
+              {/* Header Profile Bar */}
+              <div className="flex items-start justify-between border-b border-borderLine pb-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-11 h-11 rounded-xl bg-navy-800 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                    {selectedQuickMember.first_name?.[0] || 'M'}
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="font-bold text-base text-navy-900">{selectedQuickMember.first_name} {selectedQuickMember.last_name}</h3>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-navy-100 text-navy-800 border border-navy-200">
+                        {selectedQuickMember.category === 'STAFF' ? 'Management (M)' : selectedQuickMember.category === 'SPECIAL' ? 'Special / Other' : 'Worker (NM)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-xs text-textSecondary mt-0.5 font-mono">
+                      <span>CS #{selectedQuickMember.cs_no || '0'}</span>
+                      <span>&bull;</span>
+                      <span>Emp ID: {selectedQuickMember.employee_code}</span>
+                      {selectedQuickMember.hr_no && (
+                        <>
+                          <span>&bull;</span>
+                          <span>HR #{selectedQuickMember.hr_no}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                    selectedQuickMember.credit_enabled && selectedQuickMember.employment_status === 'ACTIVE'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {selectedQuickMember.credit_enabled && selectedQuickMember.employment_status === 'ACTIVE' ? 'Credit Eligible' : 'Credit Restricted'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 3 Main KPI Metrics */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-white p-3 rounded-lg border border-borderLine shadow-2xs">
+                  <span className="text-[10px] font-bold text-textSecondary uppercase tracking-wider block">Approved Credit Limit</span>
+                  <div className="text-lg font-bold text-navy-900 font-mono mt-0.5">
+                    ₹{parseFloat((selectedQuickMember.credit_limit as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-lg border border-amber-200 bg-amber-50/20 shadow-2xs">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Current Outstanding</span>
+                  <div className="text-lg font-bold text-amber-700 font-mono mt-0.5">
+                    ₹{parseFloat((selectedQuickMember.current_outstanding as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-lg border border-emerald-200 bg-emerald-50/20 shadow-2xs">
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Available Balance</span>
+                  <div className="text-lg font-bold text-emerald-700 font-mono mt-0.5">
+                    ₹{parseFloat((selectedQuickMember.available_credit as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Society Breakdown Items */}
+              <div className="bg-white rounded-lg border border-borderLine p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Month Bills</span>
+                  <span className="font-bold font-mono text-navy-800">
+                    ₹{parseFloat((selectedQuickMember.current_month_bills as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Domestic Adv.</span>
+                  <span className="font-bold font-mono text-navy-800">
+                    ₹{parseFloat((selectedQuickMember.domestic_balance as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Monthly Thrift</span>
+                  <span className="font-bold font-mono text-indigo-700">
+                    ₹{parseFloat((selectedQuickMember.thrift_deposit as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Cum. Thrift</span>
+                  <span className="font-bold font-mono text-indigo-700">
+                    ₹{parseFloat((selectedQuickMember.cum_thrift as any) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsQuickLookupOpen(false);
+                    navigate(`/employees/${selectedQuickMember.id}`);
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-borderLine bg-white hover:bg-slate-50 text-navy-800 font-semibold text-xs"
+                >
+                  View Full Profile & Ledger &rarr;
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsQuickLookupOpen(false);
+                    navigate(`/pos?memberId=${selectedQuickMember.id}`);
+                  }}
+                  className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white font-bold text-xs shadow-sm flex items-center space-x-1.5"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  <span>Open POS Checkout</span>
+                </button>
+              </div>
+            </div>
+          ) : quickLookupQuery.trim() && !isSearchingQuick ? (
+            <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-borderLine">
+              <Users className="w-8 h-8 mx-auto text-slate-400 mb-2 opacity-50" />
+              <p className="font-semibold">No member found matching "{quickLookupQuery}"</p>
+              <p className="text-[11px] text-slate-400 mt-1">Verify CS #, Employee ID, or name and try again.</p>
+            </div>
+          ) : (
+            <div className="p-6 text-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-borderLine">
+              <Zap className="w-6 h-6 mx-auto text-amber-500 mb-1" />
+              <p className="font-medium text-slate-600">Type a Member CS # or Employee ID to instantly verify live credit balances.</p>
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* Add Employee Modal */}

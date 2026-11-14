@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
 import { authenticateToken, requireRole } from '../../middleware/auth.js';
+import { getVatGstSlabSummary } from '../../lib/foxproData.js';
 
 export const reportsRouter = Router();
 
@@ -375,6 +376,17 @@ reportsRouter.get('/purchases/gst-itc', authenticateToken, async (req: Request, 
         totalInvoiceVal,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 9. Monthly GSTR-3B Slab-Wise Summary (Consolidated Tax Return)
+reportsRouter.get('/gst-slab-summary', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const { monthCode } = req.query;
+    const summary = getVatGstSlabSummary(monthCode as string);
+    return res.json(summary);
   } catch (err) {
     next(err);
   }

@@ -68,6 +68,7 @@ export const POSTerminalPage: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMode, setPaymentMode] = useState<'EMPLOYEE_CREDIT' | 'CASH' | 'UPI'>('EMPLOYEE_CREDIT');
   const [cashTendered, setCashTendered] = useState<string>('');
+  const [couponAmount, setCouponAmount] = useState<string>('');
   const [isCheckingOut, setIsCheckingOut] = useState<boolean>(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [justScannedCode, setJustScannedCode] = useState<string | null>(null);
@@ -78,6 +79,7 @@ export const POSTerminalPage: React.FC = () => {
 
   // Completed Receipt Modal
   const [completedSale, setCompletedSale] = useState<any | null>(null);
+  const [lastCompletedSale, setLastCompletedSale] = useState<any | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState<boolean>(false);
   const [waSending, setWaSending] = useState<boolean>(false);
   const [waSentStatus, setWaSentStatus] = useState<string | null>(null);
@@ -430,20 +432,24 @@ export const POSTerminalPage: React.FC = () => {
   const grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
   const totalItemsCount = cart.reduce((s, i) => s + i.quantity, 0);
 
+  // Meal Coupon Deduction (COUPAMT)
+  const couponNumeric = Math.min(grandTotal, Math.max(0, parseFloat(couponAmount) || 0));
+  const netPayable = Math.max(0, Math.round((grandTotal - couponNumeric) * 100) / 100);
+
   // Cash Change Return calculation
   const tenderedNumeric = parseFloat(cashTendered) || 0;
-  const changeToReturn = Math.max(0, tenderedNumeric - grandTotal);
+  const changeToReturn = Math.max(0, tenderedNumeric - netPayable);
 
   // Credit validation: check if order exceeds available credit
   const availableCreditNum = selectedEmployee ? parseFloat(selectedEmployee.availableCredit || 0) : 0;
-  const isCreditExceeded = paymentMode === 'EMPLOYEE_CREDIT' && selectedEmployee && grandTotal > availableCreditNum;
+  const isCreditExceeded = paymentMode === 'EMPLOYEE_CREDIT' && selectedEmployee && netPayable > availableCreditNum;
 
   // Checkout execution
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     if (isCreditExceeded) {
       setCheckoutError(
-        `Order total (₹${grandTotal.toFixed(2)}) exceeds available credit limit (₹${availableCreditNum.toFixed(2)}).`
+        `Order payable amount (₹${netPayable.toFixed(2)}) exceeds available credit limit (₹${availableCreditNum.toFixed(2)}).`
       );
       return;
     }
@@ -457,6 +463,7 @@ export const POSTerminalPage: React.FC = () => {
         customerName: selectedEmployee ? `${selectedEmployee.name}` : 'Walk-in Customer',
         customerMobile: selectedEmployee?.mobile || null,
         paymentMode,
+        couponAmount: couponNumeric,
         items: cart.map((c) => ({
           itemId: c.itemId,
           quantity: c.quantity,
@@ -468,19 +475,24 @@ export const POSTerminalPage: React.FC = () => {
 
       const res = await api.post('/pos/checkout', payload);
       if (res.data.success) {
-        setCompletedSale({
+        const saleRecord = {
           ...res.data.sale,
           items: [...cart],
           grandTotal,
+          netPayable,
+          couponAmount: couponNumeric,
           employee: selectedEmployee,
-        });
+        };
+        setCompletedSale(saleRecord);
+        setLastCompletedSale(saleRecord);
         setWaPhoneInput(selectedEmployee?.mobile || '');
         setWaSentStatus(null);
         setIsReceiptModalOpen(true);
-        // Reset Cart & Tender
+        // Reset Cart, Tender & Coupon
         setCart([]);
         setSelectedEmployee(null);
         setCashTendered('');
+        setCouponAmount('');
         fetchInitialCatalog();
         fetchActiveShift();
       }
@@ -582,6 +594,21 @@ export const POSTerminalPage: React.FC = () => {
 
         {/* Right: Actions, Fullscreen & Exit POS Button */}
         <div className="flex items-center space-x-2">
+          {lastCompletedSale && (
+            <button
+              type="button"
+              onClick={() => {
+                setCompletedSale(lastCompletedSale);
+                setIsReceiptModalOpen(true);
+              }}
+              className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-navy-800 hover:bg-navy-700 text-slate-200 hover:text-white border border-navy-700 text-xs font-semibold transition-colors"
+              title="Reprint last completed receipt"
+            >
+              <Printer className="w-3.5 h-3.5 text-primary-light" />
+              <span className="hidden sm:inline">Reprint Bill ({lastCompletedSale.invoiceNumber})</span>
+            </button>
+          )}
+
           {activeShift ? (
             <button
               type="button"
@@ -1094,9 +1121,40 @@ export const POSTerminalPage: React.FC = () => {
                 <span>Taxes (GST)</span>
                 <span className="font-mono text-slate-800 font-medium">₹{totalTax.toFixed(2)}</span>
               </div>
+              <div className="flex justify-between items-center text-xs text-slate-600">
+                <span>Gross Order Value</span>
+                <span className="font-mono font-bold text-slate-800">₹{grandTotal.toFixed(2)}</span>
+              </div>
+
+              {/* Meal / Food Coupon Deduction (COUPAMT) */}
+              <div className="flex items-center justify-between pt-1 border-t border-dashed border-slate-200">
+                <span className="text-[11px] font-semibold text-slate-600 flex items-center space-x-1">
+                  <span>Meal Coupon (COUPAMT):</span>
+                </span>
+                <div className="flex items-center space-x-1 w-28">
+                  <span className="text-slate-400 text-xs">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={grandTotal}
+                    step="any"
+                    placeholder="0.00"
+                    value={couponAmount}
+                    onChange={(e) => setCouponAmount(e.target.value)}
+                    className="w-full px-2 py-0.5 text-right font-mono font-bold text-xs bg-white border border-slate-300 rounded focus:border-primary focus:outline-none"
+                  />
+                </div>
+              </div>
+              {couponNumeric > 0 && (
+                <div className="flex justify-between text-[11px] text-emerald-700 font-medium">
+                  <span>Coupon Deduction:</span>
+                  <span className="font-mono font-bold">- ₹{couponNumeric.toFixed(2)}</span>
+                </div>
+              )}
+
               <div className="flex justify-between items-center text-sm font-bold text-navy-800 pt-1 border-t border-slate-200">
                 <span className="uppercase text-xs tracking-wider">Net Amount Due</span>
-                <span className="text-xl font-black font-mono text-primary">₹{grandTotal.toFixed(2)}</span>
+                <span className="text-xl font-black font-mono text-primary">₹{netPayable.toFixed(2)}</span>
               </div>
             </div>
 
@@ -1156,7 +1214,7 @@ export const POSTerminalPage: React.FC = () => {
                     <span>Change Calculator</span>
                   </span>
                   <div className="flex space-x-1">
-                    {[grandTotal, 100, 200, 500, 1000, 2000].map((preset) => (
+                    {[netPayable, 100, 200, 500, 1000, 2000].map((preset) => (
                       <button
                         key={preset}
                         type="button"
@@ -1196,7 +1254,7 @@ export const POSTerminalPage: React.FC = () => {
               <div className="p-2 bg-rose-50 border border-rose-300 text-rose-800 text-[11px] rounded-lg flex items-center space-x-1.5">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
                 <span>
-                  Order (₹{grandTotal.toFixed(2)}) exceeds available credit of ₹{availableCreditNum.toFixed(2)}. Switch tender to Cash or UPI.
+                  Order payable amount (₹{netPayable.toFixed(2)}) exceeds available credit of ₹{availableCreditNum.toFixed(2)}. Switch tender to Cash or UPI.
                 </span>
               </div>
             )}
@@ -1220,7 +1278,7 @@ export const POSTerminalPage: React.FC = () => {
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4" />
-                  <span>COMPLETE SALE &bull; ₹{grandTotal.toFixed(2)}</span>
+                  <span>COMPLETE SALE &bull; ₹{netPayable.toFixed(2)}</span>
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </>
               )}
@@ -1311,7 +1369,8 @@ ${(completedSale.items || []).map((it: any, idx: number) => {
   return `${sno}  ${code} ${name} ${qty}  ${vat} ${rate} ${amt}`;
 }).join('\n')}
                                                                  ------------
-          TOTAL (TAX + BASIC PRICE):   ${parseFloat(completedSale.taxAmount).toFixed(2)} + ${parseFloat(completedSale.subtotal).toFixed(2)}      ${parseFloat(completedSale.totalAmount).toFixed(2).padStart(11)}
+          TOTAL (TAX + BASIC PRICE):   ${parseFloat(completedSale.taxAmount).toFixed(2)} + ${parseFloat(completedSale.subtotal).toFixed(2)}      ${(parseFloat(completedSale.subtotal) + parseFloat(completedSale.taxAmount)).toFixed(2).padStart(11)}
+${parseFloat((completedSale.couponAmount || 0).toString()) > 0 ? `          LESS COUPON (COUPAMT):                                       - ${parseFloat(completedSale.couponAmount).toFixed(2).padStart(11)}\n` : ''}          NET TOTAL:                                                  ${parseFloat(completedSale.totalAmount).toFixed(2).padStart(11)}
 
      * Goods once sold will not be taken back..
 
@@ -1385,6 +1444,12 @@ ${(completedSale.items || []).map((it: any, idx: number) => {
                     <span>CGST / SGST (Tax):</span>
                     <span>₹{parseFloat(completedSale.taxAmount).toFixed(2)}</span>
                   </div>
+                  {parseFloat((completedSale.couponAmount || 0).toString()) > 0 && (
+                    <div className="flex justify-between text-black font-semibold">
+                      <span>Meal Coupon (COUPAMT):</span>
+                      <span>- ₹{parseFloat(completedSale.couponAmount).toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between font-bold text-sm text-black pt-1 border-t border-dashed border-slate-400">
                     <span>NET TOTAL:</span>
                     <span>₹{parseFloat(completedSale.totalAmount).toFixed(2)}</span>
