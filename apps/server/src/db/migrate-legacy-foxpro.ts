@@ -355,3 +355,4 @@ if (process.argv[1]?.includes('migrate-legacy-foxpro')) {
       process.exit(1);
     });
 }
+
