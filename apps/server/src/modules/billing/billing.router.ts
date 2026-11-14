@@ -207,6 +207,8 @@ billingRouter.get('/statements', authenticateToken, async (req: Request, res: Re
       whereClauses.push(`(
         LOWER(ei.invoice_number) LIKE '%${q}%' OR 
         LOWER(e.employee_code) LIKE '%${q}%' OR 
+        LOWER(COALESCE(e.cs_no, '')) LIKE '%${q}%' OR 
+        LOWER(COALESCE(e.hr_no, '')) LIKE '%${q}%' OR 
         LOWER(e.first_name) LIKE '%${q}%' OR 
         LOWER(e.last_name) LIKE '%${q}%'
       )`);
@@ -218,7 +220,8 @@ billingRouter.get('/statements', authenticateToken, async (req: Request, res: Re
       SELECT 
         ei.*,
         bp.period_name, bp.period_code,
-        e.employee_code, e.first_name, e.last_name, e.mobile,
+        e.employee_code, e.cs_no, e.grade, e.category, e.hr_no,
+        e.first_name, e.last_name, e.mobile,
         d.name as department_name, des.title as designation_title
       FROM employee_invoices ei
       JOIN billing_periods bp ON ei.billing_period_id = bp.id
@@ -253,7 +256,8 @@ billingRouter.get('/statements/:id', authenticateToken, async (req: Request, res
         TO_CHAR(bp.start_date, 'YYYY-MM-DD') as period_start_date,
         TO_CHAR(bp.end_date, 'YYYY-MM-DD') as period_end_date,
         TO_CHAR(bp.billing_date, 'YYYY-MM-DD') as billing_date,
-        e.employee_code, e.first_name, e.last_name, e.mobile, e.email, e.credit_limit,
+        e.employee_code, e.cs_no, e.grade, e.category, e.hr_no,
+        e.first_name, e.last_name, e.mobile, e.email, e.credit_limit,
         e.current_outstanding as live_employee_outstanding,
         d.name as department_name, des.title as designation_title
       FROM employee_invoices ei

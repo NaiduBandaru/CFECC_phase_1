@@ -206,6 +206,10 @@ export interface EmployeeStatement {
   period_code: string;
   employee_id: number;
   employee_code: string;
+  cs_no?: string | null;
+  grade?: string | null;
+  category?: string | null;
+  hr_no?: string | null;
   first_name: string;
   last_name: string;
   mobile: string;

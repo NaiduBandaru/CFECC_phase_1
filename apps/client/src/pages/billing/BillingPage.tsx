@@ -248,10 +248,26 @@ export const BillingPage: React.FC = () => {
   const handleExportCsv = () => {
     if (statements.length === 0) return;
     const periodCode = selectedPeriod?.period_code || 'BILLING';
-    const headers = ['Statement #', 'Employee Code', 'Employee Name', 'Mobile', 'Opening (INR)', 'Purchases (INR)', 'Payments (INR)', 'Recoveries (INR)', 'Closing Outstanding (INR)', 'Status', 'WhatsApp Status'];
-    const rows = statements.map(s => [
+    const headers = [
+      'Statement #',
+      'Society CS #',
+      'Employee Code',
+      'Grade',
+      'Employee Name',
+      'Mobile',
+      'Opening (INR)',
+      'Purchases (INR)',
+      'Payments (INR)',
+      'Recoveries (INR)',
+      'Closing Outstanding (INR)',
+      'Status',
+      'WhatsApp Status',
+    ];
+    const rows = statements.map((s) => [
       s.invoice_number,
+      s.cs_no || '',
       s.employee_code,
+      s.grade || (s.category === 'STAFF' ? 'M' : s.category === 'SPECIAL' ? 'Other' : 'NM'),
       `"${s.first_name} ${s.last_name}"`,
       s.mobile || '',
       parseFloat(s.opening_balance?.toString() || '0').toFixed(2),
@@ -263,7 +279,7 @@ export const BillingPage: React.FC = () => {
       s.whatsapp_status || 'PENDING',
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
@@ -273,7 +289,7 @@ export const BillingPage: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  const selectedPeriod = periods.find(p => p.id.toString() === selectedPeriodId);
+  const selectedPeriod = periods.find((p) => p.id.toString() === selectedPeriodId);
 
   const totalPeriodBilled = statements.reduce(
     (acc, s) => acc + parseFloat(s.closing_outstanding?.toString() || '0'),
@@ -288,6 +304,7 @@ export const BillingPage: React.FC = () => {
       stmt.first_name?.toLowerCase().includes(q) ||
       stmt.last_name?.toLowerCase().includes(q) ||
       stmt.employee_code?.toLowerCase().includes(q) ||
+      stmt.cs_no?.toLowerCase().includes(q) ||
       stmt.mobile?.includes(q)
     );
   });
@@ -494,11 +511,23 @@ export const BillingPage: React.FC = () => {
                         {stmt.invoice_number}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="font-bold text-navy-800">
-                          {stmt.first_name} {stmt.last_name}
+                        <div className="font-bold text-navy-800 flex items-center space-x-1.5">
+                          <span>{stmt.first_name} {stmt.last_name}</span>
+                          {stmt.cs_no && (
+                            <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                              CS #{stmt.cs_no}
+                            </span>
+                          )}
                         </div>
-                        <div className="text-[11px] text-textSecondary font-mono">
-                          {stmt.employee_code} &bull; {stmt.mobile || 'No Mobile'}
+                        <div className="text-[11px] text-textSecondary font-mono flex items-center space-x-1.5 mt-0.5">
+                          <span>{stmt.employee_code}</span>
+                          <span>&bull;</span>
+                          <span>{stmt.mobile || 'No Mobile'}</span>
+                          {stmt.grade && (
+                            <span className="px-1 py-0.2 rounded text-[9px] font-semibold bg-navy-50 text-navy-800 border border-navy-200">
+                              {stmt.grade === 'M' ? 'Mgmt (M)' : stmt.grade === 'NM' ? 'Worker (NM)' : stmt.grade}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="py-3 px-4 text-right tabular-nums text-textSecondary font-medium">
@@ -603,11 +632,22 @@ export const BillingPage: React.FC = () => {
                     <User className="w-3.5 h-3.5 text-primary" />
                     <span>Employee:</span>
                   </div>
-                  <div className="font-bold text-navy-800 text-xs">
-                    {statementDetails.statement.first_name} {statementDetails.statement.last_name}
+                  <div className="font-bold text-navy-800 text-xs flex items-center space-x-1.5">
+                    <span>{statementDetails.statement.first_name} {statementDetails.statement.last_name}</span>
+                    {statementDetails.statement.cs_no && (
+                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-800">
+                        CS #{statementDetails.statement.cs_no}
+                      </span>
+                    )}
                   </div>
-                  <div className="text-textSecondary font-mono">
-                    ID: {statementDetails.statement.employee_code} &bull; Dept: {statementDetails.statement.department_name || 'N/A'}
+                  <div className="text-textSecondary font-mono text-[10px]">
+                    ID: {statementDetails.statement.employee_code}
+                    {statementDetails.statement.grade && (
+                      <span className="ml-1 px-1 py-0.2 rounded font-semibold bg-navy-100 text-navy-800">
+                        {statementDetails.statement.grade === 'M' ? 'Mgmt (M)' : statementDetails.statement.grade === 'NM' ? 'Worker (NM)' : statementDetails.statement.grade}
+                      </span>
+                    )}
+                    &bull; Dept: {statementDetails.statement.department_name || 'N/A'}
                   </div>
                 </div>
 
@@ -761,7 +801,7 @@ export const BillingPage: React.FC = () => {
               <option value="">Select Employee</option>
               {statements.map((s) => (
                 <option key={s.employee_id} value={s.employee_id}>
-                  {s.first_name} {s.last_name} ({s.employee_code}) - Outstanding: {formatCurrency(s.closing_outstanding)}
+                  {s.first_name} {s.last_name} {s.cs_no ? `(CS #${s.cs_no} • ${s.employee_code})` : `(${s.employee_code})`} - Outstanding: {formatCurrency(s.closing_outstanding)}
                 </option>
               ))}
             </select>
