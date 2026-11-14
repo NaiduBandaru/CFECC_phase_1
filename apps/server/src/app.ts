@@ -14,6 +14,7 @@ import { billingRouter } from './modules/billing/billing.router.js';
 import { payrollRouter } from './modules/payroll/payroll.router.js';
 import { reportsRouter } from './modules/reports/reports.router.js';
 import { whatsappRouter } from './modules/whatsapp/whatsapp.router.js';
+import { backupRouter } from './modules/backup/backup.router.js';
 
 let isDatabaseReady = false;
 
@@ -82,6 +83,7 @@ export function createApp(): Express {
   app.use('/api/payroll', payrollRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/whatsapp', whatsappRouter);
+  app.use('/api/backup', backupRouter);
 
   // Global Error Handler
   app.use(errorHandler);

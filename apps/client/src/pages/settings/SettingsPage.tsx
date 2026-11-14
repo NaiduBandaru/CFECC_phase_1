@@ -20,9 +20,13 @@ import {
   Eye,
   Info,
   X,
+  Database,
+  HardDriveDownload,
 } from 'lucide-react';
+import { DatabaseBackupTab } from './DatabaseBackupTab.js';
 
 export const SettingsPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'BACKUP' | 'WHATSAPP' | 'ORGANIZATION'>('BACKUP');
   const [waLogs, setWaLogs] = useState<any[]>([]);
   const [waConfig, setWaConfig] = useState<any>(null);
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
@@ -197,145 +201,198 @@ export const SettingsPage: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-navy-800">System Administration & Configurations</h2>
           <p className="text-xs text-textSecondary mt-0.5">
-            Enterprise organization parameters, security roles, audit logs and official Meta WhatsApp Cloud API gateway
+            Enterprise organization parameters, security roles, automated database backups & maintenance, and official Meta WhatsApp Cloud API gateway
           </p>
         </div>
 
+        {activeTab === 'WHATSAPP' && (
+          <button
+            onClick={() => setIsConfigModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors shadow-subtle self-start sm:self-auto"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>Configure WhatsApp API</span>
+          </button>
+        )}
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex items-center space-x-2 border-b border-borderLine pb-2 flex-wrap gap-y-2">
         <button
-          onClick={() => setIsConfigModalOpen(true)}
-          className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors shadow-subtle self-start sm:self-auto"
+          onClick={() => setActiveTab('BACKUP')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'BACKUP'
+              ? 'bg-primary text-white shadow-subtle'
+              : 'bg-white text-navy-800 hover:bg-gray-100 border border-borderLine'
+          }`}
         >
-          <Settings className="w-3.5 h-3.5" />
-          <span>Configure WhatsApp API</span>
+          <Database className="w-4 h-4" />
+          <span>Database Backup & Maintenance</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('WHATSAPP')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'WHATSAPP'
+              ? 'bg-primary text-white shadow-subtle'
+              : 'bg-white text-navy-800 hover:bg-gray-100 border border-borderLine'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>Meta WhatsApp Gateway</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('ORGANIZATION')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'ORGANIZATION'
+              ? 'bg-primary text-white shadow-subtle'
+              : 'bg-white text-navy-800 hover:bg-gray-100 border border-borderLine'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>Organization & Roles</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Organization Profile */}
-        <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle space-y-4">
-          <div className="flex items-center space-x-2 pb-2 border-b border-borderLine">
-            <Building2 className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-bold text-navy-800 uppercase">Enterprise Client Details</h3>
+      {/* 1. Database Backup & Maintenance Tab */}
+      {activeTab === 'BACKUP' && <DatabaseBackupTab />}
+
+      {/* 2. Organization & Enterprise Roles Tab */}
+      {activeTab === 'ORGANIZATION' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left: Organization Profile */}
+          <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle space-y-4">
+            <div className="flex items-center space-x-2 pb-2 border-b border-borderLine">
+              <Building2 className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-bold text-navy-800 uppercase">Enterprise Client Details</h3>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <span className="text-textSecondary block">Client Entity</span>
+                <span className="font-bold text-navy-800">CFECC Stores</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block">Facility Location</span>
+                <span className="font-semibold text-navy-800">Visakhapatnam, Andhra Pradesh, India</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block">GSTIN Registration</span>
+                <span className="font-mono font-semibold text-navy-800">37AAAAA0000A1Z5</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block">Billing Cycle Cutoff</span>
+                <span className="font-semibold text-navy-800">25th of every month</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block">Database Engine</span>
+                <span className="font-mono font-semibold text-emerald-700">PostgreSQL (Drizzle ORM)</span>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-3 text-xs">
-            <div>
-              <span className="text-textSecondary block">Client Entity</span>
-              <span className="font-bold text-navy-800">CFECC Stores</span>
+          {/* Middle: Roles & Security */}
+          <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle space-y-4">
+            <div className="flex items-center space-x-2 pb-2 border-b border-borderLine">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <h3 className="text-sm font-bold text-navy-800 uppercase">Configured Enterprise Roles</h3>
             </div>
-            <div>
-              <span className="text-textSecondary block">Facility Location</span>
-              <span className="font-semibold text-navy-800">Visakhapatnam, Andhra Pradesh, India</span>
-            </div>
-            <div>
-              <span className="text-textSecondary block">GSTIN Registration</span>
-              <span className="font-mono font-semibold text-navy-800">37AAAAA0000A1Z5</span>
-            </div>
-            <div>
-              <span className="text-textSecondary block">Billing Cycle Cutoff</span>
-              <span className="font-semibold text-navy-800">25th of every month</span>
-            </div>
-            <div>
-              <span className="text-textSecondary block">Database Engine</span>
-              <span className="font-mono font-semibold text-emerald-700">PostgreSQL (Drizzle ORM)</span>
+
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 rounded bg-slate-50 border border-borderLine flex justify-between items-center">
+                <div>
+                  <div className="font-bold text-navy-800">Super Administrator</div>
+                  <div className="text-[11px] text-textSecondary">Full system & security control</div>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-navy-800 text-white">ALL PERMS</span>
+              </div>
+
+              <div className="p-2.5 rounded bg-slate-50 border border-borderLine flex justify-between items-center">
+                <div>
+                  <div className="font-bold text-navy-800">Store Manager</div>
+                  <div className="text-[11px] text-textSecondary">Inventory, purchases & pricing</div>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-primary">OPS</span>
+              </div>
+
+              <div className="p-2.5 rounded bg-slate-50 border border-borderLine flex justify-between items-center">
+                <div>
+                  <div className="font-bold text-navy-800">POS Cashier</div>
+                  <div className="text-[11px] text-textSecondary">Point of sale, receipts & customer credit</div>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">POS</span>
+              </div>
+
+              <div className="p-2.5 rounded bg-slate-50 border border-borderLine flex justify-between items-center">
+                <div>
+                  <div className="font-bold text-navy-800">Accounts & HR Payroll</div>
+                  <div className="text-[11px] text-textSecondary">Billing, statement recovery & payslips</div>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">FINANCE</span>
+              </div>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Middle: Roles & Security */}
-        <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle space-y-4">
-          <div className="flex items-center space-x-2 pb-2 border-b border-borderLine">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <h3 className="text-sm font-bold text-navy-800 uppercase">Configured Enterprise Roles</h3>
-          </div>
-
-          <div className="space-y-2 text-xs">
-            <div className="p-2.5 rounded bg-slate-50 border border-borderLine flex justify-between items-center">
-              <div>
-                <div className="font-bold text-navy-800">Super Administrator</div>
-                <div className="text-[11px] text-textSecondary">Full system & security control</div>
+      {/* 3. WhatsApp Gateway & Logs Tab */}
+      {activeTab === 'WHATSAPP' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* WhatsApp Integration Summary Card */}
+            <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle space-y-4 lg:col-span-3">
+              <div className="flex items-center justify-between pb-2 border-b border-borderLine">
+                <div className="flex items-center space-x-2">
+                  <MessageSquare className="w-4 h-4 text-emerald-600" />
+                  <h3 className="text-sm font-bold text-navy-800 uppercase">Meta WhatsApp Gateway</h3>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    waConfig?.isConfigured
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {waConfig?.isConfigured ? 'LIVE META CLOUD' : 'SIMULATED MODE'}
+                </span>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-navy-800 text-white">ALL PERMS</span>
-            </div>
 
-            <div className="p-2.5 rounded bg-slate-50 border border-borderLine flex justify-between items-center">
-              <div>
-                <div className="font-bold text-navy-800">Store Manager</div>
-                <div className="text-[11px] text-textSecondary">Inventory, purchases & pricing</div>
-              </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-primary">OPS</span>
-            </div>
-
-            <div className="p-2.5 rounded bg-slate-50 border border-borderLine flex justify-between items-center">
-              <div>
-                <div className="font-bold text-navy-800">POS Cashier</div>
-                <div className="text-[11px] text-textSecondary">Point of sale, receipts & customer credit</div>
-              </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">POS</span>
-            </div>
-
-            <div className="p-2.5 rounded bg-slate-50 border border-borderLine flex justify-between items-center">
-              <div>
-                <div className="font-bold text-navy-800">Accounts & HR Payroll</div>
-                <div className="text-[11px] text-textSecondary">Billing, statement recovery & payslips</div>
-              </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">FINANCE</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: WhatsApp Integration */}
-        <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-borderLine">
-            <div className="flex items-center space-x-2">
-              <MessageSquare className="w-4 h-4 text-emerald-600" />
-              <h3 className="text-sm font-bold text-navy-800 uppercase">Meta WhatsApp Gateway</h3>
-            </div>
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                waConfig?.isConfigured
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-amber-100 text-amber-800'
-              }`}
-            >
-              {waConfig?.isConfigured ? 'LIVE META CLOUD' : 'SIMULATED MODE'}
-            </span>
-          </div>
-
-          <div className="space-y-3 text-xs">
-            <div>
-              <span className="text-textSecondary block">Gateway Protocol</span>
-              <span className="font-semibold text-navy-800">Meta Graph API {waConfig?.apiVersion || 'v21.0'}</span>
-            </div>
-            <div>
-              <span className="text-textSecondary block">Phone Number ID</span>
-              <span className="font-mono text-textPrimary">
-                {waConfig?.phoneNumberId || 'Not configured (using fallback sandbox)'}
-              </span>
-            </div>
-            <div>
-              <span className="text-textSecondary block">Access Token Status</span>
-              <span className="font-mono text-textPrimary">
-                {waConfig?.hasAccessToken ? (
-                  <span className="text-emerald-700 font-semibold">Active ({waConfig?.maskedAccessToken})</span>
-                ) : (
-                  <span className="text-amber-700 font-medium">No token set (Click Configure to add)</span>
-                )}
-              </span>
-            </div>
-            <div>
-              <span className="text-textSecondary block">Approved Templates</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {(waConfig?.approvedTemplates || ['cfecc_monthly_statement', 'cfecc_pos_receipt']).map((t: string) => (
-                  <span key={t} className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-textSecondary">
-                    {t}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                <div>
+                  <span className="text-textSecondary block">Gateway Protocol</span>
+                  <span className="font-semibold text-navy-800">Meta Graph API {waConfig?.apiVersion || 'v21.0'}</span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block">Phone Number ID</span>
+                  <span className="font-mono text-textPrimary">
+                    {waConfig?.phoneNumberId || 'Not configured (using fallback sandbox)'}
                   </span>
-                ))}
+                </div>
+                <div>
+                  <span className="text-textSecondary block">Access Token Status</span>
+                  <span className="font-mono text-textPrimary">
+                    {waConfig?.hasAccessToken ? (
+                      <span className="text-emerald-700 font-semibold">Active ({waConfig?.maskedAccessToken})</span>
+                    ) : (
+                      <span className="text-amber-700 font-medium">No token set (Click Configure to add)</span>
+                    )}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block">Approved Templates</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(waConfig?.approvedTemplates || ['cfecc_monthly_statement', 'cfecc_pos_receipt']).map((t: string) => (
+                      <span key={t} className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-textSecondary">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
       {/* Meta API Test & Diagnostic Console */}
       <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle">
@@ -723,6 +780,8 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
       </div>
+        </div>
+      )}
 
       {/* Meta WhatsApp Cloud API Configuration Modal */}
       <Modal

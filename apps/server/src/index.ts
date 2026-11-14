@@ -2,6 +2,7 @@ import { createApp, setDatabaseReady } from './app.js';
 import { config } from './config/index.js';
 import { initDatabase, executeRawSql } from './db/index.js';
 import { seedDatabase } from './db/seed.js';
+import { initBackupScheduler } from './modules/backup/backup.service.js';
 
 export const app = createApp();
 
@@ -23,6 +24,9 @@ async function bootstrapDatabase() {
     // Open readiness gate to process incoming requests immediately
     setDatabaseReady(true);
     console.log('[Server] Database ready. Readiness gate open.');
+
+    // Initialize automated daily backup daemon
+    initBackupScheduler();
   } catch (err) {
     console.error('[Server Bootstrap Fatal Error]:', err);
     if (!process.env.VERCEL) {

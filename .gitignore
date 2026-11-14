@@ -20,4 +20,8 @@ coverage
 **/.data/**
 *.tsbuildinfo
 .eslintcache
+**/backups/*.json
+**/backups/*.sql
+**/backups/*.gz
+!**/backups/.gitkeep
 

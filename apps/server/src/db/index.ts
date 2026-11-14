@@ -120,6 +120,7 @@ export async function syncDatabaseSequences() {
     'payroll_periods',
     'payroll_entries',
     'audit_logs',
+    'backup_logs',
   ];
 
   for (const table of tables) {
@@ -707,6 +708,19 @@ async function ensureTablesCreated() {
       provider_message_id TEXT,
       error_message TEXT,
       sent_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS backup_logs (
+      id SERIAL PRIMARY KEY,
+      filename TEXT NOT NULL,
+      file_path TEXT,
+      file_size BIGINT NOT NULL DEFAULT 0,
+      backup_type TEXT NOT NULL DEFAULT 'MANUAL',
+      status TEXT NOT NULL DEFAULT 'COMPLETED',
+      record_count_summary JSONB,
+      error_message TEXT,
+      created_by TEXT DEFAULT 'System',
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
