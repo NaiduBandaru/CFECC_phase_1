@@ -576,13 +576,19 @@ purchasingRouter.get('/invoices', authenticateToken, async (req: Request, res: R
     const invoices = await executeRawSql(`
       SELECT 
         pi.*,
+        COALESCE(pi.due_date, pi.invoice_date + INTERVAL '30 days') as effective_due_date,
         v.name as vendor_name,
         v.vendor_code,
         v.gstin as vendor_gstin,
         v.state as vendor_state,
         gr.grn_number,
         (pi.total_amount - pi.paid_amount) as balance_due,
-        CASE WHEN pi.due_date < CURRENT_DATE AND pi.status != 'PAID' THEN TRUE ELSE FALSE END as is_overdue
+        CASE 
+          WHEN COALESCE(pi.due_date, pi.invoice_date + INTERVAL '30 days') < CURRENT_DATE AND pi.status != 'PAID' 
+          THEN TRUE 
+          ELSE FALSE 
+        END as is_overdue,
+        GREATEST(0, (CURRENT_DATE - COALESCE(pi.due_date, pi.invoice_date + INTERVAL '30 days')::date)) as overdue_days
       FROM purchase_invoices pi
       JOIN vendors v ON pi.vendor_id = v.id
       LEFT JOIN goods_receipts gr ON pi.grn_id = gr.id
@@ -597,7 +603,8 @@ purchasingRouter.get('/invoices', authenticateToken, async (req: Request, res: R
         COALESCE(SUM(total_amount), 0.00) as total_invoiced,
         COALESCE(SUM(paid_amount), 0.00) as total_paid,
         COALESCE(SUM(total_amount - paid_amount), 0.00) as total_outstanding,
-        COALESCE(SUM(CASE WHEN due_date < CURRENT_DATE AND status != 'PAID' THEN (total_amount - paid_amount) ELSE 0 END), 0.00) as overdue_amount
+        COALESCE(SUM(CASE WHEN COALESCE(due_date, invoice_date + INTERVAL '30 days') < CURRENT_DATE AND status != 'PAID' THEN (total_amount - paid_amount) ELSE 0 END), 0.00) as overdue_amount,
+        COALESCE(SUM(CASE WHEN COALESCE(due_date, invoice_date + INTERVAL '30 days') < CURRENT_DATE AND status != 'PAID' THEN 1 ELSE 0 END), 0) as overdue_count
       FROM purchase_invoices pi
       WHERE status != 'CANCELLED';
     `);

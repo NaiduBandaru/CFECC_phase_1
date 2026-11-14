@@ -196,8 +196,10 @@ export const SalesRegisterPage: React.FC = () => {
       'Employee Code',
       'Department',
       'Payment Mode',
+      'Coupon Applied',
       'Payment Status',
       'Subtotal (₹)',
+      'Coupon / Discount (₹)',
       'Tax Amount (₹)',
       'Total Amount (₹)',
       'Billed By',
@@ -210,8 +212,10 @@ export const SalesRegisterPage: React.FC = () => {
       `"${s.employee_code || ''}"`,
       `"${s.department_name || ''}"`,
       `"${s.payment_mode}"`,
+      parseFloat(s.discount_amount?.toString() || '0') > 0 ? `"₹${parseFloat(s.discount_amount.toString()).toFixed(2)}"` : '"-"',
       `"${s.payment_status}"`,
       parseFloat(s.subtotal.toString()).toFixed(2),
+      parseFloat(s.discount_amount?.toString() || '0').toFixed(2),
       parseFloat(s.tax_amount.toString()).toFixed(2),
       parseFloat(s.total_amount.toString()).toFixed(2),
       `"${s.billed_by_name || 'Cashier'}"`,
@@ -482,15 +486,25 @@ export const SalesRegisterPage: React.FC = () => {
                       </td>
 
                       <td className="py-3 px-4">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                            isCredit
-                              ? 'bg-blue-50 text-primary border border-blue-200'
-                              : 'bg-emerald-50 text-emerald-700'
-                          }`}
-                        >
-                          {sale.payment_mode.replace('_', ' ')}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                              isCredit
+                                ? 'bg-blue-50 text-primary border border-blue-200'
+                                : 'bg-emerald-50 text-emerald-700'
+                            }`}
+                          >
+                            {sale.payment_mode.replace('_', ' ')}
+                          </span>
+                          {(parseFloat(sale.discount_amount || '0') > 0 || (sale.notes && sale.notes.includes('Meal Coupon'))) && (
+                            <span
+                              className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300"
+                              title={`Meal Coupon Redeemed: ₹${parseFloat(sale.discount_amount || '0').toFixed(2)}`}
+                            >
+                              Coupon ₹{parseFloat(sale.discount_amount || '0').toFixed(0)}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-3 px-4 text-center font-medium">{sale.item_count || 1} line(s)</td>
@@ -703,8 +717,12 @@ export const SalesRegisterPage: React.FC = () => {
                   <span className="font-mono tabular-nums">{formatCurrency(selectedSale.subtotal)}</span>
                 </div>
                 {parseFloat(selectedSale.discount_amount || '0') > 0 && (
-                  <div className="flex justify-between text-emerald-700">
-                    <span>Discount Applied:</span>
+                  <div className="flex justify-between text-emerald-700 font-semibold">
+                    <span>
+                      {selectedSale.notes && selectedSale.notes.includes('Meal Coupon')
+                        ? 'Meal Coupon (COUPAMT) Deducted:'
+                        : 'Discount / Coupon Applied:'}
+                    </span>
                     <span className="font-mono tabular-nums">-{formatCurrency(selectedSale.discount_amount)}</span>
                   </div>
                 )}

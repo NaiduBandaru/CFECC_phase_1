@@ -349,7 +349,7 @@ export const PurchaseInvoicesPage: React.FC = () => {
         `"${t.isInter ? 'Inter-State (IGST)' : 'Intra-State AP (CGST+SGST)'}"`,
         `"${i.grn_number || 'Direct'}"`,
         `"${formatDate(i.invoice_date)}"`,
-        `"${formatDate(i.due_date)}"`,
+        `"${formatDate(i.effective_due_date || i.due_date || (i.invoice_date ? new Date(new Date(i.invoice_date).getTime() + 30*86400000).toISOString() : null))}"`,
         t.sub.toFixed(2),
         t.cgst.toFixed(2),
         t.sgst.toFixed(2),
@@ -587,13 +587,19 @@ export const PurchaseInvoicesPage: React.FC = () => {
                         {formatDate(inv.invoice_date)}
                       </td>
 
-                      {/* Due Date */}
+                      {/* Due Date & Aging */}
                       <td className="py-3 px-3 whitespace-nowrap">
-                        <span className={inv.is_overdue ? 'text-rose-600 font-bold' : 'text-textSecondary'}>
-                          {formatDate(inv.due_date)}
+                        <span className={inv.is_overdue ? 'text-rose-600 font-bold' : 'text-slate-700 font-medium'}>
+                          {formatDate(inv.effective_due_date || inv.due_date || (inv.invoice_date ? new Date(new Date(inv.invoice_date).getTime() + 30*86400000).toISOString() : null))}
                         </span>
-                        {inv.is_overdue && (
-                          <span className="block text-[9px] font-bold text-rose-600 uppercase">OVERDUE</span>
+                        {inv.status === 'PAID' ? (
+                          <span className="block text-[9px] font-semibold text-emerald-600">Settled</span>
+                        ) : inv.is_overdue ? (
+                          <span className="block text-[9px] font-bold text-rose-600 uppercase">
+                            Overdue {inv.overdue_days ? `(${Math.round(inv.overdue_days)}d)` : ''}
+                          </span>
+                        ) : (
+                          <span className="block text-[9px] text-slate-400">Net 30d</span>
                         )}
                       </td>
 
@@ -1214,7 +1220,7 @@ export const PurchaseInvoicesPage: React.FC = () => {
               <div className="text-right">
                 <span className="text-[10px] text-textSecondary uppercase font-bold block">Bill Dates</span>
                 <span className="block mt-0.5 font-medium">Invoice Date: <strong>{formatDate(invoiceDetails.invoice_date)}</strong></span>
-                <span className="text-textSecondary block">Payment Due Date: {formatDate(invoiceDetails.due_date)}</span>
+                <span className="text-textSecondary block">Payment Due Date: {formatDate(invoiceDetails.effective_due_date || invoiceDetails.due_date || (invoiceDetails.invoice_date ? new Date(new Date(invoiceDetails.invoice_date).getTime() + 30*86400000).toISOString() : null))}</span>
                 <span className="font-mono text-emerald-700 block mt-1">
                   {invoiceDetails.grn_number ? `Matched with ${invoiceDetails.grn_number}` : 'Direct Bill'}
                 </span>
