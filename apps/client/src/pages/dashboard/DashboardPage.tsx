@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
 import { StatCard } from '../../components/ui/StatCard.js';
-import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import {
   Users,
   CreditCard,
@@ -16,9 +15,7 @@ import {
   Calendar,
   ShoppingCart,
   ArrowUpRight,
-  Receipt,
   Banknote,
-  CheckCircle2,
   Clock,
   ShieldCheck,
   Tag,
@@ -41,39 +38,45 @@ import {
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [metrics, setMetrics] = useState<any>(null);
-  const [charts, setCharts] = useState<any>(null);
-  const [activity, setActivity] = useState<any>(null);
-  const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('month');
-  const [loading, setLoading] = useState<boolean>(true);
 
-  // Initial load: fetch all in parallel
+  // Instant restoration from sessionStorage for 0ms visual rendering
+  const [metrics, setMetrics] = useState<any>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_dash_month');
+      return saved ? JSON.parse(saved).metrics : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [charts, setCharts] = useState<any>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_dash_month');
+      return saved ? JSON.parse(saved).charts : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [loading, setLoading] = useState<boolean>(() => !metrics);
+
+  // Initial load: fetch unified monthly summary in a single high-speed round trip
   useEffect(() => {
     fetchInitialDashboard();
   }, []);
 
-  // When time range switches: only re-fetch metrics (charts & recent activity are independent)
-  const handleRangeChange = (newRange: 'today' | 'week' | 'month') => {
-    setTimeRange(newRange);
-    api.get(`/dashboard/metrics?range=${newRange}`)
-      .then((res) => {
-        if (res.data.success) setMetrics(res.data.data);
-      })
-      .catch((err) => console.error('Failed to update metrics', err));
-  };
-
   const fetchInitialDashboard = async () => {
     try {
-      setLoading(true);
-      const [mRes, cRes, aRes] = await Promise.all([
-        api.get(`/dashboard/metrics?range=${timeRange}`),
-        api.get('/dashboard/charts'),
-        api.get('/dashboard/recent-activity'),
-      ]);
-
-      if (mRes.data.success) setMetrics(mRes.data.data);
-      if (cRes.data.success) setCharts(cRes.data.data);
-      if (aRes.data.success) setActivity(aRes.data.data);
+      if (!metrics) {
+        setLoading(true);
+      }
+      const res = await api.get('/dashboard/summary?range=month');
+      if (res.data.success && res.data.data) {
+        const { metrics: m, charts: c } = res.data.data;
+        setMetrics(m);
+        setCharts(c);
+        sessionStorage.setItem('cfecc_dash_month', JSON.stringify(res.data.data));
+      }
     } catch (err) {
       console.error('Failed to load dashboard data', err);
     } finally {
@@ -82,12 +85,6 @@ export const DashboardPage: React.FC = () => {
   };
 
   const COLORS = ['#2563EB', '#16A34A', '#D97706', '#9333EA', '#64748B'];
-
-  const getRangeLabel = () => {
-    if (timeRange === 'today') return "Today's";
-    if (timeRange === 'week') return "This Week's";
-    return 'Monthly';
-  };
 
   if (loading && !metrics) {
     return (
@@ -108,33 +105,10 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Time-Range Switcher */}
-        <div className="flex items-center bg-surface p-1 rounded-lg border border-borderLine shadow-subtle">
-          <Calendar className="w-3.5 h-3.5 text-textSecondary ml-2 mr-1" />
-          <button
-            onClick={() => handleRangeChange('today')}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-              timeRange === 'today' ? 'bg-primary text-white shadow-xs' : 'text-textSecondary hover:text-navy-800'
-            }`}
-          >
-            Today
-          </button>
-          <button
-            onClick={() => handleRangeChange('week')}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-              timeRange === 'week' ? 'bg-primary text-white shadow-xs' : 'text-textSecondary hover:text-navy-800'
-            }`}
-          >
-            This Week
-          </button>
-          <button
-            onClick={() => handleRangeChange('month')}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-              timeRange === 'month' ? 'bg-primary text-white shadow-xs' : 'text-textSecondary hover:text-navy-800'
-            }`}
-          >
-            This Month
-          </button>
+        {/* Monthly Data Indicator */}
+        <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-surface border border-borderLine shadow-subtle text-xs font-semibold text-navy-800">
+          <Calendar className="w-3.5 h-3.5 text-primary" />
+          <span>Monthly &bull; {new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}</span>
         </div>
       </div>
 
@@ -194,7 +168,7 @@ export const DashboardPage: React.FC = () => {
       {/* Primary KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title={`${getRangeLabel()} Store Sales`}
+          title="Monthly Store Sales"
           value={`₹${(metrics?.periodSales || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
           subtitle={`${metrics?.periodInvoices || 0} completed transactions`}
           icon={TrendingUp}
@@ -216,7 +190,7 @@ export const DashboardPage: React.FC = () => {
           variant="success"
         />
         <StatCard
-          title={`${getRangeLabel()} Collections`}
+          title="Monthly Collections"
           value={`₹${(metrics?.periodCollections || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
           subtitle="Cash/UPI & Payroll recoveries"
           icon={IndianRupee}
@@ -239,7 +213,7 @@ export const DashboardPage: React.FC = () => {
         <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle">
           <div className="flex items-center text-xs text-textSecondary font-medium">
             <Layers className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-            <span>{getRangeLabel()} Purchases</span>
+            <span>Monthly Purchases</span>
           </div>
           <div className="text-xl font-bold text-navy-800 mt-1 tabular-nums">
             ₹{(metrics?.periodPurchases || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -363,150 +337,6 @@ export const DashboardPage: React.FC = () => {
                 </div>
               );
             })}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Sales, Low Stock Alerts & Repayments Sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Store Transactions */}
-        <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="text-sm font-bold text-navy-800">Recent Point of Sale Transactions</h3>
-              <p className="text-[11px] text-textSecondary">Latest counter checkouts at store terminal</p>
-            </div>
-            <button
-              onClick={() => navigate('/sales')}
-              className="text-xs text-primary font-semibold hover:underline flex items-center space-x-1"
-            >
-              <span>View All Sales</span>
-              <ArrowUpRight className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="divide-y divide-borderLine">
-            {(activity?.recentSales || []).map((s: any) => (
-              <div key={s.id} className="py-2.5 flex items-center justify-between text-xs hover:bg-slate-50/50 transition-colors px-1 rounded">
-                <div>
-                  <div className="font-semibold text-navy-800 flex items-center space-x-1.5">
-                    <span>{s.invoice_number}</span>
-                    <span className="text-textSecondary">&bull;</span>
-                    <span className="text-textPrimary">
-                      {s.customer_name ? s.customer_name : s.first_name ? `${s.first_name} ${s.last_name}` : 'Walk-in Customer'}
-                    </span>
-                    {s.employee_code && (
-                      <span className="text-[10px] font-mono text-textSecondary bg-slate-100 px-1 rounded">
-                        {s.employee_code}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-textSecondary mt-0.5">
-                    {new Date(s.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} &bull; {s.payment_mode.replace('_', ' ')} {s.item_count ? `&bull; ${s.item_count} items` : ''}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-navy-800 tabular-nums">₹{parseFloat(s.total_amount).toFixed(2)}</div>
-                  <StatusBadge status="COMPLETED" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Low Stock Alerts & Direct Collections */}
-        <div className="space-y-6">
-          {/* Low Stock Alerts */}
-          <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                <div>
-                  <h3 className="text-sm font-bold text-navy-800">Low Stock Threshold Warnings</h3>
-                  <p className="text-[11px] text-textSecondary">Commodities requiring vendor purchase replenishment</p>
-                </div>
-              </div>
-              <button
-                onClick={() => navigate('/inventory')}
-                className="text-xs text-primary font-semibold hover:underline flex items-center space-x-1"
-              >
-                <span>Stock Control</span>
-                <ArrowUpRight className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="divide-y divide-borderLine">
-              {(activity?.lowStockAlerts || []).length === 0 ? (
-                <div className="py-4 text-center text-xs text-textSecondary">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto mb-1" />
-                  All commodities are well stocked above safety threshold.
-                </div>
-              ) : (
-                (activity?.lowStockAlerts || []).map((item: any) => (
-                  <div key={item.id} className="py-2.5 flex items-center justify-between text-xs hover:bg-slate-50/50 transition-colors px-1 rounded">
-                    <div>
-                      <div className="font-semibold text-navy-800">{item.name}</div>
-                      <div className="text-[11px] text-textSecondary mt-0.5">
-                        Code: {item.item_code} &bull; Safety Min: {parseFloat(item.min_stock)} {item.unit_code} &bull; {item.category_name}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-block px-2.5 py-1 rounded text-xs font-bold bg-amber-100 text-amber-800 tabular-nums">
-                        {parseFloat(item.current_stock)} {item.unit_code} left
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Recent Direct Payments & Clearances */}
-          <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2">
-                <Receipt className="w-4 h-4 text-emerald-600" />
-                <div>
-                  <h3 className="text-sm font-bold text-navy-800">Recent Employee Payments</h3>
-                  <p className="text-[11px] text-textSecondary">Over-the-counter Cash & UPI store credit settlements</p>
-                </div>
-              </div>
-              <button
-                onClick={() => navigate('/billing')}
-                className="text-xs text-primary font-semibold hover:underline flex items-center space-x-1"
-              >
-                <span>Ledger</span>
-                <ArrowUpRight className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="divide-y divide-borderLine">
-              {(activity?.recentPayments || []).length === 0 ? (
-                <div className="py-4 text-center text-xs text-textSecondary">
-                  No direct repayments logged yet.
-                </div>
-              ) : (
-                (activity?.recentPayments || []).map((pay: any) => (
-                  <div key={pay.id} className="py-2.5 flex items-center justify-between text-xs hover:bg-slate-50/50 transition-colors px-1 rounded">
-                    <div>
-                      <div className="font-semibold text-navy-800 flex items-center space-x-1.5">
-                        <span>{pay.first_name} {pay.last_name}</span>
-                        <span className="text-textSecondary">&bull;</span>
-                        <span className="text-[11px] font-mono text-textSecondary">{pay.employee_code}</span>
-                      </div>
-                      <div className="text-[11px] text-textSecondary mt-0.5">
-                        {pay.payment_number} &bull; {pay.payment_mode} &bull; {new Date(pay.payment_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-emerald-700 tabular-nums">
-                        +₹{parseFloat(pay.amount).toFixed(2)}
-                      </div>
-                      <span className="text-[10px] text-emerald-800 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded">
-                        SETTLED
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         </div>
       </div>

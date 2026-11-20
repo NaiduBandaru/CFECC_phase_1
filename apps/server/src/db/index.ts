@@ -38,9 +38,11 @@ export async function initDatabase() {
         console.warn(`[Database Pool Warning]: ${err?.message || err}`);
       });
 
-      // Test connectivity
-      const client = await pool.connect();
-      client.release();
+      if (!process.env.VERCEL) {
+        // Test connectivity in standard/local mode to failover to PGlite if needed
+        const client = await pool.connect();
+        client.release();
+      }
       pgPoolInstance = pool;
       dbInstance = drizzlePg(pgPoolInstance, { schema });
       connectedRemote = true;

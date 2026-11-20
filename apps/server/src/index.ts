@@ -11,14 +11,16 @@ async function bootstrapDatabase() {
     console.log('[Server] Initializing database...');
     await initDatabase();
 
-    // Check if initial users exist, if not run seed automatically
-    const userCheck = await executeRawSql(`SELECT COUNT(*) as count FROM users`);
-    const count = parseInt(userCheck.rows[0]?.count || '0', 10);
-    if (count === 0) {
-      console.log('[Server] No users detected. Running initial enterprise seed...');
-      await seedDatabase();
-    } else {
-      console.log(`[Server] Database contains ${count} user accounts.`);
+    // Check if initial users exist, if not run seed automatically (only in non-serverless mode)
+    if (!process.env.VERCEL) {
+      const userCheck = await executeRawSql(`SELECT COUNT(*) as count FROM users`);
+      const count = parseInt(userCheck.rows[0]?.count || '0', 10);
+      if (count === 0) {
+        console.log('[Server] No users detected. Running initial enterprise seed...');
+        await seedDatabase();
+      } else {
+        console.log(`[Server] Database contains ${count} user accounts.`);
+      }
     }
 
     // Open readiness gate to process incoming requests immediately
