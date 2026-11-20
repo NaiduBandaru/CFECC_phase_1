@@ -21,9 +21,16 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
   hideTabs = false,
   initialTab = 'stock',
 }) => {
-  const [stock, setStock] = useState<any[]>([]);
+  const [stock, setStock] = useState<any[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_inventory_stock');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [movements, setMovements] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => stock.length === 0);
   const [activeTab, setActiveTab] = useState<'stock' | 'movements'>(initialTab);
 
   useEffect(() => {
@@ -41,15 +48,21 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
 
   useEffect(() => {
     fetchStock();
-    fetchMovements();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'movements' && movements.length === 0) {
+      fetchMovements();
+    }
+  }, [activeTab]);
 
   const fetchStock = async () => {
     try {
-      setLoading(true);
+      if (stock.length === 0) setLoading(true);
       const res = await api.get('/inventory/stock');
       if (res.data.success) {
         setStock(res.data.data);
+        sessionStorage.setItem('cfecc_inventory_stock', JSON.stringify(res.data.data));
       }
     } catch (err) {
       console.error(err);

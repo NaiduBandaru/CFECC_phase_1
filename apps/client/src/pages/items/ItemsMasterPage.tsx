@@ -27,10 +27,31 @@ interface ItemsMasterPageProps {
 }
 
 export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = false }) => {
-  const [items, setItems] = useState<Item[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [items, setItems] = useState<Item[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_items_master');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [categories, setCategories] = useState<Category[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_categories');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [units, setUnits] = useState<Unit[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_units');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(() => items.length === 0);
 
   // Filters & Sorting
   const [search, setSearch] = useState<string>('');
@@ -134,6 +155,8 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
       if (res.data.success) {
         setCategories(res.data.categories);
         setUnits(res.data.units);
+        sessionStorage.setItem('cfecc_categories', JSON.stringify(res.data.categories));
+        sessionStorage.setItem('cfecc_units', JSON.stringify(res.data.units));
       }
     } catch (err) {
       console.error('Failed to load categories', err);
@@ -142,7 +165,7 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
 
   const fetchItems = async () => {
     try {
-      setLoading(true);
+      if (items.length === 0) setLoading(true);
       const params = new URLSearchParams({
         search,
         categoryId,
@@ -155,6 +178,9 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
       const res = await api.get(`/items?${params.toString()}`);
       if (res.data.success) {
         setItems(res.data.data);
+        if (!search && categoryId === 'ALL' && !lowStockOnly && !includeInactive) {
+          sessionStorage.setItem('cfecc_items_master', JSON.stringify(res.data.data));
+        }
       }
     } catch (err) {
       console.error('Failed to load items', err);

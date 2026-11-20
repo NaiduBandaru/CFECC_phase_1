@@ -6,10 +6,26 @@ import { getLegacyStockAdjustments } from '../../lib/foxproData.js';
 
 export const inventoryRouter = Router();
 
+// In-Memory High-Speed Cache for Inventory Stock Status
+let cachedStock: any = null;
+let cachedStockTime = 0;
+const STOCK_CACHE_TTL = 30 * 1000; // 30 seconds
+
+export function invalidateStockCache() {
+  cachedStock = null;
+  cachedStockTime = 0;
+}
+
 // 1. Stock Status & Valuation
 inventoryRouter.get('/stock', authenticateToken, async (req: Request, res: Response, next) => {
   try {
     const { categoryId, search = '', lowStockOnly } = req.query;
+
+    const isDefaultQuery = !search && (!categoryId || categoryId === 'ALL') && lowStockOnly !== 'true';
+    if (isDefaultQuery && cachedStock && Date.now() - cachedStockTime < STOCK_CACHE_TTL) {
+      res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
+      return res.json({ success: true, data: cachedStock });
+    }
 
     let whereClauses = ['i.is_active = TRUE'];
 
@@ -42,6 +58,12 @@ inventoryRouter.get('/stock', authenticateToken, async (req: Request, res: Respo
       ORDER BY (i.current_stock <= i.min_stock) DESC, i.name ASC;
     `);
 
+    if (isDefaultQuery) {
+      cachedStock = items.rows;
+      cachedStockTime = Date.now();
+    }
+
+    res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
     return res.json({ success: true, data: items.rows });
   } catch (err) {
     next(err);
@@ -130,6 +152,8 @@ inventoryRouter.post('/adjust', authenticateToken, requireRole('SUPER_ADMIN', 'S
       newValues: { adjustmentType, quantity, newStock, reason },
       ipAddress: req.ip,
     });
+
+    invalidateStockCache();
 
     return res.json({ success: true, message: 'Stock adjusted successfully', newStock });
   } catch (err) {

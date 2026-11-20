@@ -102,14 +102,9 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
 
     const whereSql = whereClauses.join(' AND ');
 
-    // Count total
-    const countResult = await executeRawSql(`
-      SELECT COUNT(*) as total FROM employees e WHERE ${whereSql}
-    `);
-    const total = parseInt(countResult.rows[0]?.total || '0', 10);
-
-    // Fetch records
-    const listResult = await executeRawSql(`
+    // Fetch count and records in ONE single round trip
+    const batchSql = `
+      SELECT COUNT(*) as total FROM employees e WHERE ${whereSql};
       SELECT 
         e.id, e.employee_code, e.cs_no, e.grade, e.category, e.hr_no,
         e.first_name, e.last_name, e.date_of_birth, e.gender, e.profile_image_url,
@@ -127,11 +122,17 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
       WHERE ${whereSql}
       ORDER BY ${sortBy} ${sortOrder === 'DESC' ? 'DESC' : 'ASC'}
       LIMIT ${limitNum} OFFSET ${offset};
-    `);
+    `;
 
+    const rawRes: any = await executeRawSql(batchSql);
+    const results = Array.isArray(rawRes) ? rawRes : [rawRes];
+    const total = parseInt(results[0]?.rows?.[0]?.total || '0', 10);
+    const employees = results[1]?.rows || results[0]?.rows || [];
+
+    res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
     return res.json({
       success: true,
-      data: listResult.rows,
+      data: employees,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -144,38 +145,34 @@ employeesRouter.get('/', authenticateToken, async (req: Request, res: Response, 
   }
 });
 
+// In-Memory High-Speed Cache for Departments & Designations
+let cachedDeptsData: any = null;
+let cachedDeptsTime = 0;
+
 // 2. Department & Designation lookups
 employeesRouter.get('/departments', authenticateToken, async (req: Request, res: Response, next) => {
   try {
-    // Ensure 'Others' department and designation exist in database
-    await executeRawSql(`
-      INSERT INTO departments (code, name, is_active)
-      VALUES ('OTHERS', 'Others', TRUE)
-      ON CONFLICT (code) DO NOTHING;
-    `).catch(() => {});
+    if (cachedDeptsData && Date.now() - cachedDeptsTime < 120 * 1000) {
+      res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+      return res.json(cachedDeptsData);
+    }
 
-    await executeRawSql(`
-      INSERT INTO designations (department_id, title, is_active)
-      SELECT d.id, 'Others', TRUE
-      FROM departments d
-      WHERE d.code = 'OTHERS'
-      AND NOT EXISTS (SELECT 1 FROM designations WHERE UPPER(title) = 'OTHERS');
-    `).catch(() => {});
-
-    const depts = await executeRawSql(`
+    const rawRes: any = await executeRawSql(`
       SELECT * FROM departments 
       WHERE is_active = TRUE 
-      ORDER BY CASE WHEN UPPER(name) = 'OTHERS' THEN 1 ELSE 0 END, name ASC
-    `);
+      ORDER BY CASE WHEN UPPER(name) = 'OTHERS' THEN 1 ELSE 0 END, name ASC;
 
-    const desigs = await executeRawSql(`
       SELECT * FROM designations 
       WHERE is_active = TRUE 
-      ORDER BY CASE WHEN UPPER(title) = 'OTHERS' THEN 1 ELSE 0 END, title ASC
+      ORDER BY CASE WHEN UPPER(title) = 'OTHERS' THEN 1 ELSE 0 END, title ASC;
     `);
 
-    let deptList: any[] = depts.rows ? [...depts.rows] : [];
-    let desigList: any[] = desigs.rows ? [...desigs.rows] : [];
+    const results = Array.isArray(rawRes) ? rawRes : [rawRes];
+    const depts = results[0]?.rows || [];
+    const desigs = results[1]?.rows || [];
+
+    let deptList: any[] = [...depts];
+    let desigList: any[] = [...desigs];
 
     if (!deptList.some((d: any) => d.name.toLowerCase() === 'others')) {
       deptList.push({ id: 9999, code: 'OTHERS', name: 'Others', is_active: true });
@@ -184,19 +181,32 @@ employeesRouter.get('/departments', authenticateToken, async (req: Request, res:
       desigList.push({ id: 9999, title: 'Others', is_active: true });
     }
 
-    return res.json({
+    cachedDeptsData = {
       success: true,
       departments: deptList,
       designations: desigList,
-    });
+    };
+    cachedDeptsTime = Date.now();
+
+    res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+    return res.json(cachedDeptsData);
   } catch (err) {
     next(err);
   }
 });
 
+// In-Memory Cache for Member Summary KPIs
+let cachedSummaryData: any = null;
+let cachedSummaryTime = 0;
+
 // 2b. Cooperative Members Summary KPIs
 employeesRouter.get('/summary', authenticateToken, async (req: Request, res: Response, next) => {
   try {
+    if (cachedSummaryData && Date.now() - cachedSummaryTime < 30 * 1000) {
+      res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
+      return res.json(cachedSummaryData);
+    }
+
     const summaryResult = await executeRawSql(`
       SELECT 
         COUNT(*) as total_members,
@@ -216,6 +226,28 @@ employeesRouter.get('/summary', authenticateToken, async (req: Request, res: Res
     `);
 
     const row = summaryResult.rows[0] || {};
+    cachedSummaryData = {
+      success: true,
+      data: {
+        totalMembers: parseInt(row.total_members || '0', 10),
+        workersCount: parseInt(row.workers_count || '0', 10),
+        staffCount: parseInt(row.staff_count || '0', 10),
+        specialCount: parseInt(row.special_count || '0', 10),
+        totalShareCapital: parseFloat(row.total_share_capital || '0'),
+        totalCumThrift: parseFloat(row.total_cum_thrift || '0'),
+        totalMonthlyThrift: parseFloat(row.total_monthly_thrift || '0'),
+        totalMonthBills: parseFloat(row.total_month_bills || '0'),
+        totalDomesticAdvance: parseFloat(row.total_domestic_advance || '0'),
+        totalFestivalAdvance: parseFloat(row.total_festival_advance || '0'),
+        totalOutstanding: parseFloat(row.total_outstanding || '0'),
+        totalCreditLimit: parseFloat(row.total_credit_limit || '0'),
+        totalAvailableCredit: parseFloat(row.total_available_credit || '0'),
+      },
+    };
+    cachedSummaryTime = Date.now();
+
+    res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
+    return res.json(cachedSummaryData);
     return res.json({
       success: true,
       data: {

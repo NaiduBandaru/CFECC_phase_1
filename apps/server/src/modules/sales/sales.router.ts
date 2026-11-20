@@ -72,16 +72,12 @@ salesRouter.get('/', authenticateToken, async (req: Request, res: Response, next
     const sortCol = allowedSortColumns[sortBy as string] || 's.created_at';
     const sortDir = (sortOrder as string).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
-    // Total Count
-    const countResult = await executeRawSql(`
+    // Execute Count, Metrics and List in ONE single round trip
+    const batchSql = `
       SELECT COUNT(*) as total FROM sales s
       LEFT JOIN employees e ON s.employee_id = e.id
       WHERE ${whereSql};
-    `);
-    const total = parseInt(countResult.rows[0]?.total || '0', 10);
 
-    // Summary Metrics
-    const metricsResult = await executeRawSql(`
       SELECT 
         COUNT(*) as total_count,
         COALESCE(SUM(s.total_amount), 0.00) as total_revenue,
@@ -91,10 +87,7 @@ salesRouter.get('/', authenticateToken, async (req: Request, res: Response, next
       FROM sales s
       LEFT JOIN employees e ON s.employee_id = e.id
       WHERE ${whereSql} AND s.payment_status = 'COMPLETED';
-    `);
 
-    // Invoices list
-    const salesResult = await executeRawSql(`
       SELECT 
         s.*,
         e.employee_code, e.first_name, e.last_name, e.mobile as employee_mobile,
@@ -108,18 +101,25 @@ salesRouter.get('/', authenticateToken, async (req: Request, res: Response, next
       WHERE ${whereSql}
       ORDER BY ${sortCol} ${sortDir}
       LIMIT ${limitNum} OFFSET ${offset};
-    `);
+    `;
 
+    const rawRes: any = await executeRawSql(batchSql);
+    const results = Array.isArray(rawRes) ? rawRes : [rawRes];
+    const total = parseInt(results[0]?.rows?.[0]?.total || '0', 10);
+    const summary = results[1]?.rows?.[0] || {
+      total_count: 0,
+      total_revenue: '0.00',
+      credit_revenue: '0.00',
+      direct_revenue: '0.00',
+      total_tax: '0.00',
+    };
+    const salesList = results[2]?.rows || [];
+
+    res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
     return res.json({
       success: true,
-      data: salesResult.rows,
-      summary: metricsResult.rows[0] || {
-        total_count: 0,
-        total_revenue: '0.00',
-        credit_revenue: '0.00',
-        direct_revenue: '0.00',
-        total_tax: '0.00',
-      },
+      data: salesList,
+      summary,
       pagination: {
         page: pageNum,
         limit: limitNum,

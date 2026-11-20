@@ -44,11 +44,39 @@ interface MembersSummary {
 }
 
 export const EmployeeDirectoryPage: React.FC = () => {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [designations, setDesignations] = useState<any[]>([]);
-  const [summary, setSummary] = useState<MembersSummary | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [employees, setEmployees] = useState<Employee[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_employees_list');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [departments, setDepartments] = useState<any[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_departments');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [designations, setDesignations] = useState<any[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_designations');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [summary, setSummary] = useState<MembersSummary | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('cfecc_members_summary');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(() => employees.length === 0);
 
   // Filters, Search & Sorting
   const [search, setSearch] = useState<string>('');
@@ -147,6 +175,8 @@ export const EmployeeDirectoryPage: React.FC = () => {
       if (res.data.success) {
         setDepartments(res.data.departments || []);
         setDesignations(res.data.designations || []);
+        sessionStorage.setItem('cfecc_departments', JSON.stringify(res.data.departments || []));
+        sessionStorage.setItem('cfecc_designations', JSON.stringify(res.data.designations || []));
       }
     } catch (err) {
       console.error('Failed to load departments', err);
@@ -158,6 +188,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
       const res = await api.get('/employees/summary');
       if (res.data.success) {
         setSummary(res.data.data);
+        sessionStorage.setItem('cfecc_members_summary', JSON.stringify(res.data.data));
       }
     } catch (err) {
       console.error('Failed to load members summary', err);
@@ -166,7 +197,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
 
   const fetchEmployees = async () => {
     try {
-      setLoading(true);
+      if (employees.length === 0) setLoading(true);
       const params = new URLSearchParams({
         search,
         category,
@@ -183,6 +214,9 @@ export const EmployeeDirectoryPage: React.FC = () => {
       if (res.data.success) {
         setEmployees(res.data.data);
         setPagination(res.data.pagination);
+        if (!search && category === 'ALL' && balanceFilter === 'ALL' && status === 'ALL' && pagination.page === 1) {
+          sessionStorage.setItem('cfecc_employees_list', JSON.stringify(res.data.data));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch employees', err);

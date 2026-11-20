@@ -108,10 +108,9 @@ itemsRouter.get('/', authenticateToken, async (req: Request, res: Response, next
     const sortCol = allowedSortColumns[sortBy as string] || 'i.name';
     const sortDir = (sortOrder as string).toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
-    const countResult = await executeRawSql(`SELECT COUNT(*) as total FROM items i ${whereSql}`);
-    const total = parseInt(countResult.rows[0]?.total || '0', 10);
-
-    const itemsResult = await executeRawSql(`
+    // Execute COUNT and LIMIT queries in ONE single round trip
+    const batchSql = `
+      SELECT COUNT(*) as total FROM items i ${whereSql};
       SELECT 
         i.*,
         c.name as category_name,
@@ -123,11 +122,17 @@ itemsRouter.get('/', authenticateToken, async (req: Request, res: Response, next
       ${whereSql}
       ORDER BY ${sortCol} ${sortDir}
       LIMIT ${limitNum} OFFSET ${offset};
-    `);
+    `;
 
+    const rawRes: any = await executeRawSql(batchSql);
+    const results = Array.isArray(rawRes) ? rawRes : [rawRes];
+    const total = parseInt(results[0]?.rows?.[0]?.total || '0', 10);
+    const items = results[1]?.rows || results[0]?.rows || [];
+
+    res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
     return res.json({
       success: true,
-      data: itemsResult.rows,
+      data: items,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -140,16 +145,38 @@ itemsRouter.get('/', authenticateToken, async (req: Request, res: Response, next
   }
 });
 
+// In-Memory Cache for Categories & Units
+let cachedCategoriesData: any = null;
+let cachedCategoriesTime = 0;
+const CATEGORIES_CACHE_TTL = 60 * 1000; // 60 seconds
+
+export function invalidateCategoriesCache() {
+  cachedCategoriesData = null;
+  cachedCategoriesTime = 0;
+}
+
 // 2. Categories & Units List
 itemsRouter.get('/categories', authenticateToken, async (req: Request, res: Response, next) => {
   try {
-    const cats = await executeRawSql(`SELECT * FROM item_categories WHERE is_active = TRUE ORDER BY name ASC`);
-    const unts = await executeRawSql(`SELECT * FROM units ORDER BY name ASC`);
-    return res.json({
+    if (cachedCategoriesData && Date.now() - cachedCategoriesTime < CATEGORIES_CACHE_TTL) {
+      res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+      return res.json(cachedCategoriesData);
+    }
+
+    const rawRes: any = await executeRawSql(`
+      SELECT * FROM item_categories WHERE is_active = TRUE ORDER BY name ASC;
+      SELECT * FROM units ORDER BY name ASC;
+    `);
+    const results = Array.isArray(rawRes) ? rawRes : [rawRes];
+    cachedCategoriesData = {
       success: true,
-      categories: cats.rows,
-      units: unts.rows,
-    });
+      categories: results[0]?.rows || [],
+      units: results[1]?.rows || [],
+    };
+    cachedCategoriesTime = Date.now();
+
+    res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+    return res.json(cachedCategoriesData);
   } catch (err) {
     next(err);
   }
