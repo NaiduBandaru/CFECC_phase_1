@@ -12,7 +12,6 @@ import {
   IndianRupee,
   Layers,
   FileText,
-  Calendar,
   ShoppingCart,
   ArrowUpRight,
   Banknote,
@@ -96,20 +95,12 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Date Filter */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-1">
-        <div>
-          <h2 className="text-xl font-bold text-navy-800">Executive Overview</h2>
-          <p className="text-xs text-textSecondary mt-0.5">
-            CFECC Employees Consumer Co-operative Society &bull; Real-time store sales, inventory & employee credit
-          </p>
-        </div>
-
-        {/* Monthly Data Indicator */}
-        <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-surface border border-borderLine shadow-subtle text-xs font-semibold text-navy-800">
-          <Calendar className="w-3.5 h-3.5 text-primary" />
-          <span>Monthly &bull; {new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}</span>
-        </div>
+      {/* Top Banner */}
+      <div className="pb-1">
+        <h2 className="text-xl font-bold text-navy-800">Executive Overview</h2>
+        <p className="text-xs text-textSecondary mt-0.5">
+          CFECC Employees Consumer Co-operative Society &bull; Real-time store sales, inventory & employee credit
+        </p>
       </div>
 
       {/* Super Administrator Executive Management Console */}
