@@ -25,8 +25,10 @@ async function bootstrapDatabase() {
     setDatabaseReady(true);
     console.log('[Server] Database ready. Readiness gate open.');
 
-    // Initialize automated daily backup daemon
-    initBackupScheduler();
+    // Initialize automated daily backup daemon (only in persistent server mode)
+    if (!process.env.VERCEL) {
+      initBackupScheduler();
+    }
   } catch (err) {
     console.error('[Server Bootstrap Fatal Error]:', err);
     if (!process.env.VERCEL) {
@@ -47,7 +49,7 @@ if (!process.env.VERCEL) {
   });
 }
 
-// Kick off database initialization
-bootstrapDatabase();
+// Kick off database initialization and export promise for serverless cold-start sync
+export const bootstrapPromise = bootstrapDatabase();
 
 export default app;
