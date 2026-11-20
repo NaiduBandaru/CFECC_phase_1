@@ -63,7 +63,8 @@ export async function initDatabase() {
       }
       cur = path.dirname(cur);
     }
-    const dataDir = process.env.PGLITE_DATA_DIR || path.resolve(rootDir, '.data', 'pglite');
+    const defaultDataDir = process.env.VERCEL ? path.resolve('/tmp', '.data', 'pglite') : path.resolve(rootDir, '.data', 'pglite');
+    const dataDir = process.env.PGLITE_DATA_DIR || defaultDataDir;
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
