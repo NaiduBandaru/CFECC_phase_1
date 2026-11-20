@@ -2,6 +2,7 @@
   "name": "cfecc-stores-management-system",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "CFECC Stores Management System - Enterprise Retail, Inventory, POS, Credit & Payroll Recovery Platform",
   "scripts": {
     "dev": "concurrently \"pnpm --filter @cfecc/server dev\" \"pnpm --filter @cfecc/client dev\"",
