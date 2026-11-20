@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   IndianRupee,
   Layers,
+  FileText,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
