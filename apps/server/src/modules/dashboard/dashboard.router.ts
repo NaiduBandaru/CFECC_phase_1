@@ -191,7 +191,7 @@ dashboardRouter.get('/charts', authenticateToken, async (req: Request, res: Resp
         SELECT 
           c.name as category,
           COUNT(i.id) as item_count,
-          COALESCE(SUM(i.current_stock * i.purchase_price), 0) as valuation
+          COALESCE(SUM(i.current_stock * COALESCE(NULLIF(i.purchase_price, 0), i.purchase_rate1, 0)), 0) as valuation
         FROM item_categories c
         LEFT JOIN items i ON c.id = i.category_id AND i.is_active = TRUE
         GROUP BY c.id, c.name

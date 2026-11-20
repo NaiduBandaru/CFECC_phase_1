@@ -420,6 +420,7 @@ async function ensureTablesCreated() {
       city TEXT DEFAULT 'Visakhapatnam',
       state TEXT DEFAULT 'Andhra Pradesh',
       gstin TEXT,
+      category TEXT DEFAULT 'Provisions & Groceries',
       payment_terms_days INTEGER NOT NULL DEFAULT 30,
       bank_name TEXT,
       account_number TEXT,
@@ -788,14 +789,23 @@ async function ensureTablesCreated() {
     ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS item_code TEXT;
     ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS batch_number INTEGER DEFAULT 1;
 
-    -- Vendors optional phone
+    -- Vendors optional phone & category
     ALTER TABLE vendors ALTER COLUMN phone DROP NOT NULL;
+    ALTER TABLE vendors ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Provisions & Groceries';
 
     -- Goods Receipt items expiry date tracking & safe schema alignment
     ALTER TABLE goods_receipt_items ADD COLUMN IF NOT EXISTS expiry_date DATE;
     ALTER TABLE goods_receipt_items ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12, 2) DEFAULT 0.00;
     ALTER TABLE goods_receipt_items ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
     ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_invoice_number TEXT;
+
+    -- Purchase Order Items separate GST rates & amounts
+    ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS cgst_rate NUMERIC(5, 2) DEFAULT 0.00;
+    ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS sgst_rate NUMERIC(5, 2) DEFAULT 0.00;
+    ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS igst_rate NUMERIC(5, 2) DEFAULT 0.00;
+    ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS cgst_amount NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS sgst_amount NUMERIC(12, 2) DEFAULT 0.00;
+    ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS igst_amount NUMERIC(12, 2) DEFAULT 0.00;
 
     -- High-Performance Dashboard & Reporting Indexes
     CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at DESC);
@@ -816,6 +826,32 @@ async function ensureTablesCreated() {
     FROM departments d
     WHERE d.code = 'OTHERS'
     AND NOT EXISTS (SELECT 1 FROM designations WHERE title = 'Others');
+
+    -- Ensure default item categories exist
+    INSERT INTO item_categories (code, name, description, is_active)
+    VALUES 
+      ('PROVISIONS', 'Provisions & Groceries', 'Flour, rice, pulses, spices, oils, staples', TRUE),
+      ('DAIRY', 'Dairy & Refrigerated', 'Milk, curd, butter, ghee, paneer, cheese', TRUE),
+      ('SNACKS', 'Beverages & Snacks', 'Tea, coffee, biscuits, drinks, snacks, confectioneries', TRUE),
+      ('PERSONAL', 'Personal Care & Hygiene', 'Soaps, shampoos, detergents, oral care, cosmetics', TRUE),
+      ('STATIONERY', 'Stationery & Household', 'Stationery, office supplies, household essentials, pooja items', TRUE)
+    ON CONFLICT (code) DO NOTHING;
+
+    -- Categorize unassigned inventory items based on standard commodity keywords
+    UPDATE items SET category_id = (SELECT id FROM item_categories WHERE code = 'DAIRY' LIMIT 1)
+    WHERE category_id IS NULL AND name ~* '\\y(MILK|CURD|BUTTER|PANEER|GHEE|CHEESE|YOGURT|DAIRY)\\y';
+
+    UPDATE items SET category_id = (SELECT id FROM item_categories WHERE code = 'SNACKS' LIMIT 1)
+    WHERE category_id IS NULL AND name ~* '\\y(TEA|COFFEE|BISCUIT|BISCUITS|BISKET|COOKIES|JUICE|DRINK|SODA|COLA|MIXTURE|CHEGODI|CHIPS|FRIES|NAMKEEN|CHOCOLATE|CANDY|HORLICKS|BOOST|BOURNVITA|COMPLAN|WATER|SNACK|SNACKS|RUSK|WAFER|NOODLES|MAGGI|PASTA|JAM|SAUCE|KETCHUP|LADDU|BURFI|CHIKKI|CAKE|SWEET|SWEETS|GULAB|JAMUN|HALWA)\\y';
+
+    UPDATE items SET category_id = (SELECT id FROM item_categories WHERE code = 'PERSONAL' LIMIT 1)
+    WHERE category_id IS NULL AND name ~* '\\y(SOAP|SHAMPOO|PASTE|TOOTHPASTE|TOOTHBRUSH|BRUSH|CREAM|LOTION|POWDER|TALC|DEO|PERFUME|DETERGENT|SURF|RIN|ARIEL|TIDE|VIM|HARPIC|COLIN|LIZOL|DETTOL|SAVLON|SANITIZER|WASH|WASHING|CLEANER|SHAVING|BLADE|RAZOR|HAIR|COLOGNE|BODYWASH|DIAPER|NAPKIN|SENSODYNE|COLGATE|PEPSODENT|CLOSEUP|DOVE|LUX|LIFEBUOY|HAMAM|CINTHOL|MEDIMIX|PEARS|SANTOOR|FIAMA|DENVER|AXE|FOGG|NEVIA|NIVEA|VASELINE|FAIR|GLOW|PONDS|HIMALAYA)\\y';
+
+    UPDATE items SET category_id = (SELECT id FROM item_categories WHERE code = 'STATIONERY' LIMIT 1)
+    WHERE category_id IS NULL AND name ~* '\\y(NOTEBOOK|BOOK|PEN|PENCIL|ERASER|SHARPENER|SCALE|REGISTER|PAPER|FILE|FOLDER|BATTERY|PENCELL|BULB|BROOM|MOP|BUCKET|MUG|PLASTIC|MATCH|CANDLE|AGARBATTI|DHOOP|FOIL|SCISSORS|TAPE|GLUE|STATIONERY|OFFICE|UMBRELLA|LOCK|BULB|LED|TORCH|KHARPOORAM|POOJA|CAMPHOR|WIC|WICKS)\\y';
+
+    UPDATE items SET category_id = (SELECT id FROM item_categories WHERE code = 'PROVISIONS' LIMIT 1)
+    WHERE category_id IS NULL;
   `;
 
   await executeScript(ddl);

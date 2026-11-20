@@ -298,45 +298,71 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Inventory Category Breakdown */}
-        <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle">
-          <div className="mb-4">
-            <h3 className="text-sm font-bold text-navy-800">Inventory Distribution</h3>
-            <p className="text-xs text-textSecondary">Valuation share by commodity category</p>
-          </div>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={charts?.categoryDistribution || []}
-                  dataKey="valuation"
-                  nameKey="category"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={75}
-                  innerRadius={45}
-                  paddingAngle={3}
-                >
-                  {(charts?.categoryDistribution || []).map((_: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Valuation']}
-                  contentStyle={{ backgroundColor: '#172B4D', borderColor: '#203A65', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-2 space-y-1">
-            {(charts?.categoryDistribution || []).slice(0, 4).map((c: any, idx: number) => (
-              <div key={c.category} className="flex items-center justify-between text-xs text-textSecondary">
-                <div className="flex items-center">
-                  <span className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                  <span className="truncate max-w-[140px]">{c.category}</span>
-                </div>
-                <span className="font-semibold text-navy-800 tabular-nums">₹{Math.round(c.valuation).toLocaleString('en-IN')}</span>
+        <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="text-sm font-bold text-navy-800">Inventory Distribution</h3>
+                <p className="text-xs text-textSecondary">Valuation share by commodity category</p>
               </div>
-            ))}
+              {charts?.categoryDistribution && (
+                <div className="text-right">
+                  <span className="text-[10px] font-semibold text-textSecondary uppercase tracking-wider block">Total Valuation</span>
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    ₹{Math.round((charts.categoryDistribution || []).reduce((acc: number, c: any) => acc + (Number(c.valuation) || 0), 0)).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="h-48 relative">
+              {charts?.categoryDistribution && charts.categoryDistribution.some((c: any) => Number(c.valuation) > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={charts.categoryDistribution.filter((c: any) => Number(c.valuation) > 0)}
+                      dataKey="valuation"
+                      nameKey="category"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={72}
+                      innerRadius={42}
+                      paddingAngle={3}
+                    >
+                      {charts.categoryDistribution.filter((c: any) => Number(c.valuation) > 0).map((_: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Valuation']}
+                      contentStyle={{ backgroundColor: '#172B4D', borderColor: '#203A65', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-textSecondary text-xs">
+                  <Package className="w-8 h-8 text-slate-300 mb-1" />
+                  <span>No stock valuation data</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-1.5 pt-2 border-t border-slate-100">
+            {(charts?.categoryDistribution || []).map((c: any, idx: number) => {
+              const totalVal = (charts?.categoryDistribution || []).reduce((acc: number, item: any) => acc + (Number(item.valuation) || 0), 0);
+              const pct = totalVal > 0 ? (((Number(c.valuation) || 0) / totalVal) * 100).toFixed(1) : '0';
+              return (
+                <div key={c.category} className="flex items-center justify-between text-xs text-textSecondary hover:bg-slate-50/50 px-1 py-0.5 rounded transition-colors">
+                  <div className="flex items-center space-x-2 truncate">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                    <span className="truncate text-navy-800 font-medium">{c.category}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">({pct}%)</span>
+                  </div>
+                  <span className="font-semibold text-navy-800 tabular-nums shrink-0 ml-2">₹{Math.round(c.valuation).toLocaleString('en-IN')}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

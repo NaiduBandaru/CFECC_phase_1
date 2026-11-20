@@ -5,11 +5,88 @@ import { logAudit } from '../../middleware/audit.js';
 
 export const billingRouter = Router();
 
+export function toDateStr(val: any): string {
+  if (!val) return '';
+  if (val instanceof Date) {
+    const year = val.getFullYear();
+    const month = String(val.getMonth() + 1).padStart(2, '0');
+    const day = String(val.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  const str = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str.substring(0, 10);
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return str;
+}
+
+export function getStandardBillingCycle(refDate = new Date()) {
+  const d = new Date(refDate);
+  const day = d.getDate();
+  let cycleMonth = d.getMonth(); // 0-indexed
+  let cycleYear = d.getFullYear();
+
+  let prevMonth = cycleMonth - 1;
+  let prevYear = cycleYear;
+  let curMonth = cycleMonth;
+  let curYear = cycleYear;
+
+  if (day >= 21) {
+    prevMonth = cycleMonth;
+    prevYear = cycleYear;
+    curMonth = cycleMonth + 1;
+    if (curMonth > 11) {
+      curMonth = 0;
+      curYear++;
+    }
+  }
+
+  const prevMonthDate = new Date(prevYear, prevMonth, 21);
+  const startStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-21`;
+
+  const curMonthDate = new Date(curYear, curMonth, 20);
+  const endStr = `${curMonthDate.getFullYear()}-${String(curMonthDate.getMonth() + 1).padStart(2, '0')}-20`;
+
+  const billingDateStr = `${curYear}-${String(curMonth + 1).padStart(2, '0')}-21`;
+
+  const monthName = curMonthDate.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+  const periodCode = `BILL-${curYear}-${String(curMonth + 1).padStart(2, '0')}`;
+  const periodName = `${monthName} Store Billing (21 ${prevMonthDate.toLocaleString('en-IN', { month: 'short' })} - 20 ${curMonthDate.toLocaleString('en-IN', { month: 'short' })})`;
+
+  return {
+    periodCode,
+    periodName,
+    startDate: startStr,
+    endDate: endStr,
+    billingDate: billingDateStr,
+  };
+}
+
+// 0. Get Default Standard Cycle (21st to 20th)
+billingRouter.get('/default-cycle', authenticateToken, (req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    cycle: getStandardBillingCycle(),
+  });
+});
+
 // 1. List Billing Periods
 billingRouter.get('/periods', authenticateToken, async (req: Request, res: Response, next) => {
   try {
     const result = await executeRawSql(`
-      SELECT bp.*,
+      SELECT 
+        bp.id, bp.period_code, bp.period_name,
+        TO_CHAR(bp.start_date, 'YYYY-MM-DD') as start_date,
+        TO_CHAR(bp.end_date, 'YYYY-MM-DD') as end_date,
+        TO_CHAR(bp.billing_date, 'YYYY-MM-DD') as billing_date,
+        bp.status, bp.created_at, bp.finalized_at, bp.finalized_by,
         usr.full_name as finalized_by_name,
         COALESCE(
           (SELECT SUM(closing_outstanding) FROM employee_invoices ei WHERE ei.billing_period_id = bp.id),
@@ -34,16 +111,23 @@ billingRouter.post('/periods', authenticateToken, requireRole('SUPER_ADMIN', 'AC
   try {
     const { periodCode, periodName, startDate, endDate, billingDate } = req.body;
 
-    const existing = await executeRawSql(`SELECT id FROM billing_periods WHERE period_code = '${periodCode}'`);
+    const defCycle = getStandardBillingCycle();
+    const finalCode = (periodCode || defCycle.periodCode).trim();
+    const finalName = (periodName || defCycle.periodName).trim();
+    const finalStart = startDate || defCycle.startDate;
+    const finalEnd = endDate || defCycle.endDate;
+    const finalBilling = billingDate || defCycle.billingDate;
+
+    const existing = await executeRawSql(`SELECT id FROM billing_periods WHERE period_code = '${finalCode}'`);
     if (existing.rows && existing.rows.length > 0) {
-      return res.status(400).json({ success: false, message: `Billing period code '${periodCode}' already exists.` });
+      return res.status(400).json({ success: false, message: `Billing period code '${finalCode}' already exists.` });
     }
 
     const insertResult = await executeRawSql(`
       INSERT INTO billing_periods (
         period_code, period_name, start_date, end_date, billing_date, status
       ) VALUES (
-        '${periodCode}', '${periodName.replace(/'/g, "''")}', '${startDate}', '${endDate}', '${billingDate}', 'OPEN'
+        '${finalCode}', '${finalName.replace(/'/g, "''")}', '${finalStart}', '${finalEnd}', '${finalBilling}', 'OPEN'
       ) RETURNING id;
     `);
 
@@ -62,12 +146,24 @@ billingRouter.post('/generate', authenticateToken, requireRole('SUPER_ADMIN', 'A
   try {
     const { periodId } = req.body;
 
-    const periodRes = await executeRawSql(`SELECT * FROM billing_periods WHERE id = ${periodId}`);
+    const periodRes = await executeRawSql(`
+      SELECT 
+        id, period_code, period_name,
+        TO_CHAR(start_date, 'YYYY-MM-DD') as start_date,
+        TO_CHAR(end_date, 'YYYY-MM-DD') as end_date,
+        TO_CHAR(billing_date, 'YYYY-MM-DD') as billing_date,
+        status, total_employees_billed, total_billed_amount, total_recovered_amount
+      FROM billing_periods 
+      WHERE id = ${periodId}
+    `);
     if (!periodRes.rows || periodRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Billing period not found' });
     }
 
     const period = periodRes.rows[0];
+    const startDateStr = toDateStr(period.start_date);
+    const endDateStr = toDateStr(period.end_date);
+
     if (period.status === 'FINALIZED' || period.status === 'CLOSED') {
       return res.status(400).json({
         success: false,
@@ -93,8 +189,8 @@ billingRouter.post('/generate', authenticateToken, requireRole('SUPER_ADMIN', 'A
         FROM sales
         WHERE employee_id = ${emp.id}
           AND payment_mode = 'EMPLOYEE_CREDIT'
-          AND created_at >= '${period.start_date}'
-          AND created_at <= '${period.end_date} 23:59:59';
+          AND created_at >= '${startDateStr} 00:00:00'
+          AND created_at <= '${endDateStr} 23:59:59';
       `);
       const currentPurchases = parseFloat(salesRes.rows[0]?.period_purchases || '0');
 
@@ -103,8 +199,8 @@ billingRouter.post('/generate', authenticateToken, requireRole('SUPER_ADMIN', 'A
         SELECT COALESCE(SUM(amount), 0) as period_payments
         FROM payments
         WHERE employee_id = ${emp.id}
-          AND payment_date >= '${period.start_date}'
-          AND payment_date <= '${period.end_date} 23:59:59';
+          AND payment_date >= '${startDateStr} 00:00:00'
+          AND payment_date <= '${endDateStr} 23:59:59';
       `);
       const paymentsReceived = parseFloat(paymentsRes.rows[0]?.period_payments || '0');
 
@@ -114,8 +210,8 @@ billingRouter.post('/generate', authenticateToken, requireRole('SUPER_ADMIN', 'A
         FROM recovery_records
         WHERE employee_id = ${emp.id}
           AND status = 'COMPLETED'
-          AND recovered_at >= '${period.start_date}'
-          AND recovered_at <= '${period.end_date} 23:59:59';
+          AND recovered_at >= '${startDateStr} 00:00:00'
+          AND recovered_at <= '${endDateStr} 23:59:59';
       `);
       const recoveriesDeducted = parseFloat(recoveryRes.rows[0]?.period_recoveries || '0');
 
@@ -273,6 +369,8 @@ billingRouter.get('/statements/:id', authenticateToken, async (req: Request, res
     }
 
     const stmt = stmtRes.rows[0];
+    const stmtStartStr = toDateStr(stmt.period_start_date);
+    const stmtEndStr = toDateStr(stmt.period_end_date);
 
     // Itemized credit sales during this period
     const salesRes = await executeRawSql(`
@@ -281,8 +379,8 @@ billingRouter.get('/statements/:id', authenticateToken, async (req: Request, res
       FROM sales s
       WHERE s.employee_id = ${stmt.employee_id}
         AND s.payment_mode = 'EMPLOYEE_CREDIT'
-        AND s.created_at >= '${stmt.period_start_date} 00:00:00'
-        AND s.created_at <= '${stmt.period_end_date} 23:59:59'
+        AND s.created_at >= '${stmtStartStr} 00:00:00'
+        AND s.created_at <= '${stmtEndStr} 23:59:59'
       ORDER BY s.created_at DESC;
     `);
 
@@ -290,8 +388,8 @@ billingRouter.get('/statements/:id', authenticateToken, async (req: Request, res
     const paymentsRes = await executeRawSql(`
       SELECT * FROM payments
       WHERE employee_id = ${stmt.employee_id}
-        AND payment_date >= '${stmt.period_start_date} 00:00:00'
-        AND payment_date <= '${stmt.period_end_date} 23:59:59'
+        AND payment_date >= '${stmtStartStr} 00:00:00'
+        AND payment_date <= '${stmtEndStr} 23:59:59'
       ORDER BY payment_date DESC;
     `);
 
@@ -299,8 +397,8 @@ billingRouter.get('/statements/:id', authenticateToken, async (req: Request, res
     const recoveriesRes = await executeRawSql(`
       SELECT * FROM recovery_records
       WHERE employee_id = ${stmt.employee_id}
-        AND recovered_at >= '${stmt.period_start_date} 00:00:00'
-        AND recovered_at <= '${stmt.period_end_date} 23:59:59'
+        AND recovered_at >= '${stmtStartStr} 00:00:00'
+        AND recovered_at <= '${stmtEndStr} 23:59:59'
       ORDER BY recovered_at DESC;
     `);
 
@@ -318,11 +416,32 @@ billingRouter.get('/statements/:id', authenticateToken, async (req: Request, res
   }
 });
 
-// 5. Finalize Billing Period
+// 5. Finalize Billing Period, Schedule Payroll Recovery, Reset Usage & Auto-Create Next Period
 billingRouter.post('/finalize', authenticateToken, requireRole('SUPER_ADMIN', 'ACCOUNTS_OFFICER'), async (req: Request, res: Response, next) => {
   try {
     const { periodId } = req.body;
 
+    const periodRes = await executeRawSql(`
+      SELECT 
+        id, period_code, period_name,
+        TO_CHAR(start_date, 'YYYY-MM-DD') as start_date,
+        TO_CHAR(end_date, 'YYYY-MM-DD') as end_date,
+        TO_CHAR(billing_date, 'YYYY-MM-DD') as billing_date,
+        status, total_employees_billed, total_billed_amount, total_recovered_amount
+      FROM billing_periods 
+      WHERE id = ${periodId}
+    `);
+
+    if (!periodRes.rows || periodRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Billing period not found' });
+    }
+
+    const period = periodRes.rows[0];
+    if (period.status === 'FINALIZED' || period.status === 'CLOSED') {
+      return res.status(400).json({ success: false, message: 'Billing period is already finalized.' });
+    }
+
+    // 1. Mark billing period as FINALIZED
     await executeRawSql(`
       UPDATE billing_periods SET
         status = 'FINALIZED',
@@ -331,6 +450,7 @@ billingRouter.post('/finalize', authenticateToken, requireRole('SUPER_ADMIN', 'A
       WHERE id = ${periodId};
     `);
 
+    // 2. Mark all generated employee invoices as APPROVED
     await executeRawSql(`
       UPDATE employee_invoices SET
         status = 'APPROVED',
@@ -338,15 +458,97 @@ billingRouter.post('/finalize', authenticateToken, requireRole('SUPER_ADMIN', 'A
       WHERE billing_period_id = ${periodId};
     `);
 
+    // 3. Populate Payroll Recovery Records & Store Deduction Advice for Corporate HR
+    const invoices = await executeRawSql(`
+      SELECT ei.*, e.employee_code, e.cs_no
+      FROM employee_invoices ei
+      JOIN employees e ON ei.employee_id = e.id
+      WHERE ei.billing_period_id = ${periodId} AND ei.closing_outstanding > 0;
+    `);
+
+    let scheduledRecoveryCount = 0;
+    for (const inv of invoices.rows) {
+      const recAmt = parseFloat(inv.closing_outstanding || '0');
+      const recNum = `REC-${period.period_code}-${String(inv.employee_id).padStart(4, '0')}`;
+      
+      await executeRawSql(`
+        INSERT INTO recovery_records (
+          recovery_number, employee_id, billing_period_id, employee_invoice_id,
+          recovery_source, amount_deducted, status, recovered_at, remarks
+        ) VALUES (
+          '${recNum}', ${inv.employee_id}, ${periodId}, ${inv.id},
+          'PAYROLL_DEDUCTION', ${recAmt.toFixed(2)}, 'PENDING', NOW(),
+          'Scheduled store recovery advice for ${period.period_name.replace(/'/g, "''")}'
+        )
+        ON CONFLICT (recovery_number) DO UPDATE SET
+          amount_deducted = EXCLUDED.amount_deducted,
+          status = 'PENDING',
+          recovered_at = NOW();
+      `);
+      scheduledRecoveryCount++;
+    }
+
+    // 4. RESET CURRENT MONTH USAGE & RESTORE 100% AVAILABLE CREDIT FOR ALL MEMBERS
+    // Once billing is finalized for payroll, the member's current store usage resets to 0.00
+    // so they start with their fresh credit limit for the new cycle!
+    await executeRawSql(`
+      UPDATE employees SET
+        current_outstanding = 0.00,
+        available_credit = credit_limit,
+        updated_at = NOW()
+      WHERE credit_enabled = TRUE;
+    `);
+
+    // 5. AUTOMATICALLY ROLL OVER TO THE NEXT CYCLE (21st to 20th)
+    const curEndStr = toDateStr(period.end_date); // e.g. '2026-03-20'
+    const curEndParts = curEndStr.split('-').map(Number);
+    const nextStart = new Date(curEndParts[0], curEndParts[1] - 1, 21); // 2026-03-21
+    const nextEnd = new Date(curEndParts[0], curEndParts[1], 20); // 2026-04-20
+    const nextBilling = new Date(curEndParts[0], curEndParts[1], 21); // 2026-04-21
+
+    const nextStartStr = `${nextStart.getFullYear()}-${String(nextStart.getMonth() + 1).padStart(2, '0')}-21`;
+    const nextEndStr = `${nextEnd.getFullYear()}-${String(nextEnd.getMonth() + 1).padStart(2, '0')}-20`;
+    const nextBillingStr = `${nextBilling.getFullYear()}-${String(nextBilling.getMonth() + 1).padStart(2, '0')}-21`;
+
+    const nextMonthName = nextEnd.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    const nextCode = `BILL-${nextEnd.getFullYear()}-${String(nextEnd.getMonth() + 1).padStart(2, '0')}`;
+    const nextName = `${nextMonthName} Store Billing (21 ${nextStart.toLocaleString('en-IN', { month: 'short' })} - 20 ${nextEnd.toLocaleString('en-IN', { month: 'short' })})`;
+
+    let nextPeriodId: number | null = null;
+    const existingNext = await executeRawSql(`SELECT id FROM billing_periods WHERE period_code = '${nextCode}'`);
+    if (existingNext.rows && existingNext.rows.length > 0) {
+      nextPeriodId = existingNext.rows[0].id;
+    } else {
+      const createNextRes = await executeRawSql(`
+        INSERT INTO billing_periods (
+          period_code, period_name, start_date, end_date, billing_date, status
+        ) VALUES (
+          '${nextCode}', '${nextName.replace(/'/g, "''")}', '${nextStartStr}', '${nextEndStr}', '${nextBillingStr}', 'OPEN'
+        ) RETURNING id;
+      `);
+      nextPeriodId = createNextRes.rows[0].id;
+    }
+
     await logAudit({
       userId: req.user?.id,
       action: 'FINALIZE_BILLING',
       entity: 'BILLING_PERIOD',
       entityId: periodId,
+      newValues: {
+        scheduledRecoveryCount,
+        nextPeriodId,
+        nextPeriodCode: nextCode,
+        usageReset: true,
+      },
       ipAddress: req.ip,
     });
 
-    return res.json({ success: true, message: 'Billing period finalized and approved for recovery.' });
+    return res.json({
+      success: true,
+      message: `Billing finalized! Scheduled recovery for ${scheduledRecoveryCount} members. Store usage has been reset to ₹0.00 and member credit limits are refreshed. Next cycle '${nextName}' is now OPEN!`,
+      nextPeriodId,
+      nextPeriodCode: nextCode,
+    });
   } catch (err) {
     next(err);
   }

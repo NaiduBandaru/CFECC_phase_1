@@ -304,8 +304,7 @@ payrollRouter.post('/calculate', authenticateToken, requireRole('SUPER_ADMIN', '
     let totalStoreRecovery = 0;
     let totalNet = 0;
 
-    // Delete existing unapproved entries for this period to recalculate
-    await executeRawSql(`DELETE FROM payroll_entries WHERE payroll_period_id = ${payrollPeriodId}`);
+    const values: string[] = [];
 
     for (const emp of employees.rows) {
       const basic = parseFloat(emp.basic_salary || '0');
@@ -333,6 +332,24 @@ payrollRouter.post('/calculate', authenticateToken, requireRole('SUPER_ADMIN', '
       const totalDeductions = statutory + storeDeduction;
       const net = Math.max(0, gross - totalDeductions);
 
+      values.push(`(
+        ${payrollPeriodId}, ${emp.id},
+        ${emp.cs_no ? `'${emp.cs_no.replace(/'/g, "''")}'` : 'NULL'},
+        '${(emp.category || 'WORKER').replace(/'/g, "''")}',
+        ${billAmt.toFixed(2)}, ${domestic.toFixed(2)}, ${oldDome.toFixed(2)}, ${fest.toFixed(2)},
+        ${misc.toFixed(2)}, ${unrec.toFixed(2)}, ${addShare.toFixed(2)}, ${thrift.toFixed(2)},
+        ${coupon.toFixed(2)}, ${recPay.toFixed(2)}, ${storeDeduction.toFixed(2)},
+        ${storeDeduction.toFixed(2)}, ${basic.toFixed(2)}, ${da.toFixed(2)}, ${hra.toFixed(2)}, ${allowances.toFixed(2)},
+        ${gross.toFixed(2)}, ${statutory.toFixed(2)}, 0.00,
+        ${totalDeductions.toFixed(2)}, ${net.toFixed(2)}, 'PENDING', NOW()
+      )`);
+
+      totalGross += gross;
+      totalStoreRecovery += storeDeduction;
+      totalNet += net;
+    }
+
+    if (values.length > 0) {
       await executeRawSql(`
         INSERT INTO payroll_entries (
           payroll_period_id, employee_id, cs_no, category,
@@ -342,22 +359,33 @@ payrollRouter.post('/calculate', authenticateToken, requireRole('SUPER_ADMIN', '
           store_recovery_amount, basic_salary, da, hra, other_allowances,
           gross_salary, statutory_deductions, other_deductions,
           total_deductions, net_salary, payment_status, created_at
-        ) VALUES (
-          ${payrollPeriodId}, ${emp.id},
-          ${emp.cs_no ? `'${emp.cs_no.replace(/'/g, "''")}'` : 'NULL'},
-          '${(emp.category || 'WORKER').replace(/'/g, "''")}',
-          ${billAmt.toFixed(2)}, ${domestic.toFixed(2)}, ${oldDome.toFixed(2)}, ${fest.toFixed(2)},
-          ${misc.toFixed(2)}, ${unrec.toFixed(2)}, ${addShare.toFixed(2)}, ${thrift.toFixed(2)},
-          ${coupon.toFixed(2)}, ${recPay.toFixed(2)}, ${storeDeduction.toFixed(2)},
-          ${storeDeduction.toFixed(2)}, ${basic.toFixed(2)}, ${da.toFixed(2)}, ${hra.toFixed(2)}, ${allowances.toFixed(2)},
-          ${gross.toFixed(2)}, ${statutory.toFixed(2)}, 0.00,
-          ${totalDeductions.toFixed(2)}, ${net.toFixed(2)}, 'PENDING', NOW()
-        );
+        ) VALUES ${values.join(',\n')}
+        ON CONFLICT (payroll_period_id, employee_id) DO UPDATE SET
+          cs_no = EXCLUDED.cs_no,
+          category = EXCLUDED.category,
+          current_month_bills = EXCLUDED.current_month_bills,
+          domestic_installment = EXCLUDED.domestic_installment,
+          old_domestic = EXCLUDED.old_domestic,
+          festival_advance = EXCLUDED.festival_advance,
+          misc_deductions = EXCLUDED.misc_deductions,
+          unrecovered_dues = EXCLUDED.unrecovered_dues,
+          additional_shares = EXCLUDED.additional_shares,
+          thrift_deposit = EXCLUDED.thrift_deposit,
+          coupon_amount = EXCLUDED.coupon_amount,
+          direct_receipt_payments = EXCLUDED.direct_receipt_payments,
+          total_store_deduction = EXCLUDED.total_store_deduction,
+          store_recovery_amount = EXCLUDED.store_recovery_amount,
+          basic_salary = EXCLUDED.basic_salary,
+          da = EXCLUDED.da,
+          hra = EXCLUDED.hra,
+          other_allowances = EXCLUDED.other_allowances,
+          gross_salary = EXCLUDED.gross_salary,
+          statutory_deductions = EXCLUDED.statutory_deductions,
+          other_deductions = EXCLUDED.other_deductions,
+          total_deductions = EXCLUDED.total_deductions,
+          net_salary = EXCLUDED.net_salary,
+          payment_status = 'PENDING';
       `);
-
-      totalGross += gross;
-      totalStoreRecovery += storeDeduction;
-      totalNet += net;
     }
 
     // Update payroll period
@@ -651,73 +679,97 @@ payrollRouter.post('/disburse', authenticateToken, requireRole('SUPER_ADMIN'), a
       WHERE pe.payroll_period_id = ${payrollPeriodId};
     `);
 
-    let recoveryCount = 0;
+    const recoveringEntries = entriesRes.rows.filter(
+      (entry: any) => parseFloat(entry.store_recovery_amount) > 0
+    );
+
+    let recoveryCount = recoveringEntries.length;
     let totalRecovered = 0;
 
-    for (const entry of entriesRes.rows) {
-      const recoveryAmt = parseFloat(entry.store_recovery_amount);
-      if (recoveryAmt > 0) {
-        // Generate Recovery Number
-        const recCountRes = await executeRawSql(`SELECT COUNT(*) as count FROM recovery_records`);
-        const recNum = `REC-2026-${String(parseInt(recCountRes.rows[0]?.count || '0', 10) + 1).padStart(4, '0')}`;
+    if (recoveringEntries.length > 0) {
+      // Get base sequence number once
+      const maxRecRes = await executeRawSql(`SELECT COALESCE(MAX(id), 0) as max_id FROM recovery_records`);
+      let nextRecId = parseInt(maxRecRes.rows[0]?.max_id || '0', 10);
 
-        // Insert recovery record
-        await executeRawSql(`
-          INSERT INTO recovery_records (
-            recovery_number, employee_id, billing_period_id, recovery_source,
-            amount_deducted, payroll_period_id, status, recovered_at, remarks
-          ) VALUES (
-            '${recNum}', ${entry.employee_id}, ${billingPeriodId || '1'}, 'PAYROLL_DEDUCTION',
-            ${recoveryAmt.toFixed(2)}, ${payrollPeriodId}, 'COMPLETED', NOW(),
-            'Recovered via salary deduction for period ${period.period_code}'
-          );
-        `);
+      const recoveryValues: string[] = [];
+      const ledgerValues: string[] = [];
+      const empUpdateWhens: string[] = [];
+      const empCreditWhens: string[] = [];
+      const empIds: number[] = [];
 
-        // Update employee outstanding balance and restore available credit
+      for (const entry of recoveringEntries) {
+        const recoveryAmt = parseFloat(entry.store_recovery_amount);
+        totalRecovered += recoveryAmt;
+        nextRecId++;
+        const recNum = `REC-2026-${String(nextRecId).padStart(4, '0')}`;
+
+        recoveryValues.push(`(
+          '${recNum}', ${entry.employee_id}, ${billingPeriodId || 'NULL'}, 'PAYROLL_DEDUCTION',
+          ${recoveryAmt.toFixed(2)}, ${payrollPeriodId}, 'COMPLETED', NOW(),
+          'Recovered via salary deduction for period ${period.period_code.replace(/'/g, "''")}'
+        )`);
+
         const newOutstanding = Math.max(0, parseFloat(entry.current_outstanding) - recoveryAmt);
         const newCredit = Math.min(parseFloat(entry.credit_limit), parseFloat(entry.available_credit) + recoveryAmt);
 
-        await executeRawSql(`
-          UPDATE employees SET
-            current_outstanding = ${newOutstanding.toFixed(2)},
-            available_credit = ${newCredit.toFixed(2)},
-            updated_at = NOW()
-          WHERE id = ${entry.employee_id};
-        `);
+        ledgerValues.push(`(
+          ${entry.employee_id}, NOW(), 'PAYROLL_RECOVERY', 'PAYROLL_ENTRY', '${period.period_code.replace(/'/g, "''")}',
+          0.00, ${recoveryAmt.toFixed(2)}, ${newOutstanding.toFixed(2)},
+          'Monthly store purchase recovery deduction from salary', ${req.user?.id || 'NULL'}
+        )`);
 
-        // Post to employee ledger
-        await executeRawSql(`
-          INSERT INTO employee_ledger (
-            employee_id, transaction_date, transaction_type, reference_type, reference_id,
-            debit_amount, credit_amount, running_balance, remarks, created_by
-          ) VALUES (
-            ${entry.employee_id}, NOW(), 'PAYROLL_RECOVERY', 'PAYROLL_ENTRY', '${period.period_code}',
-            0.00, ${recoveryAmt.toFixed(2)}, ${newOutstanding.toFixed(2)},
-            'Monthly store purchase recovery deduction from salary', ${req.user?.id || 'NULL'}
-          );
-        `);
-
-        // Update employee invoice if billingPeriodId provided
-        if (billingPeriodId) {
-          await executeRawSql(`
-            UPDATE employee_invoices SET
-              status = 'RECOVERED',
-              recoveries_deducted = ${recoveryAmt.toFixed(2)},
-              closing_outstanding = GREATEST(0.00, closing_outstanding - ${recoveryAmt.toFixed(2)}),
-              updated_at = NOW()
-            WHERE billing_period_id = ${billingPeriodId} AND employee_id = ${entry.employee_id};
-          `);
-        }
-
-        recoveryCount++;
-        totalRecovered += recoveryAmt;
+        empUpdateWhens.push(`WHEN id = ${entry.employee_id} THEN ${newOutstanding.toFixed(2)}`);
+        empCreditWhens.push(`WHEN id = ${entry.employee_id} THEN ${newCredit.toFixed(2)}`);
+        empIds.push(entry.employee_id);
       }
 
-      // Mark individual entry as PAID
+      // 1. Bulk insert recovery_records
       await executeRawSql(`
-        UPDATE payroll_entries SET payment_status = 'PAID' WHERE id = ${entry.id};
+        INSERT INTO recovery_records (
+          recovery_number, employee_id, billing_period_id, recovery_source,
+          amount_deducted, payroll_period_id, status, recovered_at, remarks
+        ) VALUES ${recoveryValues.join(',\n')};
       `);
+
+      // 2. Bulk insert employee_ledger
+      await executeRawSql(`
+        INSERT INTO employee_ledger (
+          employee_id, transaction_date, transaction_type, reference_type, reference_id,
+          debit_amount, credit_amount, running_balance, remarks, created_by
+        ) VALUES ${ledgerValues.join(',\n')};
+      `);
+
+      // 3. Bulk update employees
+      await executeRawSql(`
+        UPDATE employees SET
+          current_outstanding = CASE ${empUpdateWhens.join(' ')} END,
+          available_credit = CASE ${empCreditWhens.join(' ')} END,
+          updated_at = NOW()
+        WHERE id IN (${empIds.join(', ')});
+      `);
+
+      // 4. Bulk update employee invoices if billingPeriodId provided
+      if (billingPeriodId) {
+        await executeRawSql(`
+          UPDATE employee_invoices ei
+          SET
+            status = 'RECOVERED',
+            recoveries_deducted = pe.store_recovery_amount,
+            closing_outstanding = GREATEST(0.00, ei.closing_outstanding - pe.store_recovery_amount),
+            updated_at = NOW()
+          FROM payroll_entries pe
+          WHERE pe.payroll_period_id = ${payrollPeriodId}
+            AND pe.employee_id = ei.employee_id
+            AND ei.billing_period_id = ${billingPeriodId}
+            AND pe.store_recovery_amount > 0;
+        `);
+      }
     }
+
+    // Mark all payroll entries for this period as PAID
+    await executeRawSql(`
+      UPDATE payroll_entries SET payment_status = 'PAID' WHERE payroll_period_id = ${payrollPeriodId};
+    `);
 
     // Mark payroll period as DISBURSED
     await executeRawSql(`

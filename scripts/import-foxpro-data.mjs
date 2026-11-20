@@ -666,10 +666,10 @@ async function migrateDatabase(db, dbLabel) {
     // 5d. Ingest Order Items & GRN Items from PURDETL.DBF
     const detlPath = path.join(FOXPRO_DIR, 'PURDETL.DBF');
     if (fs.existsSync(detlPath)) {
-      const itemDbRes = await db.query('SELECT id, item_code FROM items', []);
+      const itemDbRes = await db.query('SELECT id, item_code, tax_rate, cgst_rate, sgst_rate, igst_rate FROM items', []);
       const itemRows = itemDbRes.rows || (Array.isArray(itemDbRes) ? itemDbRes[0]?.rows : []) || [];
-      const itemMap = new Map(itemRows.map(it => [it.item_code, it.id]));
-      const defaultItemId = itemRows[0]?.id || 1;
+      const itemMap = new Map(itemRows.map(it => [it.item_code, it]));
+      const defaultItem = itemRows[0] || { id: 1, tax_rate: 0, cgst_rate: 0, sgst_rate: 0, igst_rate: 0 };
 
       const detlRecords = parseDbf(detlPath);
       const activeDetails = detlRecords.filter(d => activeBillCodes.has(d.BILLCODE.trim()));
@@ -693,13 +693,31 @@ async function migrateDatabase(db, dbLabel) {
           if (!po || !grnId) continue;
 
           const itemCode = d.ITEMCODE.trim();
-          const itemId = itemMap.get(itemCode) || defaultItemId;
+          const itm = itemMap.get(itemCode) || defaultItem;
+          const itemId = itm.id || defaultItem.id;
           const qty = parseFloat(d.QTY) || 1;
           const purRate = parseFloat(d.PURRATE) || 0;
           const amt = parseFloat(d.AMT) || (qty * purRate);
 
-          poPlaceholders.push(`($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, 0, 0, $${pIdx++})`);
-          poItemValues.push(po.id, itemId, qty, qty, purRate, amt);
+          const itmCgst = parseFloat(itm.cgst_rate) || 0;
+          const itmSgst = parseFloat(itm.sgst_rate) || 0;
+          const itmIgst = parseFloat(itm.igst_rate) || 0;
+          const itmTaxRate = parseFloat(itm.tax_rate) || (itmCgst + itmSgst + itmIgst);
+
+          const cgstAmt = amt * (itmCgst / 100);
+          const sgstAmt = amt * (itmSgst / 100);
+          const igstAmt = amt * (itmIgst / 100);
+          const lineTax = (cgstAmt + sgstAmt + igstAmt) > 0 ? (cgstAmt + sgstAmt + igstAmt) : amt * (itmTaxRate / 100);
+          const totalLine = amt + lineTax;
+
+          poPlaceholders.push(`(
+            $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++},
+            $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}
+          )`);
+          poItemValues.push(
+            po.id, itemId, qty, qty, purRate, itmTaxRate, lineTax, totalLine,
+            itmCgst, itmSgst, itmIgst, cgstAmt, sgstAmt, igstAmt
+          );
 
           grnPlaceholders.push(`($${gIdx++}, $${gIdx++}, $${gIdx++}, $${gIdx++}, 0, $${gIdx++})`);
           grnItemValues.push(grnId, itemId, qty, qty, purRate);
@@ -708,7 +726,8 @@ async function migrateDatabase(db, dbLabel) {
         if (poPlaceholders.length > 0) {
           await db.query(`
             INSERT INTO purchase_order_items (
-              po_id, item_id, ordered_qty, received_qty, unit_price, tax_rate, tax_amount, total_price
+              po_id, item_id, ordered_qty, received_qty, unit_price, tax_rate, tax_amount, total_price,
+              cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount
             ) VALUES ${poPlaceholders.join(', ')};
           `, poItemValues);
         }

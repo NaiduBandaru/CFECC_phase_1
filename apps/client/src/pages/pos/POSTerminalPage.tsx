@@ -3,10 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
 import { Modal } from '../../components/ui/Modal.js';
-import { BarcodeSvg } from '../../components/ui/BarcodeSvg.js';
 import {
   Search,
-  Barcode,
   ShoppingCart,
   Plus,
   Minus,
@@ -33,6 +31,9 @@ import {
   Store,
   Clock,
   Check,
+  Calendar,
+  Filter,
+  LayoutGrid,
 } from 'lucide-react';
 
 interface CartItem {
@@ -46,6 +47,7 @@ interface CartItem {
   quantity: number;
   taxRate: number;
   currentStock: number;
+  imageUrl?: string;
 }
 
 export const POSTerminalPage: React.FC = () => {
@@ -57,7 +59,7 @@ export const POSTerminalPage: React.FC = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [itemSearch, setItemSearch] = useState<string>('');
-  const [barcodeInput, setBarcodeInput] = useState<string>('');
+  const itemSearchRef = useRef<HTMLInputElement>(null);
 
   // Selected Employee & Credit info
   const [employeeQuery, setEmployeeQuery] = useState<string>('');
@@ -101,8 +103,6 @@ export const POSTerminalPage: React.FC = () => {
   const [shiftOperating, setShiftOperating] = useState<boolean>(false);
   const [shiftError, setShiftError] = useState<string | null>(null);
 
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
-
   // Live Clock Interval
   useEffect(() => {
     const updateTime = () => {
@@ -129,13 +129,13 @@ export const POSTerminalPage: React.FC = () => {
   useEffect(() => {
     fetchInitialCatalog();
     fetchActiveShift();
-    // Auto focus barcode input on boot
+    // Auto focus rapid code input on boot
     setTimeout(() => {
-      barcodeInputRef.current?.focus();
+      quickCodeRef.current?.focus();
     }, 400);
   }, []);
 
-  // Keyboard Shortcuts Listener (F1: Quick Code, F2: Barcode, F4: Payment Mode, Ctrl+Enter: Checkout, Esc: Exit)
+  // Keyboard Shortcuts Listener (F1: 4-Digit Code, F2: Search Products, F4: Payment Mode, Ctrl+Enter: Checkout, Esc: Exit)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F1') {
@@ -144,8 +144,8 @@ export const POSTerminalPage: React.FC = () => {
         quickCodeRef.current?.select();
       } else if (e.key === 'F2') {
         e.preventDefault();
-        barcodeInputRef.current?.focus();
-        barcodeInputRef.current?.select();
+        itemSearchRef.current?.focus();
+        itemSearchRef.current?.select();
       } else if (e.key === 'F4') {
         e.preventDefault();
         setPaymentMode((prev) => {
@@ -153,6 +153,10 @@ export const POSTerminalPage: React.FC = () => {
           if (prev === 'UPI') return 'CASH';
           return 'EMPLOYEE_CREDIT';
         });
+      } else if (isReceiptModalOpen && e.key === 'Enter') {
+        e.preventDefault();
+        setIsReceiptModalOpen(false);
+        quickCodeRef.current?.focus();
       } else if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
         if (cart.length > 0 && !isCheckingOut) {
@@ -275,6 +279,31 @@ export const POSTerminalPage: React.FC = () => {
     }
   };
 
+  // Live Server Item Search Debounce
+  useEffect(() => {
+    const trimmed = itemSearch.trim();
+    if (!trimmed) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get(`/pos/lookup-item?query=${encodeURIComponent(trimmed)}`);
+        if (res.data.success && Array.isArray(res.data.items) && res.data.items.length > 0) {
+          setItems((prev) => {
+            const existingMap = new Map(prev.map((i) => [i.id, i]));
+            for (const itm of res.data.items) {
+              existingMap.set(itm.id, itm);
+            }
+            return Array.from(existingMap.values());
+          });
+        }
+      } catch (err) {
+        console.error('Failed to lookup item by search query', err);
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [itemSearch]);
+
   // Live employee lookup
   const handleEmployeeSearch = async (val: string) => {
     setEmployeeQuery(val);
@@ -297,29 +326,29 @@ export const POSTerminalPage: React.FC = () => {
     setEmployeeSuggestions([]);
     setEmployeeQuery('');
     setPaymentMode('EMPLOYEE_CREDIT');
-
-    // Recalculate cart item prices to staff subsidized rates
-    setCart((prev) =>
-      prev.map((c) => ({
-        ...c,
-        unitPrice: c.employeePrice,
-      }))
-    );
   };
 
   const handleClearEmployee = () => {
     setSelectedEmployee(null);
+    setCouponAmount('');
     if (paymentMode === 'EMPLOYEE_CREDIT') {
       setPaymentMode('CASH');
     }
-    // Revert cart item prices to standard selling prices
-    setCart((prev) =>
-      prev.map((c) => ({
-        ...c,
-        unitPrice: c.sellingPrice,
-      }))
-    );
   };
+
+  const handleClearAll = () => {
+    setCart([]);
+    setCouponAmount('');
+    setCashTendered('');
+    setCheckoutError(null);
+  };
+
+  // Auto-clear coupon if cart becomes empty
+  useEffect(() => {
+    if (cart.length === 0 && couponAmount !== '') {
+      setCouponAmount('');
+    }
+  }, [cart.length, couponAmount]);
 
   // Add Item to Cart
   const handleAddToCart = (product: any) => {
@@ -337,10 +366,6 @@ export const POSTerminalPage: React.FC = () => {
         ? (b2Rate > 0 ? b2Rate : baseSelling)
         : baseSelling;
 
-    const effectivePrice = selectedEmployee
-      ? (parseFloat(product.employee_price) || activeSellingPrice)
-      : activeSellingPrice;
-
     if (existing) {
       setCart(
         cart.map((c) =>
@@ -355,35 +380,15 @@ export const POSTerminalPage: React.FC = () => {
           itemCode: product.item_code,
           name: product.name,
           unitCode: product.unit_code || 'PCS',
-          unitPrice: effectivePrice,
-          employeePrice: parseFloat(product.employee_price) || activeSellingPrice,
+          unitPrice: activeSellingPrice,
+          employeePrice: activeSellingPrice,
           sellingPrice: activeSellingPrice,
           quantity: 1,
           taxRate: parseFloat(product.tax_rate || '0'),
           currentStock: parseFloat(String((product as any).batch1_qty || 0)) + parseFloat(String((product as any).batch2_qty || 0)),
+          imageUrl: product.image_url,
         },
       ]);
-    }
-  };
-
-  // Barcode Instant Scan
-  const handleBarcodeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!barcodeInput.trim()) return;
-
-    try {
-      const code = barcodeInput.trim();
-      const res = await api.get(`/pos/lookup-item?barcode=${encodeURIComponent(code)}`);
-      if (res.data.success && res.data.items.length > 0) {
-        handleAddToCart(res.data.items[0]);
-        setJustScannedCode(code);
-        setTimeout(() => setJustScannedCode(null), 1500);
-        setBarcodeInput('');
-      } else {
-        setCheckoutError(`Item with barcode '${code}' not found.`);
-      }
-    } catch (err) {
-      console.error(err);
     }
   };
 
@@ -524,24 +529,72 @@ export const POSTerminalPage: React.FC = () => {
     }
   };
 
-  // Filter products by category & search
-  const filteredProducts = items.filter((itm) => {
-    const matchesCat = selectedCategory === 'ALL' || itm.category_name === selectedCategory;
-    const matchesSearch =
-      !itemSearch ||
-      itm.name.toLowerCase().includes(itemSearch.toLowerCase()) ||
-      itm.item_code.toLowerCase().includes(itemSearch.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
+  // Filter products by category & search, prioritizing exact code matches & available items
+  const q = itemSearch.trim().toLowerCase();
+  const isDigits = /^\d+$/.test(q);
+  const paddedQ = isDigits && q.length < 4 ? q.padStart(4, '0') : q;
+
+  const filteredProducts = items
+    .filter((itm) => {
+      const itmCode = (itm.item_code || '').toLowerCase();
+      const itmName = (itm.name || '').toLowerCase();
+
+      // Support raw code, zero-padded code (e.g. '1' -> '0001'), or substring
+      const matchesSearch =
+        !q ||
+        itmCode === q ||
+        itmCode === paddedQ ||
+        itmCode.includes(q) ||
+        itmName.includes(q);
+
+      // When searching specifically for an item, do not let an active category filter hide it
+      const matchesCat = !q
+        ? selectedCategory === 'ALL' || itm.category_name === selectedCategory
+        : selectedCategory === 'ALL' || itm.category_name === selectedCategory || itmCode === q || itmCode === paddedQ;
+
+      return matchesCat && matchesSearch;
+    })
+    .sort((a, b) => {
+      const itmCodeA = (a.item_code || '').toLowerCase();
+      const itmCodeB = (b.item_code || '').toLowerCase();
+
+      // 1. Exact item code match comes FIRST
+      if (q) {
+        const exactA = itmCodeA === q || itmCodeA === paddedQ;
+        const exactB = itmCodeB === q || itmCodeB === paddedQ;
+        if (exactA && !exactB) return -1;
+        if (!exactA && exactB) return 1;
+      }
+
+      // 2. Available items first, out-of-stock items at the end
+      const stockA =
+        parseFloat(String((a as any).batch1_qty || 0)) + parseFloat(String((a as any).batch2_qty || 0)) ||
+        parseFloat(String(a.current_stock || 0));
+      const stockB =
+        parseFloat(String((b as any).batch1_qty || 0)) + parseFloat(String((b as any).batch2_qty || 0)) ||
+        parseFloat(String(b.current_stock || 0));
+      const hasStockA = stockA > 0;
+      const hasStockB = stockB > 0;
+
+      if (hasStockA && !hasStockB) return -1;
+      if (!hasStockA && hasStockB) return 1;
+
+      // If both in stock, sort descending by stock level (or item code)
+      if (hasStockA && hasStockB && stockB !== stockA) {
+        return stockB - stockA;
+      }
+
+      return (a.item_code || '').localeCompare(b.item_code || '', undefined, { numeric: true });
+    });
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-slate-100 flex flex-col z-50 overflow-hidden font-sans select-none">
       {/* 1. TOP DEDICATED POS TERMINAL COMMAND BAR */}
       <header className="h-14 bg-navy-900 border-b border-navy-800 text-white px-4 flex items-center justify-between shrink-0 shadow-md">
-        {/* Left: Branding, Station & Live Clock */}
+        {/* Left: Branding, Station & Subtitle */}
         <div className="flex items-center space-x-3.5">
-          <div className="flex items-center space-x-2">
-            <div className="p-1.5 rounded-lg bg-amber-500/20 border border-amber-400/30 text-amber-400">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-lg bg-amber-500/20 border border-amber-400/30 text-amber-400">
               <Store className="w-4 h-4" />
             </div>
             <div>
@@ -552,47 +605,25 @@ export const POSTerminalPage: React.FC = () => {
                 </span>
               </div>
               <div className="text-[10px] text-slate-400 font-medium">
-                Consumer Cooperative Society Ltd
+                Community &bull; Cooperate &bull; Security &bull; Life
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="hidden md:flex items-center space-x-1.5 text-xs text-slate-300 font-mono bg-navy-800/80 px-2.5 py-1 rounded-md border border-navy-700/60">
+        {/* Center: Live Date & Clock Badges */}
+        <div className="hidden md:flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5 text-xs text-slate-300 font-medium bg-navy-800/80 px-2.5 py-1 rounded-md border border-navy-700/60">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            <span>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+          </div>
+          <div className="flex items-center space-x-1.5 text-xs text-slate-300 font-mono bg-navy-800/80 px-2.5 py-1 rounded-md border border-navy-700/60">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
             <span>{currentTime}</span>
           </div>
         </div>
 
-        {/* Center: Shift & Live Drawer Cash */}
-        <div className="hidden lg:flex items-center space-x-3 text-xs">
-          {activeShift ? (
-            <div className="flex items-center space-x-2.5 bg-navy-800/90 px-3 py-1.5 rounded-lg border border-navy-700">
-              <span className="flex items-center space-x-1.5 text-emerald-400 font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>SHIFT #{activeShift.shiftNumber}</span>
-              </span>
-              <span className="text-slate-400">&bull;</span>
-              <span className="text-slate-200">
-                Cashier: <strong className="text-white">{activeShift.cashierName || user?.fullName || 'Store Cashier'}</strong>
-              </span>
-              <span className="text-slate-400">&bull;</span>
-              <span className="text-slate-200">
-                Drawer: <strong className="text-emerald-300 font-mono">₹{(activeShift.liveMetrics?.expectedCash || activeShift.openingFloat).toFixed(2)}</strong>
-              </span>
-              <span className="text-slate-400">&bull;</span>
-              <span className="text-slate-200">
-                Sales: <strong className="text-amber-300 font-mono">₹{(activeShift.liveMetrics?.totalSales || 0).toFixed(2)}</strong> ({activeShift.liveMetrics?.totalTransactions || 0} bills)
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-2 bg-amber-500/10 border border-amber-400/30 text-amber-300 px-3 py-1 rounded-lg text-xs font-semibold">
-              <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
-              <span>Register Drawer Closed</span>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Actions, Fullscreen & Exit POS Button */}
+        {/* Right: Actions, User Icon, Fullscreen & Exit POS Button */}
         <div className="flex items-center space-x-2">
           {lastCompletedSale && (
             <button
@@ -609,37 +640,13 @@ export const POSTerminalPage: React.FC = () => {
             </button>
           )}
 
-          {activeShift ? (
-            <button
-              type="button"
-              onClick={() => {
-                setClosingCashCountedInput(
-                  (activeShift.liveMetrics?.expectedCash || activeShift.openingFloat).toFixed(2)
-                );
-                setClosingNotesInput('');
-                setShiftError(null);
-                setIsCloseShiftModalOpen(true);
-              }}
-              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-navy-800 hover:bg-navy-700 text-slate-200 hover:text-white border border-navy-700 text-xs font-semibold transition-colors"
-              title="Close shift and print EOD Z-Report"
-            >
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Close Shift</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setShiftError(null);
-                setNewOpeningFloat('2000');
-                setIsOpenShiftModalOpen(true);
-              }}
-              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors"
-            >
-              <Unlock className="w-3.5 h-3.5" />
-              <span>Open Register</span>
-            </button>
-          )}
+          {/* User Profile Badge */}
+          <div
+            className="w-8 h-8 rounded-lg bg-navy-800 border border-navy-700 flex items-center justify-center text-slate-300"
+            title={user?.fullName || 'Cashier'}
+          >
+            <User className="w-4 h-4" />
+          </div>
 
           {/* Fullscreen Toggle */}
           <button
@@ -669,10 +676,10 @@ export const POSTerminalPage: React.FC = () => {
       <div className="flex-1 grid grid-cols-12 gap-3 p-3 overflow-hidden min-h-0">
         {/* LEFT PANE: PRODUCT DISCOVERY, BARCODE SCANNER & CATALOG GRID (7 COLS / 8 COLS ON XL) */}
         <div className="col-span-12 lg:col-span-7 xl:col-span-8 bg-white rounded-xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden min-h-0">
-          {/* Barcode & Search Controls */}
+          {/* Product Search & Rapid Code Controls */}
           <div className="p-3 bg-slate-50 border-b border-slate-200 space-y-2.5 shrink-0">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-              {/* 1. Quick 4-Digit Code Entry (Numpad Rapid Billing) */}
+              {/* 1. Quick 4-Digit Commodity Code Entry (FoxPro Numpad Rapid Billing) */}
               <form onSubmit={handleQuickCodeSubmit} className="md:col-span-4 relative">
                 <Calculator
                   className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
@@ -683,7 +690,7 @@ export const POSTerminalPage: React.FC = () => {
                   ref={quickCodeRef}
                   type="text"
                   maxLength={6}
-                  placeholder="[F1] 4-Digit Code (e.g. 0755) + ↵"
+                  placeholder="[F1] 4-Digit Code (e.g. 0001) + ↵"
                   value={quickCodeInput}
                   onChange={(e) => setQuickCodeInput(e.target.value)}
                   className={`w-full pl-9 pr-7 py-2 text-xs rounded-lg font-mono font-bold transition-all focus:outline-none focus:ring-2 focus:ring-amber-500 ${
@@ -703,45 +710,24 @@ export const POSTerminalPage: React.FC = () => {
                 )}
               </form>
 
-              {/* 2. Barcode Quick Scan */}
-              <form onSubmit={handleBarcodeSubmit} className="md:col-span-4 relative">
-                <Barcode
-                  className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
-                    justScannedCode ? 'text-emerald-500 animate-bounce' : 'text-primary'
-                  }`}
-                />
+              {/* 2. Product Name / Code Search */}
+              <div className="md:col-span-5 relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  ref={barcodeInputRef}
+                  ref={itemSearchRef}
                   type="text"
-                  placeholder="Scan Barcode [F2] &bull; Press Enter..."
-                  value={barcodeInput}
-                  onChange={(e) => setBarcodeInput(e.target.value)}
-                  className={`w-full pl-9 pr-8 py-2 text-xs rounded-lg font-mono transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
-                    justScannedCode
-                      ? 'bg-emerald-50 border-2 border-emerald-400 text-emerald-900 font-bold'
-                      : 'bg-white border border-slate-300 focus:bg-white text-navy-800'
-                  }`}
-                />
-                {barcodeInput && (
-                  <button
-                    type="button"
-                    onClick={() => setBarcodeInput('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </form>
-
-              {/* 3. Product Name Search */}
-              <div className="md:col-span-4 relative">
-                <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Filter items by name or category..."
+                  placeholder="Search by product name, code, brand... [F2]"
                   value={itemSearch}
                   onChange={(e) => setItemSearch(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-navy-800"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (filteredProducts.length > 0) {
+                        handleAddToCart(filteredProducts[0]);
+                      }
+                    }
+                  }}
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-navy-800 placeholder:text-slate-400"
                 />
                 {itemSearch && (
                   <button
@@ -753,6 +739,21 @@ export const POSTerminalPage: React.FC = () => {
                   </button>
                 )}
               </div>
+
+              {/* 3. Category Filter Dropdown */}
+              <div className="md:col-span-3 relative">
+                <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-slate-700 font-medium appearance-none cursor-pointer"
+                >
+                  <option value="ALL">Filter by category...</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Category Filter Tabs */}
@@ -762,30 +763,40 @@ export const POSTerminalPage: React.FC = () => {
                 onClick={() => setSelectedCategory('ALL')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center space-x-1.5 ${
                   selectedCategory === 'ALL'
-                    ? 'bg-navy-800 text-white shadow-xs'
+                    ? 'bg-primary text-white shadow-xs'
                     : 'bg-white text-slate-600 hover:bg-slate-100 hover:text-navy-800 border border-slate-200'
                 }`}
               >
+                <LayoutGrid className="w-3.5 h-3.5" />
                 <span>All Commodities</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 font-mono">
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    selectedCategory === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
                   {items.length}
                 </span>
               </button>
               {categories.map((c) => {
                 const count = items.filter((i) => i.category_id === c.id || i.category_name === c.name).length;
+                const isSelected = selectedCategory === c.name;
                 return (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => setSelectedCategory(c.name)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center space-x-1.5 ${
-                      selectedCategory === c.name
-                        ? 'bg-navy-800 text-white shadow-xs'
+                      isSelected
+                        ? 'bg-primary text-white shadow-xs'
                         : 'bg-white text-slate-600 hover:bg-slate-100 hover:text-navy-800 border border-slate-200'
                     }`}
                   >
                     <span>{c.name}</span>
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700 font-mono">
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
                       {count}
                     </span>
                   </button>
@@ -796,9 +807,11 @@ export const POSTerminalPage: React.FC = () => {
 
           {/* Product Cards Grid with Fast-Scroll */}
           <div className="flex-1 overflow-y-auto p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5">
               {filteredProducts.map((p) => {
-                const stock = parseFloat(String((p as any).batch1_qty || 0)) + parseFloat(String((p as any).batch2_qty || 0));
+                const stock =
+                  parseFloat(String((p as any).batch1_qty || 0)) + parseFloat(String((p as any).batch2_qty || 0)) ||
+                  parseFloat(String(p.current_stock || 0));
                 const minStock = parseFloat(p.min_stock || '0');
                 const hasStock = stock > 0;
                 const isLow = hasStock && stock <= minStock;
@@ -810,68 +823,84 @@ export const POSTerminalPage: React.FC = () => {
                     type="button"
                     disabled={!hasStock}
                     onClick={() => handleAddToCart(p)}
-                    className={`text-left p-3 rounded-xl border transition-all flex flex-col justify-between group relative ${
-                      cartItem
-                        ? 'border-primary ring-2 ring-primary/40 bg-blue-50/30 shadow-sm'
-                        : 'border-slate-200 bg-white hover:border-primary/80 hover:shadow-md'
-                    } ${!hasStock ? 'opacity-40 cursor-not-allowed bg-slate-50' : 'cursor-pointer active:scale-[0.98]'}`}
+                    className={`text-left p-2.5 rounded-xl border transition-all flex items-center space-x-3 group relative bg-white hover:border-primary/80 hover:shadow-md ${
+                      cartItem ? 'border-primary ring-2 ring-primary/40 bg-blue-50/20' : 'border-slate-200'
+                    } ${!hasStock ? 'opacity-55 cursor-not-allowed bg-slate-50/70' : 'cursor-pointer active:scale-[0.99]'}`}
                   >
-                    {/* In-cart count badge */}
-                    {cartItem && (
-                      <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary text-white flex items-center space-x-1 shadow-xs">
-                        <Check className="w-3 h-3" />
-                        <span>{cartItem.quantity} in cart</span>
+                    {/* Left: Product Pack Shot on Clean White Background */}
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-lg bg-white flex items-center justify-center p-1 relative border border-slate-100">
+                      {p.image_url ? (
+                        <img
+                          src={p.image_url}
+                          alt={p.name}
+                          loading="lazy"
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <Package className="w-8 h-8 text-slate-300" />
+                      )}
+                      <span className="absolute bottom-0.5 left-0.5 px-1 py-0.2 rounded bg-navy-900/80 text-white font-mono text-[8px] font-bold">
+                        {p.item_code}
                       </span>
-                    )}
+                    </div>
 
-                    <div>
-                      <div className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase">
-                        <span>{p.item_code}</span>
+                    {/* Right: Details */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
+                      {/* Top Row: Item Code + Name + Status Badge */}
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="text-[9px] font-mono font-extrabold text-primary bg-primary/10 border border-primary/20 px-1 py-0.2 rounded shrink-0">
+                              {p.item_code}
+                            </span>
+                            <div className="text-[11px] font-bold text-navy-900 uppercase tracking-tight line-clamp-1 leading-snug group-hover:text-primary transition-colors">
+                              {p.name}
+                            </div>
+                          </div>
+                        </div>
+                        {!hasStock ? (
+                          <span className="text-[9px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded uppercase shrink-0">
+                            OUT OF STOCK
+                          </span>
+                        ) : isLow ? (
+                          <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded uppercase shrink-0">
+                            LOW STOCK
+                          </span>
+                        ) : stock >= 10 ? (
+                          <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded uppercase shrink-0">
+                            POPULAR
+                          </span>
+                        ) : null}
                       </div>
 
-                      <div className="text-xs font-bold text-navy-800 line-clamp-2 mt-0.5 leading-snug group-hover:text-primary transition-colors">
-                        {p.name}
-                      </div>
-
-                      <div className="text-[10px] text-slate-500 mt-1 flex items-center space-x-1">
+                      {/* Middle Row: Stock Indicator */}
+                      <div className="text-[10px] text-slate-500 flex items-center space-x-1.5 mt-0.5">
                         <span
-                          className={`inline-block w-1.5 h-1.5 rounded-full ${
-                            !hasStock ? 'bg-rose-500' : isLow ? 'bg-amber-500' : 'bg-emerald-500'
+                          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
+                            !hasStock ? 'bg-slate-400' : isLow ? 'bg-rose-500' : 'bg-emerald-500'
                           }`}
                         />
                         <span>
-                          Stock: <strong className={isLow ? 'text-amber-700' : 'text-slate-700'}>{stock} {p.unit_code}</strong>
+                          Stock: <strong className={!hasStock ? 'text-slate-400 font-normal' : isLow ? 'text-rose-600' : 'text-slate-700'}>{stock}</strong>
                         </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-end justify-between w-full">
-                      <div>
-                        {selectedEmployee ? (
-                          <div>
-                            <span className="text-[9px] font-bold text-emerald-800 uppercase flex items-center space-x-0.5">
-                              <Sparkles className="w-2.5 h-2.5" />
-                              <span>Staff Subsidy</span>
-                            </span>
-                            <div className="text-sm font-black text-emerald-700 font-mono">
-                              ₹{parseFloat(p.employee_price).toFixed(2)}
-                            </div>
-                            <span className="text-[9px] text-slate-400 line-through font-mono">
-                              ₹{parseFloat(p.selling_price).toFixed(2)}
-                            </span>
-                          </div>
-                        ) : (
-                          <div>
-                            <span className="text-[9px] text-slate-400 uppercase font-medium">Price</span>
-                            <div className="text-sm font-black text-navy-800 font-mono">
-                              ₹{parseFloat(p.selling_price).toFixed(2)}
-                            </div>
-                          </div>
+                        {cartItem && (
+                          <span className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded">
+                            ({cartItem.quantity})
+                          </span>
                         )}
                       </div>
 
-                      <div className="p-1 rounded-lg bg-slate-100 group-hover:bg-primary group-hover:text-white text-navy-800 transition-colors shadow-2xs">
-                        <Plus className="w-3.5 h-3.5" />
+                      {/* Bottom Row: Price + Plus Button */}
+                      <div className="flex items-center justify-between mt-1 pt-1 border-t border-slate-100">
+                        <div className="font-mono font-black text-sm text-navy-900">
+                          ₹{parseFloat(p.selling_price || 0).toFixed(2)}
+                        </div>
+                        <div className="w-6 h-6 rounded-lg bg-blue-50 text-primary group-hover:bg-primary group-hover:text-white flex items-center justify-center transition-colors shadow-2xs">
+                          <Plus className="w-3.5 h-3.5" />
+                        </div>
                       </div>
                     </div>
                   </button>
@@ -1002,20 +1031,20 @@ export const POSTerminalPage: React.FC = () => {
               </span>
             </div>
 
-            {cart.length > 0 && (
+            {(cart.length > 0 || couponAmount !== '') && (
               <button
                 type="button"
                 onClick={() => {
                   if (cart.length > 1) {
-                    if (window.confirm(`Clear all ${totalItemsCount} items from the order?`)) {
-                      setCart([]);
+                    if (window.confirm(`Clear all ${totalItemsCount} items and coupon from the order?`)) {
+                      handleClearAll();
                     }
                   } else {
-                    setCart([]);
+                    handleClearAll();
                   }
                 }}
                 className="text-xs text-rose-600 hover:text-rose-700 font-semibold hover:bg-rose-50 px-2 py-1 rounded transition-colors flex items-center space-x-1"
-                title="Clear all items in cart"
+                title="Clear all items and coupon in cart"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Clear All</span>
@@ -1032,31 +1061,35 @@ export const POSTerminalPage: React.FC = () => {
                 </div>
                 <div>
                   <div className="font-bold text-slate-700 text-xs">Cart is currently empty</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Scan barcode [F2] or click any product to add</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Enter 4-digit code [F1], search products [F2], or click any item to add</div>
                 </div>
               </div>
             ) : (
               cart.map((item) => (
                 <div
                   key={item.itemId}
-                  className="py-3 flex items-center justify-between gap-2.5 text-xs group hover:bg-slate-50/70 -mx-1.5 px-1.5 rounded-lg transition-colors"
+                  className="py-2.5 flex items-center justify-between gap-2.5 text-xs group hover:bg-slate-50/70 -mx-1.5 px-1.5 rounded-lg transition-colors"
                 >
+                  {/* Cart Item Thumbnail */}
+                  <div className="w-9 h-9 rounded-md bg-slate-100 overflow-hidden shrink-0 border border-slate-200/80 flex items-center justify-center">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Package className="w-4 h-4 text-slate-300" />
+                    )}
+                  </div>
+
                   {/* Item Details: Full Unclipped Name & Unit Price */}
                   <div className="flex-1 min-w-0">
                     <div
-                      className="font-bold text-navy-900 leading-snug line-clamp-2 text-xs"
+                      className="font-bold text-navy-900 leading-snug line-clamp-2 text-xs flex items-baseline space-x-1"
                       title={item.name}
                     >
-                      {item.name}
+                      <span className="font-mono text-[10px] text-primary shrink-0 font-extrabold">[{item.itemCode}]</span>
+                      <span>{item.name}</span>
                     </div>
                     <div className="text-[11px] text-slate-500 font-mono flex items-center flex-wrap gap-1.5 mt-0.5">
                       <span>₹{item.unitPrice.toFixed(2)} / {item.unitCode}</span>
-                      {selectedEmployee && (
-                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.2 rounded flex items-center space-x-0.5">
-                          <Sparkles className="w-2.5 h-2.5" />
-                          <span>Staff Subsidy</span>
-                        </span>
-                      )}
                     </div>
                   </div>
 
@@ -1131,18 +1164,30 @@ export const POSTerminalPage: React.FC = () => {
                 <span className="text-[11px] font-semibold text-slate-600 flex items-center space-x-1">
                   <span>Meal Coupon (COUPAMT):</span>
                 </span>
-                <div className="flex items-center space-x-1 w-28">
+                <div className="flex items-center space-x-1 w-32">
                   <span className="text-slate-400 text-xs">₹</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max={grandTotal}
-                    step="any"
-                    placeholder="0.00"
-                    value={couponAmount}
-                    onChange={(e) => setCouponAmount(e.target.value)}
-                    className="w-full px-2 py-0.5 text-right font-mono font-bold text-xs bg-white border border-slate-300 rounded focus:border-primary focus:outline-none"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      type="number"
+                      min="0"
+                      max={grandTotal}
+                      step="any"
+                      placeholder="0.00"
+                      value={couponAmount}
+                      onChange={(e) => setCouponAmount(e.target.value)}
+                      className="w-full pl-2 pr-6 py-0.5 text-right font-mono font-bold text-xs bg-white border border-slate-300 rounded focus:border-primary focus:outline-none"
+                    />
+                    {couponAmount !== '' && (
+                      <button
+                        type="button"
+                        onClick={() => setCouponAmount('')}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 p-0.5 transition-colors"
+                        title="Clear Meal Coupon"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               {couponNumeric > 0 && (
@@ -1286,7 +1331,9 @@ export const POSTerminalPage: React.FC = () => {
 
             {/* Keyboard Shortcuts Helper Bar */}
             <div className="pt-1 flex items-center justify-center space-x-3 text-[10px] text-slate-400 font-mono">
-              <span>[F2] Barcode</span>
+              <span>[F1] 4-Digit Code</span>
+              <span>&bull;</span>
+              <span>[F2] Search</span>
               <span>&bull;</span>
               <span>[F4] Mode</span>
               <span>&bull;</span>
@@ -1300,235 +1347,148 @@ export const POSTerminalPage: React.FC = () => {
 
       {/* 3. MODALS: THERMAL RECEIPT, OPEN SHIFT, CLOSE SHIFT, Z-REPORT */}
 
-      {/* Invoice Receipt Modal */}
+      {/* High-Speed Payment Success & WhatsApp Dialog */}
       <Modal
         isOpen={isReceiptModalOpen}
         onClose={() => setIsReceiptModalOpen(false)}
-        title="CFECC Stores &bull; Sales Invoice Receipt"
-        subtitle="Official tax invoice and customer credit receipt"
-        maxWidth="md"
+        title="Sale Completed"
+        subtitle="Payment recorded & receipt generated"
+        maxWidth="sm"
       >
         {completedSale && (
-          <div className="space-y-4 text-xs font-sans">
-            {/* Paper Size selector (no-print) */}
-            <div className="no-print flex items-center justify-between pb-2 border-b border-borderLine">
-              <span className="text-textSecondary text-[11px] font-semibold">Printer & Paper Roll Format:</span>
-              <div className="flex items-center space-x-1.5">
-                <button
-                  type="button"
-                  onClick={() => setThermalSize('80mm')}
-                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
-                    thermalSize === '80mm' ? 'bg-navy-800 text-white shadow-sm' : 'bg-slate-100 text-textSecondary hover:bg-slate-200'
-                  }`}
-                >
-                  80mm Thermal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setThermalSize('58mm')}
-                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
-                    thermalSize === '58mm' ? 'bg-navy-800 text-white shadow-sm' : 'bg-slate-100 text-textSecondary hover:bg-slate-200'
-                  }`}
-                >
-                  58mm Compact
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setThermalSize('continuous')}
-                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
-                    thermalSize === 'continuous' ? 'bg-amber-600 text-white shadow-sm' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
-                  }`}
-                >
-                  80-Col Dot-Matrix (BILLCOPY)
-                </button>
+          <div className="space-y-3.5 text-xs font-sans">
+            {/* 1. Direct Success Header */}
+            <div className="flex flex-col items-center text-center pt-1 pb-1">
+              <div className="w-13 h-13 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2 shadow-xs">
+                <CheckCircle className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-black text-slate-800">Payment Successful!</h3>
+              <p className="text-xs font-mono font-bold text-slate-500 mt-0.5">
+                Bill <span className="text-navy-900 bg-slate-100 px-2 py-0.5 rounded font-mono font-black">{completedSale.invoiceNumber}</span>
+              </p>
+            </div>
+
+            {/* 2. Compact Key Details Card */}
+            <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <span className="text-xs text-slate-500 font-semibold">Total Paid</span>
+                <span className="font-mono font-black text-xl text-emerald-600">
+                  ₹{parseFloat(completedSale.totalAmount || completedSale.netPayable || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs pt-0.5">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Customer</span>
+                  <span className="font-bold text-slate-800 truncate block">
+                    {completedSale.employeeName || completedSale.customerName || 'Walk-in Customer'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Tender Mode</span>
+                  <span className="font-bold text-slate-800 uppercase block">
+                    {completedSale.paymentMode === 'EMPLOYEE_CREDIT' ? 'Monthly Credit' : completedSale.paymentMode}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Items</span>
+                  <span className="font-semibold text-slate-700">
+                    {completedSale.items?.length || 1} items
+                  </span>
+                </div>
+                {completedSale.employee && completedSale.paymentMode === 'EMPLOYEE_CREDIT' && (
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Available Credit</span>
+                    <span className="font-mono font-bold text-blue-700">
+                      ₹{parseFloat((completedSale.employee.available_credit || 0).toString()).toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Printable Receipt Container */}
-            {thermalSize === 'continuous' ? (
-              <div
-                id="printable-receipt"
-                className="font-mono text-[11px] leading-relaxed text-black bg-white p-5 border border-slate-300 rounded shadow-xs overflow-x-auto whitespace-pre select-text"
-              >
-{` COROMANDEL FERTILISERS EMPLOYEES CONSUMERS CO-OP STORES Ltd
- Visakhapatnam - 530 011.  No. B - 1906               CREDIT BILL
-     EMP No.: ${(completedSale.employee?.employee_code || completedSale.employeeCode || 'CASH').padEnd(10)}   CS No. : ${String(completedSale.employee?.cs_no || completedSale.csNo || '---').padEnd(6)}        BILL No.: ${completedSale.invoiceNumber}
-     NAME   : ${(completedSale.employeeName || completedSale.customerName || 'Customer').padEnd(25)}   DATE    : ${new Date(completedSale.createdAt).toLocaleDateString('en-GB')}
-     ELIGI  : ${parseFloat((completedSale.employee?.credit_limit || completedSale.creditLimit || 0).toString()).toFixed(2).padStart(10)}                TOT BILLS AMT : ${parseFloat((completedSale.employee?.current_outstanding || completedSale.currentOutstanding || 0).toString()).toFixed(2).padStart(10)}
- ------------------------------------------------------------------------------
- SNo.  ITEM  DESCRIPTION OF ITEM        QTY      VAT%     RATE      AMOUNT
- ------------------------------------------------------------------------------
-${(completedSale.items || []).map((it: any, idx: number) => {
-  const sno = String(idx + 1).padStart(4);
-  const code = String(it.itemCode || it.item_code || '----').padEnd(5);
-  const name = String(it.name || '').slice(0, 24).padEnd(25);
-  const qty = parseFloat(it.quantity).toFixed(2).padStart(7);
-  const vat = `${parseFloat(it.taxRate || it.tax_rate || 0).toFixed(1)}%`.padStart(7);
-  const rate = parseFloat(it.unitPrice).toFixed(2).padStart(9);
-  const amt = (parseFloat(it.quantity) * parseFloat(it.unitPrice)).toFixed(2).padStart(11);
-  return `${sno}  ${code} ${name} ${qty}  ${vat} ${rate} ${amt}`;
-}).join('\n')}
-                                                                 ------------
-          TOTAL (TAX + BASIC PRICE):   ${parseFloat(completedSale.taxAmount).toFixed(2)} + ${parseFloat(completedSale.subtotal).toFixed(2)}      ${(parseFloat(completedSale.subtotal) + parseFloat(completedSale.taxAmount)).toFixed(2).padStart(11)}
-${parseFloat((completedSale.couponAmount || 0).toString()) > 0 ? `          LESS COUPON (COUPAMT):                                       - ${parseFloat(completedSale.couponAmount).toFixed(2).padStart(11)}\n` : ''}          NET TOTAL:                                                  ${parseFloat(completedSale.totalAmount).toFixed(2).padStart(11)}
-
-     * Goods once sold will not be taken back..
-
-     Signature of MEMBER         ${new Date(completedSale.createdAt).toLocaleTimeString('en-GB')}         Signature of Salesman
- --------------------------------------------------------------------------
- PAN NO: AAAJC0553E         CST NO: VSP/04/02/1111     T I N : 28280198550`}
-              </div>
-            ) : (
-              <div
-                id="printable-receipt"
-                className={`space-y-3 font-mono border border-dashed border-slate-300 p-4 rounded-lg bg-white mx-auto shadow-sm ${
-                  thermalSize === '58mm' ? 'thermal-58mm max-w-[280px] text-[10px]' : 'max-w-[340px] text-[11px]'
-                }`}
-              >
-                <div className="text-center pb-2 border-b border-dashed border-slate-400">
-                  <h4 className="font-bold text-sm tracking-wide text-black uppercase">CFECC STORES</h4>
-                  <p className="text-[10px] text-black">Employee Consumer Cooperative Society</p>
-                  <p className="text-[10px] text-black">Visakhapatnam, Andhra Pradesh</p>
-                  <p className="text-[10px] font-bold text-black mt-0.5">GSTIN: 37AAAAA0000A1Z5</p>
-                </div>
-
-                <div className="space-y-1 text-black text-[10px] sm:text-[11px]">
-                  <div className="flex justify-between">
-                    <span>Bill No:</span>
-                    <span className="font-bold">{completedSale.invoiceNumber}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Date & Time:</span>
-                    <span>
-                      {new Date(completedSale.createdAt).toLocaleString('en-IN', {
-                        dateStyle: 'short',
-                        timeStyle: 'short',
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Customer:</span>
-                    <span className="font-bold truncate max-w-[170px]">{completedSale.employeeName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Payment Mode:</span>
-                    <span className="font-bold uppercase">{completedSale.paymentMode}</span>
-                  </div>
-                </div>
-
-                <div className="border-t border-b border-dashed border-slate-400 py-1.5 space-y-1">
-                  <div className="flex justify-between font-bold text-[10px] text-black border-b border-dotted pb-0.5">
-                    <span className="w-1/2">ITEM</span>
-                    <span className="w-1/4 text-center">QTY</span>
-                    <span className="w-1/4 text-right">AMT</span>
-                  </div>
-                  {completedSale.items?.map((item: any) => (
-                    <div key={item.itemId} className="flex justify-between text-black text-[10px] sm:text-[11px]">
-                      <span className="w-1/2 truncate font-medium">{item.name}</span>
-                      <span className="w-1/4 text-center">{item.quantity}</span>
-                      <span className="w-1/4 text-right">₹{(item.quantity * item.unitPrice).toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="space-y-1 text-black text-[10px] sm:text-[11px]">
-                  <div className="flex justify-between">
-                    <span>Items Count:</span>
-                    <span>{completedSale.items?.length || 1}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Subtotal:</span>
-                    <span>₹{parseFloat(completedSale.subtotal).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>CGST / SGST (Tax):</span>
-                    <span>₹{parseFloat(completedSale.taxAmount).toFixed(2)}</span>
-                  </div>
-                  {parseFloat((completedSale.couponAmount || 0).toString()) > 0 && (
-                    <div className="flex justify-between text-black font-semibold">
-                      <span>Meal Coupon (COUPAMT):</span>
-                      <span>- ₹{parseFloat(completedSale.couponAmount).toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-sm text-black pt-1 border-t border-dashed border-slate-400">
-                    <span>NET TOTAL:</span>
-                    <span>₹{parseFloat(completedSale.totalAmount).toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {completedSale.employee && completedSale.paymentMode === 'EMPLOYEE_CREDIT' && (
-                  <div className="border-t border-dotted border-slate-400 pt-1 text-[10px] text-black space-y-0.5">
-                    <div className="flex justify-between font-semibold">
-                      <span>Store Credit Outstanding:</span>
-                      <span>₹{parseFloat((completedSale.employee.current_outstanding || 0).toString()).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-black">
-                      <span>Available Credit Limit:</span>
-                      <span>₹{parseFloat((completedSale.employee.available_credit || 0).toString()).toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="text-center pt-2 flex flex-col items-center">
-                  <BarcodeSvg value={completedSale.invoiceNumber} height={32} barWidth={1.2} showText={true} />
-                  <p className="text-[9px] text-black mt-1 font-sans font-medium">
-                    *** Thank You &bull; Visit Again ***
-                  </p>
-                  <p className="text-[8px] text-slate-600 font-sans">Goods returnable within 7 days with bill</p>
-                </div>
-              </div>
-            )}
-
-            {/* WhatsApp Receipt Dispatch via Meta Cloud API (no-print) */}
-            <div className="no-print bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200 space-y-1.5 font-sans">
-              <div className="flex items-center justify-between text-emerald-950">
-                <span className="font-bold flex items-center space-x-1.5 text-[11px]">
+            {/* 3. Direct WhatsApp e-Receipt Dispatch */}
+            <div className="bg-emerald-50/90 border border-emerald-200 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold flex items-center space-x-1.5 text-xs text-emerald-950">
                   <MessageSquare className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Send WhatsApp e-Receipt (Meta Cloud API)</span>
+                  <span>WhatsApp e-Receipt</span>
                 </span>
                 {waSentStatus && (
-                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    waSentStatus.startsWith('Error') || waSentStatus.startsWith('Failed')
+                      ? 'bg-rose-100 text-rose-700'
+                      : 'bg-emerald-200/80 text-emerald-900'
+                  }`}>
                     {waSentStatus}
                   </span>
                 )}
               </div>
-              <div className="flex items-center space-x-1.5">
-                <input
-                  type="text"
-                  placeholder="e.g. 9848022338 or +919848022338"
-                  value={waPhoneInput}
-                  onChange={(e) => setWaPhoneInput(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 text-xs border border-emerald-300 rounded-md bg-white font-mono focus:outline-none"
-                />
+              <div className="flex items-center space-x-2">
+                <div className="flex-1 px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs flex items-center justify-between">
+                  <span className="text-[11px] text-slate-500">Mobile:</span>
+                  <span className="font-mono font-bold text-emerald-950">
+                    {waPhoneInput ? waPhoneInput : 'No Mobile Registered'}
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={handleSendWhatsAppReceipt}
                   disabled={waSending || !waPhoneInput.trim()}
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold flex items-center space-x-1 disabled:opacity-50 transition-colors shadow-subtle"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 disabled:opacity-40 transition-all shadow-xs"
                 >
                   <Send className="w-3 h-3" />
-                  <span>{waSending ? 'Sending...' : 'Send WhatsApp'}</span>
+                  <span>{waSending ? 'Sending...' : 'Send'}</span>
                 </button>
               </div>
             </div>
 
-            {/* Modal Controls (no-print) */}
-            <div className="no-print flex space-x-2 pt-2 border-t border-borderLine font-sans">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex-1 flex items-center justify-center space-x-1.5 py-2.5 rounded-lg bg-navy-800 hover:bg-navy-900 text-white font-semibold text-xs shadow-subtle transition-all"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Print Thermal Receipt ({thermalSize})</span>
-              </button>
+            {/* 4. Modal Fast Actions */}
+            <div className="no-print flex space-x-2 pt-1 border-t border-slate-200 font-sans">
               <button
                 type="button"
                 onClick={() => setIsReceiptModalOpen(false)}
-                className="px-5 py-2.5 rounded-lg border border-borderLine font-semibold text-xs text-textSecondary hover:bg-slate-50 transition-all"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center space-x-1.5 active:scale-98"
               >
-                Done
+                <span>Next Customer</span>
+                <span className="text-[10px] text-white/70 font-mono">[Enter]</span>
               </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-3.5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors flex items-center space-x-1.5"
+                title="Print physical paper slip if customer requests"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Slip</span>
+              </button>
+            </div>
+
+            {/* Hidden Printable Receipt for browser print dialog */}
+            <div id="printable-receipt" className="hidden print:block font-mono text-[11px] leading-tight text-black p-4">
+              <div className="text-center pb-2 border-b border-dashed border-black">
+                <h4 className="font-bold text-sm uppercase">CFECC STORES</h4>
+                <p className="text-[10px]">Employee Consumer Cooperative Society</p>
+                <p className="text-[10px]">Visakhapatnam, Andhra Pradesh</p>
+                <p className="text-[10px] font-bold">GSTIN: 37AAAAA0000A1Z5</p>
+              </div>
+              <div className="py-2 text-[10px] space-y-0.5">
+                <div>Bill No: {completedSale.invoiceNumber}</div>
+                <div>Date: {new Date(completedSale.createdAt).toLocaleString('en-IN')}</div>
+                <div>Customer: {completedSale.employeeName || completedSale.customerName}</div>
+                <div>Mode: {completedSale.paymentMode}</div>
+              </div>
+              <div className="border-t border-b border-dashed border-black py-1">
+                {(completedSale.items || []).map((it: any) => (
+                  <div key={it.itemId} className="flex justify-between text-[10px]">
+                    <span className="truncate w-1/2">{it.name}</span>
+                    <span className="w-1/4 text-center">{it.quantity}</span>
+                    <span className="w-1/4 text-right">₹{(it.quantity * it.unitPrice).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-1.5 text-right font-bold text-xs">
+                NET TOTAL: ₹{parseFloat(completedSale.totalAmount || completedSale.netPayable || 0).toFixed(2)}
+              </div>
             </div>
           </div>
         )}

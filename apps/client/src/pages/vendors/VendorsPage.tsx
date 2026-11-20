@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { Vendor, VendorSuppliedItem } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
@@ -20,15 +21,26 @@ import {
   ArrowUp,
   ArrowDown,
   Package,
+  RotateCcw,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export const VendorsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
-  const [includeInactive, setIncludeInactive] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<string>('name');
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
+
+  // Filters
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [gstFilter, setGstFilter] = useState<string>('ALL');
+  const [outstandingFilter, setOutstandingFilter] = useState<string>('ALL');
+  const [orderFilter, setOrderFilter] = useState<string>('ALL');
+  const [creditTermsFilter, setCreditTermsFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ACTIVE');
+  const [categorySummaries, setCategorySummaries] = useState<{ category: string; count: number }[]>([]);
 
   // Add / Edit Modal
   const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false);
@@ -36,6 +48,7 @@ export const VendorsPage: React.FC = () => {
   const [vendorForm, setVendorForm] = useState({
     vendorCode: '',
     name: '',
+    category: 'Provisions & Groceries',
     contactPerson: '',
     phone: '',
     email: '',
@@ -69,15 +82,35 @@ export const VendorsPage: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
     fetchVendors();
-  }, [search, includeInactive, sortBy, sortOrder]);
+  }, [search, statusFilter, selectedCategory, gstFilter, outstandingFilter, orderFilter, creditTermsFilter, sortBy, sortOrder]);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await api.get('/vendors/categories');
+      if (res.data.success) {
+        setCategorySummaries(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchVendors = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
         search,
-        includeInactive: includeInactive.toString(),
+        status: statusFilter,
+        category: selectedCategory,
+        gstStatus: gstFilter,
+        outstandingStatus: outstandingFilter,
+        orderStatus: orderFilter,
+        creditTerms: creditTermsFilter,
         sortBy,
         sortOrder,
       });
@@ -101,11 +134,41 @@ export const VendorsPage: React.FC = () => {
     }
   };
 
+  const hasActiveFilters = 
+    search.trim() !== '' || 
+    selectedCategory !== 'ALL' || 
+    gstFilter !== 'ALL' || 
+    outstandingFilter !== 'ALL' || 
+    orderFilter !== 'ALL' || 
+    creditTermsFilter !== 'ALL' || 
+    statusFilter !== 'ACTIVE';
+
+  const activeFilterCount = [
+    search.trim() !== '',
+    selectedCategory !== 'ALL',
+    gstFilter !== 'ALL',
+    outstandingFilter !== 'ALL',
+    orderFilter !== 'ALL',
+    creditTermsFilter !== 'ALL',
+    statusFilter !== 'ACTIVE',
+  ].filter(Boolean).length;
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setSelectedCategory('ALL');
+    setGstFilter('ALL');
+    setOutstandingFilter('ALL');
+    setOrderFilter('ALL');
+    setCreditTermsFilter('ALL');
+    setStatusFilter('ACTIVE');
+  };
+
   const openCreateModal = () => {
     setEditingVendor(null);
     setVendorForm({
       vendorCode: `VND-${String(vendors.length + 1).padStart(3, '0')}`,
       name: '',
+      category: selectedCategory !== 'ALL' ? selectedCategory : 'Provisions & Groceries',
       contactPerson: '',
       phone: '',
       email: '',
@@ -129,6 +192,7 @@ export const VendorsPage: React.FC = () => {
     setVendorForm({
       vendorCode: v.vendor_code,
       name: v.name,
+      category: v.category || 'Provisions & Groceries',
       contactPerson: v.contact_person || '',
       phone: v.phone,
       email: v.email || '',
@@ -158,12 +222,14 @@ export const VendorsPage: React.FC = () => {
         if (res.data.success) {
           setIsAddEditModalOpen(false);
           fetchVendors();
+          fetchCategories();
         }
       } else {
         const res = await api.post('/vendors', vendorForm);
         if (res.data.success) {
           setIsAddEditModalOpen(false);
           fetchVendors();
+          fetchCategories();
         }
       }
     } catch (err: any) {
@@ -199,6 +265,7 @@ export const VendorsPage: React.FC = () => {
     const headers = [
       'Vendor Code',
       'Name',
+      'Category',
       'Contact Person',
       'Phone',
       'Email',
@@ -216,6 +283,7 @@ export const VendorsPage: React.FC = () => {
     const rows = vendors.map((v) => [
       `"${v.vendor_code}"`,
       `"${v.name.replace(/"/g, '""')}"`,
+      `"${v.category || 'Provisions & Groceries'}"`,
       `"${v.contact_person || ''}"`,
       `"${v.phone}"`,
       `"${v.email || ''}"`,
@@ -241,7 +309,35 @@ export const VendorsPage: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // Metrics
+  // Metrics & Categories
+  const standardCategories = useMemo(() => [
+    'Provisions & Groceries',
+    'Beverages & Snacks',
+    'Industrial & Machinery',
+    'Stationery & Household',
+    'Dairy & Refrigerated',
+    'Personal Care & Hygiene',
+    'Textiles & Apparel',
+    'General Wholesale',
+  ], []);
+
+  const categoryOptions = useMemo(() => {
+    const map = new Map<string, number>();
+    standardCategories.forEach((cat) => map.set(cat, 0));
+    categorySummaries.forEach((cs) => {
+      if (cs.category) {
+        map.set(cs.category, Number(cs.count));
+      }
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [categorySummaries, standardCategories]);
+
+  const totalRegisteredCount = useMemo(() => {
+    return categorySummaries.reduce((acc, curr) => acc + Number(curr.count || 0), 0);
+  }, [categorySummaries]);
+
   const totalOutstanding = useMemo(
     () => vendors.reduce((sum, v) => sum + (parseFloat(String(v.current_outstanding || 0)) || 0), 0),
     [vendors]
@@ -322,30 +418,160 @@ export const VendorsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-96">
+      {/* Category Pills Quick-Filter Bar */}
+      <div className="bg-surface p-2.5 rounded-cfecc border border-borderLine shadow-subtle flex items-center space-x-2 overflow-x-auto scrollbar-none">
+        <button
+          onClick={() => setSelectedCategory('ALL')}
+          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+            selectedCategory === 'ALL'
+              ? 'bg-navy-800 text-white shadow-xs'
+              : 'bg-slate-100 text-textSecondary hover:bg-slate-200 hover:text-navy-800'
+          }`}
+        >
+          <span>All Categories</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+              selectedCategory === 'ALL' ? 'bg-navy-700 text-slate-100' : 'bg-slate-200 text-slate-700'
+            }`}
+          >
+            {totalRegisteredCount || vendors.length}
+          </span>
+        </button>
+
+        {categoryOptions.map((cat) => {
+          const isSelected = selectedCategory === cat.name;
+          return (
+            <button
+              key={cat.name}
+              onClick={() => setSelectedCategory(isSelected ? 'ALL' : cat.name)}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                isSelected
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'bg-slate-100 text-textSecondary hover:bg-slate-200 hover:text-navy-800'
+              }`}
+            >
+              <span>{cat.name}</span>
+              {cat.count > 0 && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    isSelected ? 'bg-primary-hover text-white' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {cat.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Multi-Dimensional Filter Toolbar */}
+      <div className="bg-surface p-3.5 rounded-cfecc border border-borderLine shadow-subtle flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+        {/* Search Input */}
+        <div className="relative flex-1 min-w-[240px] max-w-md">
           <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search vendor name, code, contact person, GSTIN, phone..."
-            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
+            placeholder="Search vendor name, code, contact person, GSTIN, phone, category..."
+            className="w-full pl-9 pr-7 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white transition-colors"
           />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-bold leading-none"
+              title="Clear search"
+            >
+              &times;
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setIncludeInactive(!includeInactive)}
-            className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
-              includeInactive
-                ? 'bg-slate-200 text-navy-800 border-slate-300'
-                : 'bg-surface text-textSecondary border-borderLine hover:bg-slate-50'
-            }`}
+        {/* Filters Group */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Category Dropdown */}
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
           >
-            <span>{includeInactive ? 'Showing Inactive Vendors' : 'Active Vendors Only'}</span>
-          </button>
+            <option value="ALL">All Categories</option>
+            {categoryOptions.map((c) => (
+              <option key={c.name} value={c.name}>
+                {c.name} {c.count > 0 ? `(${c.count})` : ''}
+              </option>
+            ))}
+          </select>
+
+          {/* GST Status Filter */}
+          <select
+            value={gstFilter}
+            onChange={(e) => setGstFilter(e.target.value)}
+            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+          >
+            <option value="ALL">All GST Statuses</option>
+            <option value="REGISTERED">GST Registered</option>
+            <option value="UNREGISTERED">Unregistered / Non-GST</option>
+          </select>
+
+          {/* Credit Terms Filter */}
+          <select
+            value={creditTermsFilter}
+            onChange={(e) => setCreditTermsFilter(e.target.value)}
+            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+          >
+            <option value="ALL">All Credit Terms</option>
+            <option value="0">Immediate / 0 Days</option>
+            <option value="15">15 Days Credit</option>
+            <option value="30">30 Days Standard</option>
+            <option value="45+">45+ Days Window</option>
+          </select>
+
+          {/* Outstanding Payables Filter */}
+          <select
+            value={outstandingFilter}
+            onChange={(e) => setOutstandingFilter(e.target.value)}
+            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+          >
+            <option value="ALL">All Payables</option>
+            <option value="HAS_OUTSTANDING">Has Balance (&gt; ₹0)</option>
+            <option value="ZERO_BALANCE">Nil Balance (₹0.00)</option>
+          </select>
+
+          {/* Order Activity Filter */}
+          <select
+            value={orderFilter}
+            onChange={(e) => setOrderFilter(e.target.value)}
+            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+          >
+            <option value="ALL">All PO Activity</option>
+            <option value="HAS_ORDERS">Active (With POs)</option>
+            <option value="NO_ORDERS">No Purchase Orders</option>
+          </select>
+
+          {/* Active Status Filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+          >
+            <option value="ACTIVE">Active Only</option>
+            <option value="INACTIVE">Inactive Only</option>
+            <option value="ALL">All Statuses</option>
+          </select>
+
+          {/* Reset Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold hover:bg-rose-100 transition-colors shadow-xs"
+              title="Reset all filters to defaults"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset ({activeFilterCount})</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -400,7 +626,16 @@ export const VendorsPage: React.FC = () => {
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-textSecondary">
                     <Truck className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                    <div>No vendor records found matching filter criteria.</div>
+                    <div className="font-semibold text-slate-700">No vendor records found matching filter criteria.</div>
+                    {hasActiveFilters && (
+                      <button
+                        onClick={handleResetFilters}
+                        className="mt-2 text-xs text-primary font-semibold hover:underline inline-flex items-center space-x-1"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Clear All Filters</span>
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -417,7 +652,12 @@ export const VendorsPage: React.FC = () => {
                           View Products
                         </span>
                       </div>
-                      <div className="text-[11px] text-textSecondary font-mono">{v.vendor_code}</div>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <span className="text-[11px] text-textSecondary font-mono">{v.vendor_code}</span>
+                        <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200">
+                          {v.category || 'Provisions & Groceries'}
+                        </span>
+                      </div>
                     </td>
 
                     <td className="py-3 px-4">
@@ -500,6 +740,11 @@ export const VendorsPage: React.FC = () => {
         <div className="sticky bottom-0 z-10 bg-slate-50/95 backdrop-blur-xs border-t border-borderLine px-4 py-2.5 flex items-center justify-between text-xs text-textSecondary select-none">
           <div>
             Showing <span className="font-bold text-navy-800 font-mono">{vendors.length}</span> registered vendors / trade partners
+            {hasActiveFilters && (
+              <span className="ml-1.5 text-primary font-medium">
+                (filtered from {totalRegisteredCount || 'all'} total)
+              </span>
+            )}
           </div>
           <div className="flex items-center space-x-3 text-[11px]">
             <span className="text-slate-600 font-medium">
@@ -517,7 +762,7 @@ export const VendorsPage: React.FC = () => {
         isOpen={isAddEditModalOpen}
         onClose={() => setIsAddEditModalOpen(false)}
         title={editingVendor ? `Edit Vendor: ${editingVendor.name}` : 'Add New Vendor / Supplier'}
-        subtitle="Configure supplier master details, GSTIN, credit limits and bank account"
+        subtitle="Configure supplier master details, GSTIN, credit limits, category and bank account"
         maxWidth="2xl"
       >
         <form onSubmit={handleSaveVendor} className="space-y-4 text-xs">
@@ -551,6 +796,24 @@ export const VendorsPage: React.FC = () => {
                 onChange={(e) => setVendorForm({ ...vendorForm, name: e.target.value })}
                 className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
               />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-textSecondary uppercase mb-1">Product / Vendor Category *</label>
+              <select
+                value={vendorForm.category}
+                onChange={(e) => setVendorForm({ ...vendorForm, category: e.target.value })}
+                className="w-full px-3 py-1.5 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
+              >
+                <option value="Provisions & Groceries">Provisions & Groceries</option>
+                <option value="Dairy & Refrigerated">Dairy & Refrigerated</option>
+                <option value="Beverages & Snacks">Beverages & Snacks</option>
+                <option value="Personal Care & Hygiene">Personal Care & Hygiene</option>
+                <option value="Stationery & Household">Stationery & Household</option>
+                <option value="Industrial & Machinery">Industrial & Machinery</option>
+                <option value="Textiles & Apparel">Textiles & Apparel</option>
+                <option value="General Wholesale">General Wholesale</option>
+              </select>
             </div>
 
             <div>
@@ -741,7 +1004,11 @@ export const VendorsPage: React.FC = () => {
           ) : profileData ? (
             <>
               {/* Profile Top Stats */}
-              <div className="bg-slate-50 p-3 rounded-lg border border-borderLine grid grid-cols-4 gap-3">
+              <div className="bg-slate-50 p-3 rounded-lg border border-borderLine grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div>
+                  <span className="text-[10px] text-textSecondary uppercase font-bold block">Category</span>
+                  <span className="font-semibold text-primary">{profileData.vendor.category || 'Provisions & Groceries'}</span>
+                </div>
                 <div>
                   <span className="text-[10px] text-textSecondary uppercase font-bold block">Current Outstanding</span>
                   <span className="text-base font-bold text-rose-600 font-mono">
@@ -762,56 +1029,70 @@ export const VendorsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Profile Tabs */}
-              <div className="flex space-x-2 border-b border-borderLine">
+              {/* Profile Tabs & Quick Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-borderLine gap-2">
+                <div className="flex space-x-2 overflow-x-auto">
+                  <button
+                    onClick={() => setProfileTab('PRODUCTS')}
+                    className={`pb-2 px-3 font-semibold transition-colors flex items-center space-x-1.5 shrink-0 ${
+                      profileTab === 'PRODUCTS' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
+                    }`}
+                  >
+                    <Package className="w-3.5 h-3.5" />
+                    <span>Products Sold ({profileData.suppliedItems?.length || 0})</span>
+                  </button>
+                  <button
+                    onClick={() => setProfileTab('OVERVIEW')}
+                    className={`pb-2 px-3 font-semibold transition-colors shrink-0 ${
+                      profileTab === 'OVERVIEW' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
+                    }`}
+                  >
+                    Overview & Banking
+                  </button>
+                  <button
+                    onClick={() => setProfileTab('POS')}
+                    className={`pb-2 px-3 font-semibold transition-colors shrink-0 ${
+                      profileTab === 'POS' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
+                    }`}
+                  >
+                    Purchase Orders ({profileData.purchaseOrders.length})
+                  </button>
+                  <button
+                    onClick={() => setProfileTab('INVOICES')}
+                    className={`pb-2 px-3 font-semibold transition-colors shrink-0 ${
+                      profileTab === 'INVOICES' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
+                    }`}
+                  >
+                    Invoices ({profileData.invoices.length})
+                  </button>
+                  <button
+                    onClick={() => setProfileTab('PAYMENTS')}
+                    className={`pb-2 px-3 font-semibold transition-colors shrink-0 ${
+                      profileTab === 'PAYMENTS' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
+                    }`}
+                  >
+                    Payments ({profileData.payments.length})
+                  </button>
+                  <button
+                    onClick={() => setProfileTab('ACTIVITY')}
+                    className={`pb-2 px-3 font-semibold transition-colors shrink-0 ${
+                      profileTab === 'ACTIVITY' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
+                    }`}
+                  >
+                    Activity ({profileData.activityHistory.length})
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setProfileTab('PRODUCTS')}
-                  className={`pb-2 px-3 font-semibold transition-colors flex items-center space-x-1.5 ${
-                    profileTab === 'PRODUCTS' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
-                  }`}
+                  type="button"
+                  onClick={() => {
+                    setIsProfileModalOpen(false);
+                    navigate(`/purchasing/orders/new?vendorId=${profileData.vendor.id}`);
+                  }}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary-hover shadow-2xs mb-1.5 shrink-0"
                 >
-                  <Package className="w-3.5 h-3.5" />
-                  <span>Products Sold / Supplied ({profileData.suppliedItems?.length || 0})</span>
-                </button>
-                <button
-                  onClick={() => setProfileTab('OVERVIEW')}
-                  className={`pb-2 px-3 font-semibold transition-colors ${
-                    profileTab === 'OVERVIEW' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
-                  }`}
-                >
-                  Overview & Banking
-                </button>
-                <button
-                  onClick={() => setProfileTab('POS')}
-                  className={`pb-2 px-3 font-semibold transition-colors ${
-                    profileTab === 'POS' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
-                  }`}
-                >
-                  Purchase Orders ({profileData.purchaseOrders.length})
-                </button>
-                <button
-                  onClick={() => setProfileTab('INVOICES')}
-                  className={`pb-2 px-3 font-semibold transition-colors ${
-                    profileTab === 'INVOICES' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
-                  }`}
-                >
-                  Invoices ({profileData.invoices.length})
-                </button>
-                <button
-                  onClick={() => setProfileTab('PAYMENTS')}
-                  className={`pb-2 px-3 font-semibold transition-colors ${
-                    profileTab === 'PAYMENTS' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
-                  }`}
-                >
-                  Payment History ({profileData.payments.length})
-                </button>
-                <button
-                  onClick={() => setProfileTab('ACTIVITY')}
-                  className={`pb-2 px-3 font-semibold transition-colors ${
-                    profileTab === 'ACTIVITY' ? 'border-b-2 border-primary text-primary font-bold' : 'text-textSecondary hover:text-navy-800'
-                  }`}
-                >
-                  Activity Trail ({profileData.activityHistory.length})
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Issue Purchase Order</span>
                 </button>
               </div>
 

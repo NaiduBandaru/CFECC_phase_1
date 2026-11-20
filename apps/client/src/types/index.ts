@@ -130,6 +130,7 @@ export interface Vendor {
   city?: string | null;
   state?: string | null;
   gstin?: string | null;
+  category?: string | null;
   payment_terms_days: number;
   bank_name?: string | null;
   account_number?: string | null;
@@ -416,6 +417,7 @@ export interface VendorPurchaseSummary {
   contact_person?: string | null;
   phone: string;
   gstin?: string | null;
+  category?: string | null;
   payment_terms_days: number;
   current_outstanding: string | number;
   total_invoices: number;

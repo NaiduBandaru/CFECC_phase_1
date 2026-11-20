@@ -2,14 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
 import { Item, Category, Unit, ItemPriceHistory } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
-import { BarcodeSvg } from '../../components/ui/BarcodeSvg.js';
 import { FloatingActionBar } from '../../components/ui/FloatingActionBar.js';
 import {
   Package,
   Search,
   Plus,
   AlertTriangle,
-  Barcode,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -117,12 +115,6 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
   const [newUnitName, setNewUnitName] = useState('');
   const [newUnitPrec, setNewUnitPrec] = useState(0);
   const [catUnitError, setCatUnitError] = useState<string | null>(null);
-
-  // Barcode Sticker Printing Modal
-  const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState<boolean>(false);
-  const [stickerCopies, setStickerCopies] = useState<number>(2);
-  const [stickerFormat, setStickerFormat] = useState<'ROLL_50x25' | 'A4_24' | 'A4_30'>('ROLL_50x25');
-  const [barcodeTargetItems, setBarcodeTargetItems] = useState<Item[]>([]);
 
   // Form Submission
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -375,17 +367,6 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
     }
   };
 
-  const handleOpenBulkBarcodePrint = () => {
-    const selected = items.filter((i) => selectedIds.includes(i.id));
-    setBarcodeTargetItems(selected);
-    setIsBarcodeModalOpen(true);
-  };
-
-  const handleOpenSingleBarcodePrint = (item: Item) => {
-    setBarcodeTargetItems([item]);
-    setIsBarcodeModalOpen(true);
-  };
-
   const handleExportCSV = () => {
     if (items.length === 0) {
       alert('No items to export.');
@@ -528,7 +509,7 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by code, name, barcode, brand, SKU..."
+              placeholder="Search by code, name, brand, SKU..."
               className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
             />
           </div>
@@ -617,14 +598,6 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
         itemLabel="items"
         onClear={() => setSelectedIds([])}
       >
-        <button
-          type="button"
-          onClick={handleOpenBulkBarcodePrint}
-          className="px-3 py-1.5 bg-navy-800 hover:bg-navy-700 text-white font-bold rounded-lg shadow-sm flex items-center space-x-1.5 border border-navy-700"
-        >
-          <Printer className="w-3.5 h-3.5 text-amber-400" />
-          <span>Print Barcodes</span>
-        </button>
         <button
           type="button"
           disabled={isBulkOperating}
@@ -1165,121 +1138,6 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
               className="px-4 py-2 font-semibold text-textSecondary hover:text-textPrimary"
             >
               Done
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Barcode Sticker Generator Modal */}
-      <Modal
-        isOpen={isBarcodeModalOpen}
-        onClose={() => setIsBarcodeModalOpen(false)}
-        title="Print Barcode Labels & Shelf Stickers"
-        subtitle="Generate scannable Code128 barcodes formatted for 50x25mm thermal rolls or standard A4 sheets"
-        maxWidth="4xl"
-      >
-        <div className="space-y-4 text-xs">
-          {/* Controls toolbar */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg border border-borderLine no-print">
-            <div>
-              <label className="block text-[11px] font-bold text-navy-800 uppercase mb-1">Sticker Format</label>
-              <select
-                value={stickerFormat}
-                onChange={(e) => setStickerFormat(e.target.value as any)}
-                className="w-full p-2 border border-borderLine rounded bg-white font-medium text-xs focus:outline-none"
-              >
-                <option value="ROLL_50x25">50mm x 25mm Thermal Roll (TSC / Zebra / Argox)</option>
-                <option value="A4_24">A4 Sheet - 24 Labels (3 x 8 Grid)</option>
-                <option value="A4_30">A4 Sheet - 30 Labels (3 x 10 Grid)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-navy-800 uppercase mb-1">Copies Per Item</label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={stickerCopies}
-                  onChange={(e) => setStickerCopies(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-24 p-2 border border-borderLine rounded bg-white font-bold text-center text-xs focus:outline-none"
-                />
-                <span className="text-[11px] text-textSecondary">
-                  Total: <strong className="text-navy-800">{barcodeTargetItems.length * stickerCopies}</strong> labels
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-end justify-end space-x-2">
-              <button
-                onClick={() => window.print()}
-                className="flex items-center space-x-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg shadow-subtle transition-all"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Print All Labels</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Printable Barcode Sheet Container */}
-          <div className="border border-borderLine rounded-lg bg-slate-100 p-4 max-h-[500px] overflow-y-auto">
-            <div
-              id="printable-barcodes"
-              className={
-                stickerFormat === 'ROLL_50x25'
-                  ? 'flex flex-col items-center gap-3 bg-white p-2 mx-auto max-w-[240px]'
-                  : 'grid grid-cols-3 gap-2 bg-white p-4'
-              }
-            >
-              {barcodeTargetItems.flatMap((item) =>
-                Array.from({ length: stickerCopies }).map((_, copyIdx) => (
-                  <div
-                    key={`${item.id}-copy-${copyIdx}`}
-                    style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
-                    className="border border-dashed border-slate-300 rounded p-2 text-center bg-white flex flex-col justify-between items-center w-[188px] min-h-[95px] shadow-sm"
-                  >
-                    <div className="w-full">
-                      <div className="text-[9px] font-black tracking-widest text-navy-800 uppercase leading-none">
-                        CFECC STORE
-                      </div>
-                      <div className="text-[10px] font-bold text-slate-800 truncate mt-0.5" title={item.name}>
-                        {item.name}
-                      </div>
-                    </div>
-
-                    <div className="my-1 flex items-center justify-center">
-                      <BarcodeSvg
-                        value={item.barcode?.trim() || item.item_code}
-                        barWidth={1.2}
-                        height={32}
-                        showText={true}
-                      />
-                    </div>
-
-                    <div className="w-full flex items-center justify-between border-t border-slate-200 pt-1 text-[9px]">
-                      <div className="text-slate-500">
-                        MRP: <span className="line-through">₹{parseFloat(item.selling_price.toString()).toFixed(2)}</span>
-                      </div>
-                      <div className="font-black text-navy-800">
-                        MEMBER: <span className="text-primary font-bold">₹{parseFloat(item.employee_price.toString()).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] text-textSecondary pt-2 border-t border-borderLine no-print">
-            <div>
-              Tip: For thermal roll printers, set print margins to <strong>None</strong> in the browser print dialog.
-            </div>
-            <button
-              onClick={() => setIsBarcodeModalOpen(false)}
-              className="px-4 py-1.5 border border-borderLine rounded-lg bg-surface hover:bg-slate-50 font-semibold"
-            >
-              Close
             </button>
           </div>
         </div>

@@ -27,6 +27,48 @@ const formatCurrency = (val: number | string | undefined | null) => {
   return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+const calcCooperativeCycle = () => {
+  const d = new Date();
+  const day = d.getDate();
+  let cycleMonth = d.getMonth();
+  let cycleYear = d.getFullYear();
+
+  let prevMonth = cycleMonth - 1;
+  let prevYear = cycleYear;
+  let curMonth = cycleMonth;
+  let curYear = cycleYear;
+
+  if (day >= 21) {
+    prevMonth = cycleMonth;
+    prevYear = cycleYear;
+    curMonth = cycleMonth + 1;
+    if (curMonth > 11) {
+      curMonth = 0;
+      curYear++;
+    }
+  }
+
+  const prevMonthDate = new Date(prevYear, prevMonth, 21);
+  const startStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-21`;
+
+  const curMonthDate = new Date(curYear, curMonth, 20);
+  const endStr = `${curMonthDate.getFullYear()}-${String(curMonthDate.getMonth() + 1).padStart(2, '0')}-20`;
+
+  const billingDateStr = `${curYear}-${String(curMonth + 1).padStart(2, '0')}-21`;
+
+  const monthName = curMonthDate.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+  const periodCode = `BILL-${curYear}-${String(curMonth + 1).padStart(2, '0')}`;
+  const periodName = `${monthName} Store Billing (21 ${prevMonthDate.toLocaleString('en-IN', { month: 'short' })} - 20 ${curMonthDate.toLocaleString('en-IN', { month: 'short' })})`;
+
+  return {
+    periodCode,
+    periodName,
+    startDate: startStr,
+    endDate: endStr,
+    billingDate: billingDateStr,
+  };
+};
+
 export const BillingPage: React.FC = () => {
   const [periods, setPeriods] = useState<BillingPeriod[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
@@ -49,13 +91,13 @@ export const BillingPage: React.FC = () => {
 
   // New Period Modal
   const [isNewPeriodModalOpen, setIsNewPeriodModalOpen] = useState<boolean>(false);
-  const [periodForm, setPeriodForm] = useState({
-    periodCode: `BILL-2026-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
-    periodName: `${new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })} Store Billing`,
-    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
-    billingDate: new Date().toISOString().split('T')[0],
-  });
+  const [periodForm, setPeriodForm] = useState(calcCooperativeCycle);
+
+  // Open modal with freshly calculated cycle
+  const openNewPeriodModal = () => {
+    setPeriodForm(calcCooperativeCycle());
+    setIsNewPeriodModalOpen(true);
+  };
 
   // Direct Payment Collection Modal
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
@@ -131,7 +173,7 @@ export const BillingPage: React.FC = () => {
   // Finalize Billing
   const handleFinalizeBilling = async () => {
     if (!selectedPeriodId) return;
-    if (!confirm('Are you sure you want to finalize this billing period? Finalized periods cannot be modified.')) return;
+    if (!confirm('Are you sure you want to finalize this billing period?\n\nThis will:\n1. Lock monthly statements & schedule salary deduction with Corporate Payroll.\n2. Reset member store usage to ₹0.00 and restore 100% available credit limit.\n3. Automatically roll over to the next cycle (21st to 20th).')) return;
 
     setIsProcessing(true);
     setMessage(null);
@@ -141,7 +183,11 @@ export const BillingPage: React.FC = () => {
       if (res.data.success) {
         setMessage({ type: 'success', text: res.data.message });
         await fetchPeriods();
-        await fetchStatements(selectedPeriodId);
+        if (res.data.nextPeriodId) {
+          setSelectedPeriodId(res.data.nextPeriodId.toString());
+        } else {
+          await fetchStatements(selectedPeriodId);
+        }
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.response?.data?.message || 'Failed to finalize billing' });
@@ -344,7 +390,7 @@ export const BillingPage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setIsNewPeriodModalOpen(true)}
+            onClick={openNewPeriodModal}
             className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors shadow-subtle"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -390,6 +436,14 @@ export const BillingPage: React.FC = () => {
                 </option>
               ))}
             </select>
+            {selectedPeriod && (
+              <div className="flex items-center space-x-2 mt-1.5">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                  Cycle: {selectedPeriod.start_date} &rarr; {selectedPeriod.end_date}
+                </span>
+                <StatusBadge status={selectedPeriod.status} />
+              </div>
+            )}
           </div>
         </div>
 

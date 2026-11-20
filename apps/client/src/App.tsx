@@ -11,6 +11,7 @@ import { VendorsPage } from './pages/vendors/VendorsPage.js';
 import { POSTerminalPage } from './pages/pos/POSTerminalPage.js';
 import { SalesRegisterPage } from './pages/sales/SalesRegisterPage.js';
 import { PurchasingPage } from './pages/purchasing/PurchasingPage.js';
+import { CreatePurchaseOrderPage } from './pages/purchasing/CreatePurchaseOrderPage.js';
 import { PurchaseInvoicesPage } from './pages/purchasing/PurchaseInvoicesPage.js';
 import { BillingPage } from './pages/billing/BillingPage.js';
 import { PayrollPage } from './pages/payroll/PayrollPage.js';
@@ -156,6 +157,22 @@ export function App() {
               element={
                 <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
                   <PurchasingPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="purchasing/orders/new"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
+                  <CreatePurchaseOrderPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="purchasing/new"
+              element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
+                  <CreatePurchaseOrderPage />
                 </RoleRoute>
               }
             />

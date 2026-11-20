@@ -286,7 +286,7 @@ export const ItemPricingPage: React.FC<ItemPricingPageProps> = ({ hideHeader = f
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search commodity name, item code, barcode..."
+                  placeholder="Search commodity name or item code..."
                   className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
                 />
               </div>

@@ -10,12 +10,19 @@ const createPoSchema = z.object({
   vendorId: z.number().int(),
   orderDate: z.string(),
   expectedDeliveryDate: z.string().optional().nullable(),
+  vendorInvoiceNumber: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   items: z.array(z.object({
     itemId: z.number().int(),
     orderedQty: z.number().positive(),
     unitPrice: z.number().nonnegative(),
-    taxRate: z.number().nonnegative().default(0),
+    taxRate: z.number().nonnegative().optional().default(0),
+    cgstRate: z.number().nonnegative().optional().default(0),
+    sgstRate: z.number().nonnegative().optional().default(0),
+    igstRate: z.number().nonnegative().optional().default(0),
+    salePrice: z.number().optional().nullable(),
+    mrp: z.number().optional().nullable(),
+    expiryDate: z.string().optional().nullable(),
   })).min(1, 'At least one item is required in the purchase order'),
 });
 
@@ -86,7 +93,10 @@ purchasingRouter.get('/orders', authenticateToken, async (req: Request, res: Res
         gr.grn_number,
         gr.receipt_date as grn_date,
         pi.invoice_number as vendor_invoice_number,
-        (SELECT CAST(COUNT(*) AS INTEGER) FROM purchase_order_items poi WHERE poi.po_id = po.id) as item_count
+        (SELECT CAST(COUNT(*) AS INTEGER) FROM purchase_order_items poi WHERE poi.po_id = po.id) as item_count,
+        (SELECT COALESCE(SUM(poi.cgst_amount), 0) FROM purchase_order_items poi WHERE poi.po_id = po.id) as cgst_amount,
+        (SELECT COALESCE(SUM(poi.sgst_amount), 0) FROM purchase_order_items poi WHERE poi.po_id = po.id) as sgst_amount,
+        (SELECT COALESCE(SUM(poi.igst_amount), 0) FROM purchase_order_items poi WHERE poi.po_id = po.id) as igst_amount
       FROM purchase_orders po
       JOIN vendors v ON po.vendor_id = v.id
       LEFT JOIN goods_receipts gr ON gr.po_id = po.id
@@ -124,9 +134,9 @@ purchasingRouter.get('/orders/:id', authenticateToken, async (req: Request, res:
         u.code as unit_code,
         COALESCE(i.selling_price, i.batch1_rate, 0) as sale_price,
         COALESCE(i.selling_price, i.batch1_rate, 0) as mrp,
-        COALESCE(i.cgst_rate, 0) as cgst_rate,
-        COALESCE(i.sgst_rate, 0) as sgst_rate,
-        COALESCE(i.igst_rate, 0) as igst_rate
+        COALESCE(poi.cgst_rate, i.cgst_rate, 0) as cgst_rate,
+        COALESCE(poi.sgst_rate, i.sgst_rate, 0) as sgst_rate,
+        COALESCE(poi.igst_rate, 0) as igst_rate
       FROM purchase_order_items poi
       JOIN items i ON poi.item_id = i.id
       LEFT JOIN units u ON i.unit_id = u.id
@@ -150,16 +160,27 @@ purchasingRouter.post('/orders', authenticateToken, requireRole('SUPER_ADMIN', '
   try {
     const body = createPoSchema.parse(req.body);
 
-    const countResult = await executeRawSql(`SELECT COUNT(*) as count FROM purchase_orders`);
-    const nextNum = parseInt(countResult.rows[0]?.count || '0', 10) + 1;
-    const poNumber = `PO-2026-${String(nextNum).padStart(4, '0')}`;
+    const numRes = await executeRawSql(`SELECT COALESCE(MAX(id), 0) + 1 as next_num FROM purchase_orders`);
+    let nextNum = parseInt(numRes.rows[0]?.next_num || '1', 10);
+    let poNumber = `PO-2026-${String(nextNum).padStart(4, '0')}`;
+    let poAttempt = 0;
+    while (true) {
+      const check = await executeRawSql(`SELECT id FROM purchase_orders WHERE po_number = '${poNumber}'`);
+      if (!check.rows || check.rows.length === 0) break;
+      poAttempt++;
+      poNumber = `PO-2026-${String(nextNum + poAttempt).padStart(4, '0')}`;
+    }
 
     let subtotal = 0;
     let taxAmount = 0;
 
     for (const itm of body.items) {
       const lineSubtotal = itm.orderedQty * itm.unitPrice;
-      const lineTax = lineSubtotal * (itm.taxRate / 100);
+      const cgstR = itm.cgstRate ?? 0;
+      const sgstR = itm.sgstRate ?? 0;
+      const igstR = itm.igstRate ?? 0;
+      const effectiveTaxRate = (cgstR + sgstR + igstR) > 0 ? (cgstR + sgstR + igstR) : (itm.taxRate ?? 0);
+      const lineTax = lineSubtotal * (effectiveTaxRate / 100);
       subtotal += lineSubtotal;
       taxAmount += lineTax;
     }
@@ -183,16 +204,26 @@ purchasingRouter.post('/orders', authenticateToken, requireRole('SUPER_ADMIN', '
 
     for (const itm of body.items) {
       const lineSubtotal = itm.orderedQty * itm.unitPrice;
-      const lineTax = lineSubtotal * (itm.taxRate / 100);
+      const cgstR = itm.cgstRate ?? 0;
+      const sgstR = itm.sgstRate ?? 0;
+      const igstR = itm.igstRate ?? 0;
+      const effectiveTaxRate = (cgstR + sgstR + igstR) > 0 ? (cgstR + sgstR + igstR) : (itm.taxRate ?? 0);
+      const cgstAmt = lineSubtotal * (cgstR / 100);
+      const sgstAmt = lineSubtotal * (sgstR / 100);
+      const igstAmt = lineSubtotal * (igstR / 100);
+      const lineTax = (cgstAmt + sgstAmt + igstAmt) > 0 ? (cgstAmt + sgstAmt + igstAmt) : lineSubtotal * (effectiveTaxRate / 100);
       const lineTotal = lineSubtotal + lineTax;
 
       await executeRawSql(`
         INSERT INTO purchase_order_items (
-          po_id, item_id, ordered_qty, unit_price, tax_rate, tax_amount, total_price
+          po_id, item_id, ordered_qty, unit_price, tax_rate, tax_amount, total_price,
+          cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount
         ) VALUES (
           ${poId}, ${itm.itemId}, ${itm.orderedQty.toFixed(3)},
-          ${itm.unitPrice.toFixed(2)}, ${itm.taxRate.toFixed(2)},
-          ${lineTax.toFixed(2)}, ${lineTotal.toFixed(2)}
+          ${itm.unitPrice.toFixed(2)}, ${effectiveTaxRate.toFixed(2)},
+          ${lineTax.toFixed(2)}, ${lineTotal.toFixed(2)},
+          ${cgstR.toFixed(2)}, ${sgstR.toFixed(2)}, ${igstR.toFixed(2)},
+          ${cgstAmt.toFixed(2)}, ${sgstAmt.toFixed(2)}, ${igstAmt.toFixed(2)}
         );
       `);
     }
@@ -295,15 +326,17 @@ purchasingRouter.get('/receipts/:id', authenticateToken, async (req: Request, re
           COALESCE(gri.unit_cost, i.purchase_price, 0) as purchase_cost,
           COALESCE(i.selling_price, i.batch1_rate, 0) as sale_price,
           COALESCE(i.selling_price, i.batch1_rate, 0) as mrp,
-          COALESCE(i.cgst_rate, 0) as cgst_rate,
-          COALESCE(i.sgst_rate, 0) as sgst_rate,
-          COALESCE(i.igst_rate, 0) as igst_rate,
-          COALESCE(i.tax_rate, 0) as tax_rate,
+          COALESCE(poi.cgst_rate, i.cgst_rate, 0) as cgst_rate,
+          COALESCE(poi.sgst_rate, i.sgst_rate, 0) as sgst_rate,
+          COALESCE(poi.igst_rate, i.igst_rate, 0) as igst_rate,
+          COALESCE(poi.tax_rate, i.tax_rate, 0) as tax_rate,
           COALESCE(gri.expiry_date, i.batch1_expiry, i.batch2_expiry) as expiry_date,
           (gri.accepted_qty * gri.unit_cost) as total_accepted_cost
         FROM goods_receipt_items gri
+        JOIN goods_receipts gr ON gri.grn_id = gr.id
         JOIN items i ON gri.item_id = i.id
         LEFT JOIN units u ON i.unit_id = u.id
+        LEFT JOIN purchase_order_items poi ON poi.po_id = gr.po_id AND poi.item_id = gri.item_id
         WHERE gri.grn_id = ${grnId};
       `);
       itemsRows = itemsRes.rows;
@@ -330,15 +363,17 @@ purchasingRouter.get('/receipts/:id', authenticateToken, async (req: Request, re
             COALESCE(gri.unit_cost, i.purchase_price, 0) as purchase_cost,
             COALESCE(i.selling_price, i.batch1_rate, 0) as sale_price,
             COALESCE(i.selling_price, i.batch1_rate, 0) as mrp,
-            COALESCE(i.cgst_rate, 0) as cgst_rate,
-            COALESCE(i.sgst_rate, 0) as sgst_rate,
-            COALESCE(i.igst_rate, 0) as igst_rate,
-            COALESCE(i.tax_rate, 0) as tax_rate,
+            COALESCE(poi.cgst_rate, i.cgst_rate, 0) as cgst_rate,
+            COALESCE(poi.sgst_rate, i.sgst_rate, 0) as sgst_rate,
+            COALESCE(poi.igst_rate, i.igst_rate, 0) as igst_rate,
+            COALESCE(poi.tax_rate, i.tax_rate, 0) as tax_rate,
             COALESCE(i.batch1_expiry, i.batch2_expiry) as expiry_date,
             (gri.accepted_qty * gri.unit_cost) as total_accepted_cost
           FROM goods_receipt_items gri
+          JOIN goods_receipts gr ON gri.grn_id = gr.id
           JOIN items i ON gri.item_id = i.id
           LEFT JOIN units u ON i.unit_id = u.id
+          LEFT JOIN purchase_order_items poi ON poi.po_id = gr.po_id AND poi.item_id = gri.item_id
           WHERE gri.grn_id = ${grnId};
         `);
         itemsRows = fallbackRes.rows;
@@ -364,9 +399,16 @@ purchasingRouter.post('/receipts', authenticateToken, requireRole('SUPER_ADMIN',
   try {
     const body = receiveGrnSchema.parse(req.body);
 
-    const countResult = await executeRawSql(`SELECT COUNT(*) as count FROM goods_receipts`);
-    const nextNum = parseInt(countResult.rows[0]?.count || '0', 10) + 1;
-    const grnNumber = `GRN-2026-${String(nextNum).padStart(4, '0')}`;
+    const numRes = await executeRawSql(`SELECT COALESCE(MAX(id), 0) + 1 as next_num FROM goods_receipts`);
+    let nextNum = parseInt(numRes.rows[0]?.next_num || '1', 10);
+    let grnNumber = `GRN-2026-${String(nextNum).padStart(4, '0')}`;
+    let grnAttempt = 0;
+    while (true) {
+      const check = await executeRawSql(`SELECT id FROM goods_receipts WHERE grn_number = '${grnNumber}'`);
+      if (!check.rows || check.rows.length === 0) break;
+      grnAttempt++;
+      grnNumber = `GRN-2026-${String(nextNum + grnAttempt).padStart(4, '0')}`;
+    }
 
     const grnResult = await executeRawSql(`
       INSERT INTO goods_receipts (
@@ -509,9 +551,16 @@ purchasingRouter.post('/receipts', authenticateToken, requireRole('SUPER_ADMIN',
     }
 
     // Generate Purchase Invoice for accounting
-    const invCountRes = await executeRawSql(`SELECT COUNT(*) as count FROM purchase_invoices`);
-    const invNum = parseInt(invCountRes.rows[0]?.count || '0', 10) + 1;
-    const systemBillNumber = `PINV-2026-${String(invNum).padStart(4, '0')}`;
+    const invCountRes = await executeRawSql(`SELECT COALESCE(MAX(id), 0) + 1 as next_num FROM purchase_invoices`);
+    let invNum = parseInt(invCountRes.rows[0]?.next_num || '1', 10);
+    let systemBillNumber = `PINV-2026-${String(invNum).padStart(4, '0')}`;
+    let invAttempt = 0;
+    while (true) {
+      const check = await executeRawSql(`SELECT id FROM purchase_invoices WHERE system_bill_number = '${systemBillNumber}'`);
+      if (!check.rows || check.rows.length === 0) break;
+      invAttempt++;
+      systemBillNumber = `PINV-2026-${String(invNum + invAttempt).padStart(4, '0')}`;
+    }
     const invoiceTotal = grnTotalAcceptedAmount + grnTaxAmount;
 
     await executeRawSql(`

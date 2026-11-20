@@ -12,13 +12,13 @@ export async function seedDatabase() {
 
   // 1. System Roles
   await executeRawSql(`
-    INSERT INTO roles (id, code, name, description, is_system)
+    INSERT INTO roles (code, name, description, is_system)
     VALUES 
-      (1, 'SUPER_ADMIN', 'Super Administrator', 'Full system access and configurations', TRUE),
-      (2, 'STORE_MANAGER', 'Store Manager', 'Manage inventory, purchases, and store operations', TRUE),
-      (3, 'CASHIER', 'Cashier / POS Operator', 'Handle daily sales, checkout, and receipt issuance', TRUE),
-      (4, 'ACCOUNTS_OFFICER', 'Accounts Officer', 'Manage billing, payments, credit reconciliations', TRUE),
-      (5, 'HR_PAYROLL', 'HR & Payroll Officer', 'Manage employee master and payroll recoveries', TRUE)
+      ('SUPER_ADMIN', 'Super Administrator', 'Full system access and configurations', TRUE),
+      ('STORE_MANAGER', 'Store Manager', 'Manage inventory, purchases, and store operations', TRUE),
+      ('CASHIER', 'Cashier / POS Operator', 'Handle daily sales, checkout, and receipt issuance', TRUE),
+      ('ACCOUNTS_OFFICER', 'Accounts Officer', 'Manage billing, payments, credit reconciliations', TRUE),
+      ('HR_PAYROLL', 'HR & Payroll Officer', 'Manage employee master and payroll recoveries', TRUE)
     ON CONFLICT (code) DO NOTHING;
   `);
 
@@ -53,44 +53,48 @@ export async function seedDatabase() {
 
   // 3. Departments
   await executeRawSql(`
-    INSERT INTO departments (id, code, name, is_active)
+    INSERT INTO departments (code, name, is_active)
     VALUES
-      (1, 'ADMIN', 'Administration & Management', TRUE),
-      (2, 'OPS', 'Store Operations & Logistics', TRUE),
-      (3, 'FIN', 'Finance & Accounts', TRUE),
-      (4, 'HR', 'Human Resources', TRUE),
-      (5, 'ENGG', 'Engineering & Maintenance', TRUE),
-      (6, 'SEC', 'Security & Port Safety', TRUE),
-      (7, 'MARINE', 'Marine & Vessel Support', TRUE)
+      ('ADMIN', 'Administration & Management', TRUE),
+      ('OPS', 'Store Operations & Logistics', TRUE),
+      ('FIN', 'Finance & Accounts', TRUE),
+      ('HR', 'Human Resources', TRUE),
+      ('ENGG', 'Engineering & Maintenance', TRUE),
+      ('SEC', 'Security & Port Safety', TRUE),
+      ('MARINE', 'Marine & Vessel Support', TRUE)
     ON CONFLICT (code) DO NOTHING;
   `);
 
   // 4. Designations
   await executeRawSql(`
-    INSERT INTO designations (id, department_id, title, is_active)
-    VALUES
-      (1, 1, 'General Manager', TRUE),
-      (2, 2, 'Senior Store Manager', TRUE),
-      (3, 2, 'Inventory Supervisor', TRUE),
-      (4, 2, 'Store Cashier', TRUE),
-      (5, 3, 'Accounts Officer', TRUE),
-      (6, 4, 'HR Specialist', TRUE),
-      (7, 5, 'Maintenance Lead', TRUE),
-      (8, 6, 'Security Supervisor', TRUE),
-      (9, 7, 'Marine Technical Officer', TRUE),
-      (10, 2, 'Senior Logistics Coordinator', TRUE)
-    ON CONFLICT DO NOTHING;
+    INSERT INTO designations (department_id, title, is_active)
+    SELECT d.id, val.title, TRUE
+    FROM (VALUES
+      ('ADMIN', 'General Manager'),
+      ('OPS', 'Senior Store Manager'),
+      ('OPS', 'Inventory Supervisor'),
+      ('OPS', 'Store Cashier'),
+      ('FIN', 'Accounts Officer'),
+      ('HR', 'HR Specialist'),
+      ('ENGG', 'Maintenance Lead'),
+      ('SEC', 'Security Supervisor'),
+      ('MARINE', 'Marine Technical Officer'),
+      ('OPS', 'Senior Logistics Coordinator')
+    ) AS val(dept_code, title)
+    JOIN departments d ON d.code = val.dept_code
+    WHERE NOT EXISTS (SELECT 1 FROM designations des WHERE des.department_id = d.id AND des.title = val.title);
   `);
 
   // 5. System Users (Unlinked to mock employees; authentic administrative accounts)
   await executeRawSql(`
-    INSERT INTO users (id, employee_id, username, email, password_hash, full_name, role_id, is_active)
+    INSERT INTO users (employee_id, username, email, password_hash, full_name, role_id, is_active)
     VALUES
-      (1, NULL, 'admin', 'admin@cfecc.org', '${adminPasswordHash}', 'CFECC Administrator', 1, TRUE),
-      (2, NULL, 'manager', 'manager@cfecc.org', '${managerPasswordHash}', 'Store Manager', 2, TRUE),
-      (3, NULL, 'cashier', 'cashier@cfecc.org', '${cashierPasswordHash}', 'Store Cashier', 3, TRUE)
+      (NULL, 'admin', 'admin@cfecc.org', '${adminPasswordHash}', 'CFECC Administrator', (SELECT id FROM roles WHERE code = 'SUPER_ADMIN' LIMIT 1), TRUE),
+      (NULL, 'manager', 'manager@cfecc.org', '${managerPasswordHash}', 'Store Manager', (SELECT id FROM roles WHERE code = 'STORE_MANAGER' LIMIT 1), TRUE),
+      (NULL, 'cashier', 'cashier@cfecc.org', '${cashierPasswordHash}', 'Store Cashier', (SELECT id FROM roles WHERE code = 'CASHIER' LIMIT 1), TRUE)
     ON CONFLICT (username) DO UPDATE SET
       full_name = EXCLUDED.full_name,
+      password_hash = EXCLUDED.password_hash,
       employee_id = NULL,
       email = EXCLUDED.email,
       role_id = EXCLUDED.role_id,
@@ -99,24 +103,24 @@ export async function seedDatabase() {
 
   // 6. Categories & Units
   await executeRawSql(`
-    INSERT INTO item_categories (id, code, name, description)
+    INSERT INTO item_categories (code, name, description)
     VALUES
-      (1, 'PROVISIONS', 'Provisions & Groceries', 'Rice, Dal, Atta, Edible Oils, Sugar, Salt, Spices'),
-      (2, 'DAIRY', 'Dairy & Refrigerated', 'Milk, Curd, Butter, Paneer, Ghee, Cheese'),
-      (3, 'SNACKS', 'Beverages & Snacks', 'Tea, Coffee, Biscuits, Health Drinks, Juices, Dry Fruits'),
-      (4, 'PERSONAL', 'Personal Care & Hygiene', 'Soaps, Shampoos, Oral Care, Detergents, Cleaners'),
-      (5, 'STATIONERY', 'Stationery & Household', 'Notebooks, Pens, Registers, Office Utility')
+      ('PROVISIONS', 'Provisions & Groceries', 'Rice, Dal, Atta, Edible Oils, Sugar, Salt, Spices'),
+      ('DAIRY', 'Dairy & Refrigerated', 'Milk, Curd, Butter, Paneer, Ghee, Cheese'),
+      ('SNACKS', 'Beverages & Snacks', 'Tea, Coffee, Biscuits, Health Drinks, Juices, Dry Fruits'),
+      ('PERSONAL', 'Personal Care & Hygiene', 'Soaps, Shampoos, Oral Care, Detergents, Cleaners'),
+      ('STATIONERY', 'Stationery & Household', 'Notebooks, Pens, Registers, Office Utility')
     ON CONFLICT (code) DO NOTHING;
   `);
 
   await executeRawSql(`
-    INSERT INTO units (id, code, name, precision)
+    INSERT INTO units (code, name, precision)
     VALUES
-      (1, 'PCS', 'Pieces', 0),
-      (2, 'KG', 'Kilogram', 3),
-      (3, 'PKT', 'Packet', 0),
-      (4, 'LTR', 'Liter', 2),
-      (5, 'BOX', 'Box', 0)
+      ('PCS', 'Pieces', 0),
+      ('KG', 'Kilogram', 3),
+      ('PKT', 'Packet', 0),
+      ('LTR', 'Liter', 2),
+      ('BOX', 'Box', 0)
     ON CONFLICT (code) DO NOTHING;
   `);
 

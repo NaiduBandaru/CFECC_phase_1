@@ -405,10 +405,19 @@ itemsRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAG
       return res.status(400).json({ success: false, message: `Item code '${body.itemCode}' already exists.` });
     }
 
+    const cgstR = (req.body.cgstRate !== undefined ? parseFloat(req.body.cgstRate) : body.taxRate / 2) || 0;
+    const sgstR = (req.body.sgstRate !== undefined ? parseFloat(req.body.sgstRate) : body.taxRate / 2) || 0;
+    const igstR = (req.body.igstRate !== undefined ? parseFloat(req.body.igstRate) : body.taxRate || (cgstR + sgstR)) || 0;
+    const initStock = parseFloat(req.body.currentStock || req.body.initialStock || '0') || 0;
+    const stockVal = initStock * body.sellingPrice;
+    const purVal = initStock * body.purchasePrice;
+
     const insertResult = await executeRawSql(`
       INSERT INTO items (
         item_code, name, category_id, subcategory, brand, description, unit_id, sku, barcode, hsn_code,
-        purchase_price, selling_price, employee_price, min_stock, reorder_level, tax_rate, image_url, current_stock, is_active
+        purchase_price, selling_price, employee_price, min_stock, reorder_level, tax_rate, image_url, current_stock, is_active,
+        batch1_qty, batch1_rate, purchase_rate1, batch2_qty, batch2_rate, purchase_rate2,
+        cgst_rate, sgst_rate, igst_rate, stock_value, purchase_valuation
       ) VALUES (
         '${body.itemCode.replace(/'/g, "''")}',
         '${body.name.replace(/'/g, "''")}',
@@ -427,8 +436,19 @@ itemsRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MANAG
         ${body.reorderLevel.toFixed(3)},
         ${body.taxRate.toFixed(2)},
         ${body.imageUrl ? `'${body.imageUrl.replace(/'/g, "''")}'` : 'NULL'},
+        ${initStock.toFixed(3)},
+        ${body.isActive !== false ? 'TRUE' : 'FALSE'},
+        ${initStock.toFixed(3)},
+        ${body.sellingPrice.toFixed(2)},
+        ${body.purchasePrice.toFixed(2)},
         0.000,
-        ${body.isActive !== false ? 'TRUE' : 'FALSE'}
+        0.00,
+        0.00,
+        ${cgstR.toFixed(2)},
+        ${sgstR.toFixed(2)},
+        ${igstR.toFixed(2)},
+        ${stockVal.toFixed(2)},
+        ${purVal.toFixed(2)}
       ) RETURNING id;
     `);
 

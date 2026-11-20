@@ -88,7 +88,7 @@ posRouter.get('/lookup-item', authenticateToken, async (req: Request, res: Respo
         i.id, i.item_code, i.name, i.barcode, i.current_stock,
         i.selling_price, i.employee_price, i.tax_rate,
         i.batch1_qty, i.batch1_rate, i.batch2_qty, i.batch2_rate,
-        i.cgst_rate, i.sgst_rate, i.vat_rate, i.hsn_code,
+        i.cgst_rate, i.sgst_rate, i.vat_rate, i.hsn_code, i.image_url,
         c.name as category_name, u.code as unit_code
       FROM items i
       LEFT JOIN item_categories c ON i.category_id = c.id
@@ -100,8 +100,12 @@ posRouter.get('/lookup-item', authenticateToken, async (req: Request, res: Respo
           WHEN i.item_code = '${(query as string).trim().padStart(4, '0')}' THEN 1
           ELSE 2
         END,
+        CASE 
+          WHEN (COALESCE(i.batch1_qty, 0) + COALESCE(i.batch2_qty, 0) > 0) OR COALESCE(i.current_stock, 0) > 0 THEN 0 
+          ELSE 1 
+        END,
         i.item_code ASC
-      LIMIT 25;
+      LIMIT ${query ? 100 : 2000};
     `);
 
     return res.json({ success: true, items: result.rows });
@@ -126,7 +130,7 @@ posRouter.get('/quick-lookup-code', authenticateToken, async (req: Request, res:
         i.id, i.item_code, i.name, i.barcode, i.current_stock,
         i.selling_price, i.employee_price, i.tax_rate,
         i.batch1_qty, i.batch1_rate, i.batch2_qty, i.batch2_rate,
-        i.cgst_rate, i.sgst_rate, i.vat_rate, i.hsn_code,
+        i.cgst_rate, i.sgst_rate, i.vat_rate, i.hsn_code, i.image_url,
         c.name as category_name, u.code as unit_code
       FROM items i
       LEFT JOIN item_categories c ON i.category_id = c.id
@@ -219,9 +223,16 @@ posRouter.post('/checkout', authenticateToken, async (req: Request, res: Respons
     }
 
     // 3. Generate sequential invoice number
-    const countRes = await executeRawSql(`SELECT COUNT(*) as count FROM sales`);
-    const nextNum = parseInt(countRes.rows[0]?.count || '0', 10) + 1;
-    const invoiceNumber = `INV-2026-${String(nextNum).padStart(5, '0')}`;
+    const countRes = await executeRawSql(`SELECT COALESCE(MAX(id), 0) + 1 as next_num FROM sales`);
+    let nextNum = parseInt(countRes.rows[0]?.next_num || '1', 10);
+    let invoiceNumber = `INV-2026-${String(nextNum).padStart(5, '0')}`;
+    let invAttempt = 0;
+    while (true) {
+      const check = await executeRawSql(`SELECT id FROM sales WHERE invoice_number = '${invoiceNumber}'`);
+      if (!check.rows || check.rows.length === 0) break;
+      invAttempt++;
+      invoiceNumber = `INV-2026-${String(nextNum + invAttempt).padStart(5, '0')}`;
+    }
 
     // Look up active open shift for terminal / cashier
     const openShiftRes = await executeRawSql(`

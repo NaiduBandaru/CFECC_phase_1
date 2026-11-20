@@ -16,6 +16,7 @@ const vendorSchema = z.object({
   city: z.string().optional().default('Visakhapatnam'),
   state: z.string().optional().default('Andhra Pradesh'),
   gstin: z.string().optional().nullable(),
+  category: z.string().optional().default('Provisions & Groceries'),
   paymentTermsDays: z.number().int().min(0).default(30),
   bankName: z.string().optional().nullable(),
   accountNumber: z.string().optional().nullable(),
@@ -24,14 +25,79 @@ const vendorSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
-// 1. List Vendors with Search, Sort, and Metrics
+// 1. Get Vendor Categories with Counts
+vendorsRouter.get('/categories', authenticateToken, async (req: Request, res: Response, next) => {
+  try {
+    const result = await executeRawSql(`
+      SELECT 
+        COALESCE(category, 'Provisions & Groceries') as category,
+        COUNT(*) as count
+      FROM vendors
+      GROUP BY category
+      ORDER BY count DESC;
+    `);
+    return res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 2. List Vendors with Search, Filter by Category, GST, Terms, Outstanding, Sort, and Metrics
 vendorsRouter.get('/', authenticateToken, async (req: Request, res: Response, next) => {
   try {
-    const { search = '', includeInactive = 'false', sortBy = 'name', sortOrder = 'ASC' } = req.query;
+    const { 
+      search = '', 
+      includeInactive = 'false', 
+      status = 'ALL',
+      category = 'ALL',
+      gstStatus = 'ALL',
+      outstandingStatus = 'ALL',
+      orderStatus = 'ALL',
+      creditTerms = 'ALL',
+      sortBy = 'name', 
+      sortOrder = 'ASC' 
+    } = req.query;
     let whereClauses: string[] = [];
 
-    if (includeInactive !== 'true') {
+    if (status === 'ACTIVE') {
       whereClauses.push('v.is_active = TRUE');
+    } else if (status === 'INACTIVE') {
+      whereClauses.push('v.is_active = FALSE');
+    } else if (includeInactive !== 'true' && status === 'ALL') {
+      whereClauses.push('v.is_active = TRUE');
+    }
+
+    if (category && category !== 'ALL') {
+      whereClauses.push(`v.category = '${(category as string).replace(/'/g, "''")}'`);
+    }
+
+    if (gstStatus === 'REGISTERED') {
+      whereClauses.push(`(v.gstin IS NOT NULL AND TRIM(v.gstin) != '' AND LOWER(v.gstin) != 'unregistered')`);
+    } else if (gstStatus === 'UNREGISTERED') {
+      whereClauses.push(`(v.gstin IS NULL OR TRIM(v.gstin) = '' OR LOWER(v.gstin) = 'unregistered')`);
+    }
+
+    if (outstandingStatus === 'HAS_OUTSTANDING') {
+      whereClauses.push(`v.current_outstanding > 0`);
+    } else if (outstandingStatus === 'ZERO_BALANCE') {
+      whereClauses.push(`v.current_outstanding <= 0`);
+    }
+
+    if (orderStatus === 'HAS_ORDERS') {
+      whereClauses.push(`EXISTS (SELECT 1 FROM purchase_orders po WHERE po.vendor_id = v.id)`);
+    } else if (orderStatus === 'NO_ORDERS') {
+      whereClauses.push(`NOT EXISTS (SELECT 1 FROM purchase_orders po WHERE po.vendor_id = v.id)`);
+    }
+
+    if (creditTerms && creditTerms !== 'ALL') {
+      if (creditTerms === '45+') {
+        whereClauses.push(`v.payment_terms_days >= 45`);
+      } else {
+        const days = parseInt(creditTerms as string, 10);
+        if (!isNaN(days)) {
+          whereClauses.push(`v.payment_terms_days = ${days}`);
+        }
+      }
     }
 
     if (search) {
@@ -41,7 +107,9 @@ vendorsRouter.get('/', authenticateToken, async (req: Request, res: Response, ne
         LOWER(v.vendor_code) LIKE '%${q}%' OR 
         LOWER(v.phone) LIKE '%${q}%' OR 
         LOWER(COALESCE(v.gstin, '')) LIKE '%${q}%' OR
-        LOWER(COALESCE(v.contact_person, '')) LIKE '%${q}%'
+        LOWER(COALESCE(v.contact_person, '')) LIKE '%${q}%' OR
+        LOWER(COALESCE(v.category, '')) LIKE '%${q}%' OR
+        LOWER(COALESCE(v.city, '')) LIKE '%${q}%'
       )`);
     }
 
@@ -52,6 +120,8 @@ vendorsRouter.get('/', authenticateToken, async (req: Request, res: Response, ne
       vendor_code: 'v.vendor_code',
       current_outstanding: 'v.current_outstanding',
       created_at: 'v.created_at',
+      category: 'v.category',
+      payment_terms_days: 'v.payment_terms_days',
     };
     const sortCol = allowedSortColumns[sortBy as string] || 'v.name';
     const sortDir = (sortOrder as string).toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
@@ -198,7 +268,7 @@ vendorsRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MAN
 
     const insertResult = await executeRawSql(`
       INSERT INTO vendors (
-        vendor_code, name, contact_person, phone, email, address, city, state, gstin, payment_terms_days,
+        vendor_code, name, contact_person, phone, email, address, city, state, gstin, category, payment_terms_days,
         bank_name, account_number, ifsc_code, opening_balance, current_outstanding, is_active
       ) VALUES (
         '${body.vendorCode.toUpperCase().replace(/'/g, "''")}',
@@ -210,6 +280,7 @@ vendorsRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_MAN
         '${(body.city || 'Visakhapatnam').replace(/'/g, "''")}',
         '${(body.state || 'Andhra Pradesh').replace(/'/g, "''")}',
         ${body.gstin ? `'${body.gstin.toUpperCase().replace(/'/g, "''")}'` : 'NULL'},
+        '${(body.category || 'Provisions & Groceries').replace(/'/g, "''")}',
         ${body.paymentTermsDays},
         ${body.bankName ? `'${body.bankName.replace(/'/g, "''")}'` : 'NULL'},
         ${body.accountNumber ? `'${body.accountNumber.replace(/'/g, "''")}'` : 'NULL'},
@@ -258,6 +329,7 @@ vendorsRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'STORE_M
         address = ${body.address !== undefined ? (body.address ? `'${body.address.replace(/'/g, "''")}'` : 'NULL') : (current.address ? `'${current.address.replace(/'/g, "''")}'` : 'NULL')},
         city = '${(body.city || current.city || 'Visakhapatnam').replace(/'/g, "''")}',
         state = '${(body.state || current.state || 'Andhra Pradesh').replace(/'/g, "''")}',
+        category = '${(body.category || current.category || 'Provisions & Groceries').replace(/'/g, "''")}',
         gstin = ${body.gstin !== undefined ? (body.gstin ? `'${body.gstin.toUpperCase().replace(/'/g, "''")}'` : 'NULL') : (current.gstin ? `'${current.gstin.toUpperCase().replace(/'/g, "''")}'` : 'NULL')},
         payment_terms_days = ${body.paymentTermsDays !== undefined ? body.paymentTermsDays : current.payment_terms_days},
         bank_name = ${body.bankName !== undefined ? (body.bankName ? `'${body.bankName.replace(/'/g, "''")}'` : 'NULL') : (current.bank_name ? `'${current.bank_name.replace(/'/g, "''")}'` : 'NULL')},

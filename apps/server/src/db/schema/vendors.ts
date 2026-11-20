@@ -11,6 +11,7 @@ export const vendors = pgTable('vendors', {
   city: text('city').default('Visakhapatnam'),
   state: text('state').default('Andhra Pradesh'),
   gstin: text('gstin'),
+  category: text('category').default('Provisions & Groceries'),
   paymentTermsDays: integer('payment_terms_days').default(30).notNull(),
 
   // Bank Info

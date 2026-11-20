@@ -27,6 +27,12 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
   taxRate: numeric('tax_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
   taxAmount: numeric('tax_amount', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  cgstRate: numeric('cgst_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
+  sgstRate: numeric('sgst_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
+  igstRate: numeric('igst_rate', { precision: 5, scale: 2 }).default('0.00').notNull(),
+  cgstAmount: numeric('cgst_amount', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  sgstAmount: numeric('sgst_amount', { precision: 12, scale: 2 }).default('0.00').notNull(),
+  igstAmount: numeric('igst_amount', { precision: 12, scale: 2 }).default('0.00').notNull(),
   totalPrice: numeric('total_price', { precision: 12, scale: 2 }).notNull(),
 });
 
