@@ -6,52 +6,43 @@ import { initBackupScheduler } from './modules/backup/backup.service.js';
 
 export const app = createApp();
 
-async function bootstrapDatabase() {
+async function bootstrapServer() {
   try {
     console.log('[Server] Initializing database...');
     await initDatabase();
 
-    // Check if initial users exist, if not run seed automatically (only in non-serverless mode)
-    if (!process.env.VERCEL) {
-      const userCheck = await executeRawSql(`SELECT COUNT(*) as count FROM users`);
-      const count = parseInt(userCheck.rows[0]?.count || '0', 10);
-      if (count === 0) {
-        console.log('[Server] No users detected. Running initial enterprise seed...');
-        await seedDatabase();
-      } else {
-        console.log(`[Server] Database contains ${count} user accounts.`);
-      }
+    // Check if initial users exist, if not run seed automatically
+    const userCheck = await executeRawSql(`SELECT COUNT(*) as count FROM users`);
+    const count = parseInt(userCheck.rows[0]?.count || '0', 10);
+    if (count === 0) {
+      console.log('[Server] No users detected. Running initial enterprise seed...');
+      await seedDatabase();
+    } else {
+      console.log(`[Server] Database contains ${count} user accounts.`);
     }
 
     // Open readiness gate to process incoming requests immediately
     setDatabaseReady(true);
     console.log('[Server] Database ready. Readiness gate open.');
 
-    // Initialize automated daily backup daemon (only in persistent server mode)
-    if (!process.env.VERCEL) {
-      initBackupScheduler();
-    }
+    // Initialize automated daily backup daemon
+    initBackupScheduler();
+
+    // Start listening on configured port
+    app.listen(config.port, () => {
+      console.log(`[Server] ====================================================`);
+      console.log(`[Server] CFECC Stores Management System API Server running`);
+      console.log(`[Server] Port: http://localhost:${config.port}`);
+      console.log(`[Server] Location: Visakhapatnam, Andhra Pradesh, India`);
+      console.log(`[Server] Environment: ${config.nodeEnv}`);
+      console.log(`[Server] ====================================================`);
+    });
   } catch (err) {
     console.error('[Server Bootstrap Fatal Error]:', err);
-    if (!process.env.VERCEL) {
-      process.exit(1);
-    }
+    process.exit(1);
   }
 }
 
-// In standard server mode (not serverless / Vercel), bind and listen on config.port
-if (!process.env.VERCEL) {
-  app.listen(config.port, () => {
-    console.log(`[Server] ====================================================`);
-    console.log(`[Server] CFECC Stores Management System API Server running`);
-    console.log(`[Server] Port: http://localhost:${config.port}`);
-    console.log(`[Server] Location: Visakhapatnam, Andhra Pradesh, India`);
-    console.log(`[Server] Environment: ${config.nodeEnv}`);
-    console.log(`[Server] ====================================================`);
-  });
-}
-
-// Kick off database initialization and export promise for serverless cold-start sync
-export const bootstrapPromise = bootstrapDatabase();
+bootstrapServer();
 
 export default app;

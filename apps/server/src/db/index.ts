@@ -38,11 +38,9 @@ export async function initDatabase() {
         console.warn(`[Database Pool Warning]: ${err?.message || err}`);
       });
 
-      if (!process.env.VERCEL) {
-        // Test connectivity in standard/local mode to failover to PGlite if needed
-        const client = await pool.connect();
-        client.release();
-      }
+      // Test connectivity
+      const client = await pool.connect();
+      client.release();
       pgPoolInstance = pool;
       dbInstance = drizzlePg(pgPoolInstance, { schema });
       connectedRemote = true;
@@ -65,7 +63,7 @@ export async function initDatabase() {
       }
       cur = path.dirname(cur);
     }
-    const defaultDataDir = process.env.VERCEL ? path.resolve('/tmp', '.data', 'pglite') : path.resolve(rootDir, '.data', 'pglite');
+    const defaultDataDir = path.resolve(rootDir, '.data', 'pglite');
     const dataDir = process.env.PGLITE_DATA_DIR || defaultDataDir;
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
