@@ -137,11 +137,10 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
         <div className="flex space-x-2 border-b border-borderLine pb-2">
           <button
             onClick={() => setActiveTab('stock')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'stock'
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'stock'
                 ? 'bg-navy-800 text-white shadow-sm'
                 : 'text-textSecondary hover:text-navy-800 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <Boxes className="w-4 h-4" />
             <span>Live Stock Balances (Valuation: ₹{Math.round(totalValuation).toLocaleString('en-IN')})</span>
@@ -149,11 +148,10 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
 
           <button
             onClick={() => setActiveTab('movements')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'movements'
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'movements'
                 ? 'bg-navy-800 text-white shadow-sm'
                 : 'text-textSecondary hover:text-navy-800 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <History className="w-4 h-4" />
             <span>Stock Movement Audit Trail</span>
@@ -347,9 +345,8 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               <button
                 type="button"
                 onClick={() => setAdjType('ADJUSTMENT_IN')}
-                className={`p-2 rounded-lg border font-semibold flex items-center justify-center space-x-1 ${
-                  adjType === 'ADJUSTMENT_IN' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'border-borderLine text-textSecondary'
-                }`}
+                className={`p-2 rounded-lg border font-semibold flex items-center justify-center space-x-1 ${adjType === 'ADJUSTMENT_IN' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'border-borderLine text-textSecondary'
+                  }`}
               >
                 <TrendingUp className="w-3.5 h-3.5" />
                 <span>Stock In (+)</span>
@@ -358,9 +355,8 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               <button
                 type="button"
                 onClick={() => setAdjType('ADJUSTMENT_OUT')}
-                className={`p-2 rounded-lg border font-semibold flex items-center justify-center space-x-1 ${
-                  adjType === 'ADJUSTMENT_OUT' ? 'bg-rose-50 border-rose-300 text-rose-800' : 'border-borderLine text-textSecondary'
-                }`}
+                className={`p-2 rounded-lg border font-semibold flex items-center justify-center space-x-1 ${adjType === 'ADJUSTMENT_OUT' ? 'bg-rose-50 border-rose-300 text-rose-800' : 'border-borderLine text-textSecondary'
+                  }`}
               >
                 <TrendingDown className="w-3.5 h-3.5" />
                 <span>Stock Out (-)</span>
