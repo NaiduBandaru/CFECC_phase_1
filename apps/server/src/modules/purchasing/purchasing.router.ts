@@ -93,14 +93,24 @@ purchasingRouter.get('/orders', authenticateToken, async (req: Request, res: Res
         gr.grn_number,
         gr.receipt_date as grn_date,
         pi.invoice_number as vendor_invoice_number,
-        (SELECT CAST(COUNT(*) AS INTEGER) FROM purchase_order_items poi WHERE poi.po_id = po.id) as item_count,
-        (SELECT COALESCE(SUM(poi.cgst_amount), 0) FROM purchase_order_items poi WHERE poi.po_id = po.id) as cgst_amount,
-        (SELECT COALESCE(SUM(poi.sgst_amount), 0) FROM purchase_order_items poi WHERE poi.po_id = po.id) as sgst_amount,
-        (SELECT COALESCE(SUM(poi.igst_amount), 0) FROM purchase_order_items poi WHERE poi.po_id = po.id) as igst_amount
+        COALESCE(poi_agg.item_count, 0) as item_count,
+        COALESCE(poi_agg.cgst_amount, 0) as cgst_amount,
+        COALESCE(poi_agg.sgst_amount, 0) as sgst_amount,
+        COALESCE(poi_agg.igst_amount, 0) as igst_amount
       FROM purchase_orders po
       JOIN vendors v ON po.vendor_id = v.id
       LEFT JOIN goods_receipts gr ON gr.po_id = po.id
       LEFT JOIN purchase_invoices pi ON pi.grn_id = gr.id
+      LEFT JOIN (
+        SELECT 
+          po_id, 
+          CAST(COUNT(*) AS INTEGER) as item_count, 
+          COALESCE(SUM(cgst_amount), 0) as cgst_amount, 
+          COALESCE(SUM(sgst_amount), 0) as sgst_amount, 
+          COALESCE(SUM(igst_amount), 0) as igst_amount
+        FROM purchase_order_items
+        GROUP BY po_id
+      ) poi_agg ON poi_agg.po_id = po.id
       WHERE ${whereSql}
       ORDER BY po.order_date DESC, po.id DESC;
     `);
@@ -274,10 +284,15 @@ purchasingRouter.get('/receipts', authenticateToken, async (req: Request, res: R
         v.name as vendor_name,
         v.vendor_code,
         po.po_number,
-        (SELECT CAST(COUNT(*) AS INTEGER) FROM goods_receipt_items gri WHERE gri.grn_id = gr.id) as item_count
+        COALESCE(gri_agg.item_count, 0) as item_count
       FROM goods_receipts gr
       JOIN vendors v ON gr.vendor_id = v.id
       LEFT JOIN purchase_orders po ON gr.po_id = po.id
+      LEFT JOIN (
+        SELECT grn_id, CAST(COUNT(*) AS INTEGER) as item_count
+        FROM goods_receipt_items
+        GROUP BY grn_id
+      ) gri_agg ON gri_agg.grn_id = gr.id
       ORDER BY gr.receipt_date DESC, gr.id DESC;
     `);
 

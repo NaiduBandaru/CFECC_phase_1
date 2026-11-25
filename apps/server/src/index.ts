@@ -22,6 +22,15 @@ async function bootstrapServer() {
       console.log(`[Server] Database contains ${count} user accounts.`);
     }
 
+    // Ensure critical indexes exist for fast query performance
+    await executeRawSql(`
+      CREATE INDEX IF NOT EXISTS idx_poi_po_id ON purchase_order_items(po_id);
+      CREATE INDEX IF NOT EXISTS idx_gri_grn_id ON goods_receipt_items(grn_id);
+      CREATE INDEX IF NOT EXISTS idx_gr_po_id ON goods_receipts(po_id);
+      CREATE INDEX IF NOT EXISTS idx_pi_grn_id ON purchase_invoices(grn_id);
+      CREATE INDEX IF NOT EXISTS idx_po_vendor_id ON purchase_orders(vendor_id);
+    `).catch(() => {});
+
     // Open readiness gate to process incoming requests immediately
     setDatabaseReady(true);
     console.log('[Server] Database ready. Readiness gate open.');

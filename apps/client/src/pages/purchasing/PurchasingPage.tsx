@@ -29,6 +29,7 @@ import {
   ChevronDown,
   ChevronUp,
   Percent,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 const formatDate = (dateStr?: string | null) => {
@@ -61,6 +62,30 @@ export const PurchasingPage: React.FC = () => {
   const [vendorFilter, setVendorFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
+
+  // Column Visibility
+  const [showColumnDropdown, setShowColumnDropdown] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    grnNumber: false,
+    billDate: false,
+    vendorGstin: false,
+    cgst: false,
+    sgst: false,
+    igst: false,
+    taxableValue: true,
+    totalGst: true,
+  });
+
+  const columnLabels: Record<string, string> = {
+    grnNumber: 'GRN Number',
+    billDate: 'Vendor Bill Date',
+    vendorGstin: 'Vendor GSTIN',
+    cgst: 'CGST (₹)',
+    sgst: 'SGST (₹)',
+    igst: 'IGST (₹)',
+    taxableValue: 'Taxable Value',
+    totalGst: 'Total GST (₹)',
+  };
 
   // New PO Modal
   const [isPoModalOpen, setIsPoModalOpen] = useState(false);
@@ -180,17 +205,26 @@ export const PurchasingPage: React.FC = () => {
     setCurrentPage(1);
   }, [statusFilter, vendorFilter, search]);
 
+  const ensureItemsLoaded = async () => {
+    if (items.length === 0) {
+      try {
+        const res = await api.get('/items?limit=500');
+        if (res.data.success) setItems(res.data.data);
+      } catch (err) {
+        console.error('Failed to load items:', err);
+      }
+    }
+  };
+
   const fetchInitialData = async () => {
     try {
       setLoading(true);
-      // Fetch primary datasets in parallel
-      const [vRes, iRes, oRes] = await Promise.all([
+      // Fetch primary datasets in parallel (fast and light)
+      const [vRes, oRes] = await Promise.all([
         api.get('/vendors'),
-        api.get('/items?limit=500'),
         api.get('/purchasing/orders'),
       ]);
       if (vRes.data.success) setVendors(vRes.data.data);
-      if (iRes.data.success) setItems(iRes.data.data);
       if (oRes.data.success) setOrders(oRes.data.data);
 
       // Receipts & Invoices loaded asynchronously without blocking main table render
@@ -612,6 +646,7 @@ export const PurchasingPage: React.FC = () => {
 
   // Open GRN Modal and preload PO lines
   const handleOpenGrn = async (po: PurchaseOrder) => {
+    ensureItemsLoaded();
     try {
       const res = await api.get(`/purchasing/orders/${po.id}`);
       if (res.data.success) {
@@ -660,7 +695,8 @@ export const PurchasingPage: React.FC = () => {
     return map;
   }, [receipts]);
 
-  const handleOpenDirectGrn = () => {
+  const handleOpenDirectGrn = async () => {
+    await ensureItemsLoaded();
     setActivePoForGrn(null);
     setDirectGrnVendorId(vendors[0]?.id?.toString() || '');
     setGrnVendorSearch('');
@@ -1173,6 +1209,61 @@ export const PurchasingPage: React.FC = () => {
               </select>
             </div>
 
+            {/* Column Visibility Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-surface border border-borderLine text-textSecondary text-xs font-semibold hover:bg-slate-50 transition-colors"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Columns</span>
+              </button>
+
+              {showColumnDropdown && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-card border border-borderLine p-3 z-30 space-y-2">
+                  <div className="font-bold text-navy-800 text-xs pb-1.5 border-b border-borderLine flex items-center justify-between">
+                    <span>Toggle Columns</span>
+                    <button
+                      onClick={() =>
+                        setVisibleColumns({
+                          grnNumber: true,
+                          billDate: true,
+                          vendorGstin: true,
+                          cgst: true,
+                          sgst: true,
+                          igst: true,
+                          taxableValue: true,
+                          totalGst: true,
+                        })
+                      }
+                      className="text-[10px] text-primary hover:underline font-semibold"
+                    >
+                      Show All
+                    </button>
+                  </div>
+                  {Object.entries(columnLabels).map(([key, label]) => (
+                    <label
+                      key={key}
+                      className="flex items-center space-x-2 text-xs text-navy-800 cursor-pointer hover:bg-slate-50 p-1 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns[key as keyof typeof visibleColumns]}
+                        onChange={(e) =>
+                          setVisibleColumns({
+                            ...visibleColumns,
+                            [key]: e.target.checked,
+                          })
+                        }
+                        className="rounded border-borderLine text-primary focus:ring-primary w-3.5 h-3.5"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {(search || vendorFilter !== 'ALL' || statusFilter !== 'ALL') && (
               <button
                 onClick={() => {
@@ -1189,57 +1280,53 @@ export const PurchasingPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Horizontal Scroll Guide & GST Banner */}
+        {/* GST Notice Banner */}
         <div className="flex items-center justify-between text-[11px] text-textSecondary bg-slate-50/80 px-3.5 py-2 rounded-lg border border-borderLine">
           <div className="flex items-center space-x-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
             <span>
-              Detailed Tax Register with <strong>CGST + SGST (Intra-State AP - 37)</strong> & <strong>IGST (Inter-State)</strong> breakdown
+              GST Tax Inward Register with <strong>CGST + SGST (AP - 37)</strong> & <strong>IGST</strong> compliance
             </span>
           </div>
-          <div className="text-slate-500 hidden sm:flex items-center space-x-1 text-[11px] font-medium">
-            <span>Scroll horizontally &harr; to view all tax & invoice columns comfortably</span>
+          <div className="text-slate-500 hidden sm:flex items-center space-x-1 text-[11px]">
+            <span>Click <strong>View</strong> on any order to inspect full line items & slip details</span>
           </div>
         </div>
 
-        {/* Unified Table with Smooth Horizontal Scroller */}
+        {/* Unified Table */}
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[380px] border border-borderLine rounded-lg scrollbar-thin scrollbar-thumb-slate-300 hover:scrollbar-thumb-slate-400">
-          <table className="w-full text-left text-xs border-collapse min-w-[1850px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[1050px]">
             <thead className="sticky top-0 z-20 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
               <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                <th className="py-3 px-3.5 sticky left-0 z-30 bg-slate-100 min-w-[125px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] border-r border-borderLine">
-                  PO / Bill #
-                </th>
-                <th className="py-3 px-3 min-w-[120px]">GRN #</th>
-                <th className="py-3 px-3 min-w-[105px]">Bill Date</th>
-                <th className="py-3 px-3 min-w-[105px]">GRN Date</th>
-                <th className="py-3 px-3 min-w-[110px]">Vend Code</th>
-                <th className="py-3 px-3 min-w-[200px]">Vendor Name</th>
-                <th className="py-3 px-3 min-w-[160px]">Vendor GSTIN</th>
+                <th className="py-3 px-3.5 min-w-[130px]">PO / Bill #</th>
+                {visibleColumns.grnNumber && <th className="py-3 px-3 min-w-[110px]">GRN #</th>}
+                {visibleColumns.billDate && <th className="py-3 px-3 min-w-[100px]">Bill Date</th>}
+                <th className="py-3 px-3 min-w-[105px]">Date</th>
+                <th className="py-3 px-3 min-w-[200px]">Vendor</th>
+                {visibleColumns.vendorGstin && <th className="py-3 px-3 min-w-[150px]">Vendor GSTIN</th>}
                 <th className="py-3 px-3 text-center min-w-[85px]">Items</th>
-                <th className="py-3 px-3 text-right min-w-[125px]">Taxable Value</th>
-                <th className="py-3 px-3 text-right min-w-[100px] text-blue-700 bg-blue-50/50">CGST (₹)</th>
-                <th className="py-3 px-3 text-right min-w-[100px] text-indigo-700 bg-indigo-50/50">SGST (₹)</th>
-                <th className="py-3 px-3 text-right min-w-[100px] text-purple-700 bg-purple-50/50">IGST (₹)</th>
-                <th className="py-3 px-3 text-right min-w-[110px] text-navy-800 bg-slate-200/50">Total GST</th>
-                <th className="py-3 px-3 text-right min-w-[130px]">Net Total</th>
-                <th className="py-3 px-3 text-center min-w-[110px]">Status</th>
-                <th className="py-3 px-3.5 text-center sticky right-0 z-30 bg-slate-100 min-w-[130px] shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.08)] border-l border-borderLine">
-                  Actions
-                </th>
+                {visibleColumns.taxableValue && <th className="py-3 px-3 text-right min-w-[110px]">Taxable Value</th>}
+                {visibleColumns.cgst && <th className="py-3 px-3 text-right min-w-[95px] text-blue-700 bg-blue-50/50">CGST (₹)</th>}
+                {visibleColumns.sgst && <th className="py-3 px-3 text-right min-w-[95px] text-indigo-700 bg-indigo-50/50">SGST (₹)</th>}
+                {visibleColumns.igst && <th className="py-3 px-3 text-right min-w-[95px] text-purple-700 bg-purple-50/50">IGST (₹)</th>}
+                {visibleColumns.totalGst && <th className="py-3 px-3 text-right min-w-[100px] text-navy-800 bg-slate-200/50">Total GST</th>}
+                <th className="py-3 px-3 text-right min-w-[115px]">Net Total</th>
+                <th className="py-3 px-3 text-center min-w-[95px]">Status</th>
+                <th className="py-3 px-3 text-center min-w-[80px]">View</th>
+                <th className="py-3 px-3.5 text-center min-w-[100px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLine">
               {loading ? (
                 <tr>
-                  <td colSpan={16} className="py-12 text-center text-textSecondary">
+                  <td colSpan={7 + Object.values(visibleColumns).filter(Boolean).length} className="py-12 text-center text-textSecondary">
                     <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
                     <div>Loading purchases & goods receipts...</div>
                   </td>
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="py-12 text-center text-textSecondary">
+                  <td colSpan={7 + Object.values(visibleColumns).filter(Boolean).length} className="py-12 text-center text-textSecondary">
                     <FileSpreadsheet className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                     <div>No purchase records found matching filter criteria.</div>
                   </td>
@@ -1253,8 +1340,8 @@ export const PurchasingPage: React.FC = () => {
 
                   return (
                     <tr key={po.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* Sticky PO / Bill # */}
-                      <td className="py-3 px-3.5 font-mono sticky left-0 z-10 bg-white/95 backdrop-blur-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] border-r border-borderLine">
+                      {/* PO / Bill # */}
+                      <td className="py-3 px-3.5 font-mono">
                         <div className="font-bold text-navy-800">{po.po_number}</div>
                         {po.vendor_invoice_number ? (
                           <div className="text-[10px] text-slate-500 font-sans mt-0.5 truncate max-w-[120px]" title={`Vendor Bill #${po.vendor_invoice_number}`}>
@@ -1263,75 +1350,91 @@ export const PurchasingPage: React.FC = () => {
                         ) : null}
                       </td>
 
-                      {/* GRN # */}
-                      <td className="py-3 px-3 font-mono">
-                        {grnNum ? (
-                          <span className="font-bold text-emerald-700">{grnNum}</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
+                      {/* Optional GRN # */}
+                      {visibleColumns.grnNumber && (
+                        <td className="py-3 px-3 font-mono">
+                          {grnNum ? (
+                            <span className="font-bold text-emerald-700">{grnNum}</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                      )}
 
-                      {/* Bill Date */}
-                      <td className="py-3 px-3 whitespace-nowrap text-textSecondary font-medium">
-                        {formatDate(po.order_date)}
-                      </td>
+                      {/* Optional Bill Date */}
+                      {visibleColumns.billDate && (
+                        <td className="py-3 px-3 whitespace-nowrap text-textSecondary font-medium">
+                          {formatDate(po.order_date)}
+                        </td>
+                      )}
 
-                      {/* GRN Date */}
+                      {/* Inward Date */}
                       <td className="py-3 px-3 whitespace-nowrap">
                         {grnDt ? (
                           <span className="font-semibold text-emerald-700">{formatDate(grnDt)}</span>
                         ) : (
-                          <span className="text-slate-400">-</span>
+                          <span className="text-slate-600 font-medium">{formatDate(po.order_date)}</span>
                         )}
                       </td>
 
-                      {/* Vendor Code */}
-                      <td className="py-3 px-3 font-mono font-bold text-navy-800">
-                        {po.vendor_code}
-                      </td>
-
-                      {/* Vendor Name */}
+                      {/* Vendor Name & Code */}
                       <td className="py-3 px-3">
-                        <div className="font-bold text-navy-800 truncate max-w-[240px]" title={po.vendor_name}>
+                        <div className="font-bold text-navy-800 truncate max-w-[220px]" title={po.vendor_name}>
                           {po.vendor_name}
+                        </div>
+                        <div className="text-[10px] text-textSecondary font-mono mt-0.5">
+                          {po.vendor_code}
                         </div>
                       </td>
 
-                      {/* Vendor GSTIN */}
-                      <td className="py-3 px-3 font-mono text-[11px] text-slate-800 font-medium">
-                        {gstin || (po.vendor_code ? `37AAAC${po.vendor_code.replace(/[^0-9]/g, '').padStart(4, '0')}Z1` : '-')}
-                      </td>
+                      {/* Optional Vendor GSTIN */}
+                      {visibleColumns.vendorGstin && (
+                        <td className="py-3 px-3 font-mono text-[11px] text-slate-800 font-medium">
+                          {gstin || (po.vendor_code ? `37AAAC${po.vendor_code.replace(/[^0-9]/g, '').padStart(4, '0')}Z1` : '-')}
+                        </td>
+                      )}
 
                       {/* Items */}
                       <td className="py-3 px-3 text-center font-medium">
-                        {parseInt(String(po.item_count || receipt?.item_count || 0), 10)} line(s)
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-mono text-[11px]">
+                          {parseInt(String(po.item_count || receipt?.item_count || 0), 10)} lines
+                        </span>
                       </td>
 
-                      {/* Taxable Value */}
-                      <td className="py-3 px-3 text-right font-medium text-textSecondary tabular-nums">
-                        ₹{taxable.toFixed(2)}
-                      </td>
+                      {/* Optional Taxable Value */}
+                      {visibleColumns.taxableValue && (
+                        <td className="py-3 px-3 text-right font-medium text-textSecondary tabular-nums">
+                          ₹{taxable.toFixed(2)}
+                        </td>
+                      )}
 
-                      {/* CGST */}
-                      <td className="py-3 px-3 text-right font-medium text-blue-700 bg-blue-50/20 tabular-nums">
-                        {cgst > 0 ? `₹${cgst.toFixed(2)}` : '-'}
-                      </td>
+                      {/* Optional CGST */}
+                      {visibleColumns.cgst && (
+                        <td className="py-3 px-3 text-right font-medium text-blue-700 bg-blue-50/20 tabular-nums">
+                          {cgst > 0 ? `₹${cgst.toFixed(2)}` : '-'}
+                        </td>
+                      )}
 
-                      {/* SGST */}
-                      <td className="py-3 px-3 text-right font-medium text-indigo-700 bg-indigo-50/20 tabular-nums">
-                        {sgst > 0 ? `₹${sgst.toFixed(2)}` : '-'}
-                      </td>
+                      {/* Optional SGST */}
+                      {visibleColumns.sgst && (
+                        <td className="py-3 px-3 text-right font-medium text-indigo-700 bg-indigo-50/20 tabular-nums">
+                          {sgst > 0 ? `₹${sgst.toFixed(2)}` : '-'}
+                        </td>
+                      )}
 
-                      {/* IGST */}
-                      <td className="py-3 px-3 text-right font-medium text-purple-700 bg-purple-50/20 tabular-nums">
-                        {igst > 0 ? `₹${igst.toFixed(2)}` : '-'}
-                      </td>
+                      {/* Optional IGST */}
+                      {visibleColumns.igst && (
+                        <td className="py-3 px-3 text-right font-medium text-purple-700 bg-purple-50/20 tabular-nums">
+                          {igst > 0 ? `₹${igst.toFixed(2)}` : '-'}
+                        </td>
+                      )}
 
                       {/* Total Tax */}
-                      <td className="py-3 px-3 text-right font-bold text-navy-800 bg-slate-50/50 tabular-nums">
-                        ₹{totalTax.toFixed(2)}
-                      </td>
+                      {visibleColumns.totalGst && (
+                        <td className="py-3 px-3 text-right font-bold text-navy-800 bg-slate-50/50 tabular-nums">
+                          ₹{totalTax.toFixed(2)}
+                        </td>
+                      )}
 
                       {/* Net Total */}
                       <td className="py-3 px-3 text-right font-black text-navy-900 tabular-nums">
@@ -1343,28 +1446,22 @@ export const PurchasingPage: React.FC = () => {
                         <StatusBadge status={po.status} />
                       </td>
 
-                      {/* Sticky Actions */}
-                      <td className="py-3 px-3.5 text-center sticky right-0 z-10 bg-white/95 backdrop-blur-xs shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.06)] border-l border-borderLine">
-                        <div className="flex items-center justify-center space-x-1.5">
-                          {receipt ? (
-                            <button
-                              title="View / Print Inward Slip (GRN)"
-                              onClick={() => handleViewGrn(receipt.id)}
-                              className="px-2 py-1 hover:bg-emerald-50 rounded text-emerald-700 hover:text-emerald-800 transition-colors flex items-center space-x-1 text-[11px] font-semibold border border-emerald-200 bg-emerald-50/50"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>Slip</span>
-                            </button>
-                          ) : (
-                            <button
-                              title="View PO Details"
-                              onClick={() => handleViewPo(po.id)}
-                              className="p-1 hover:bg-slate-100 rounded text-textSecondary hover:text-navy-800 transition-colors"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                      {/* Dedicated View Column */}
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => receipt ? handleViewGrn(receipt.id) : handleViewPo(po.id)}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-primary border border-blue-200 text-xs font-semibold transition-colors shadow-2xs group"
+                          title="View complete purchase order and GRN slip details"
+                        >
+                          <Eye className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                          <span>View</span>
+                        </button>
+                      </td>
 
+                      {/* Actions */}
+                      <td className="py-3 px-3.5 text-center">
+                        <div className="flex items-center justify-center space-x-1.5">
                           <button
                             title="Dispatch PO via WhatsApp"
                             onClick={() => handleSendWhatsAppPo(po.id)}
@@ -1376,7 +1473,7 @@ export const PurchasingPage: React.FC = () => {
                           {po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && !receipt && (
                             <button
                               onClick={() => handleOpenGrn(po)}
-                              className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-blue-50 text-primary border border-blue-200 hover:bg-primary hover:text-white text-[11px] font-semibold transition-colors"
+                              className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-blue-50 text-primary border border-blue-200 hover:bg-primary hover:text-white text-[10px] font-semibold transition-colors"
                             >
                               <Truck className="w-3 h-3" />
                               <span>GRN</span>
