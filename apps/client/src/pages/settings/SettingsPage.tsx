@@ -763,33 +763,15 @@ export const SettingsPage: React.FC = () => {
                       <td className="py-2.5 px-4 max-w-[320px]">
                         {isFailed ? (
                           <div className="space-y-0.5">
-                            {isTokenError ? (
-                              <div className="flex items-center space-x-1.5 text-rose-700">
-                                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span className="text-[11px] font-semibold">Access Token Expired (#131005)</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setIsConfigModalOpen(true)}
-                                  className="text-[10px] text-primary underline font-bold ml-1 hover:text-primary-hover"
-                                >
-                                  Update
-                                </button>
-                              </div>
-                            ) : isWhitelistError ? (
-                              <div className="flex items-center space-x-1.5 text-amber-700">
-                                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span className="text-[11px] font-semibold">Recipient Not Whitelisted (#131030)</span>
-                              </div>
-                            ) : (
-                              <div className="text-[11px] text-rose-700 truncate" title={log.error_message}>
-                                {log.error_message || 'Meta Gateway delivery rejected'}
-                              </div>
-                            )}
+                            <div className="text-[11px] text-rose-700 flex items-center space-x-1 font-medium">
+                              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span>Dispatch Failed</span>
+                            </div>
                           </div>
                         ) : (
-                          <div className="text-[11px] text-emerald-700 flex items-center space-x-1">
+                          <div className="text-[11px] text-emerald-700 flex items-center space-x-1 font-medium">
                             <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span>Dispatched via Meta Graph API</span>
+                            <span>Delivered Successfully</span>
                           </div>
                         )}
                       </td>

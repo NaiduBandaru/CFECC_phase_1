@@ -194,9 +194,9 @@ whatsappRouter.post('/send-test', authenticateToken, requireRole('SUPER_ADMIN'),
     return res.json({
       success: result.success,
       message: result.success
-        ? `Test message dispatched successfully (Mode: ${result.mode})!`
-        : `Failed to dispatch test message: ${result.errorMessage}`,
-      result,
+        ? 'WhatsApp test message dispatched successfully!'
+        : 'Failed to dispatch WhatsApp message. Please check connection.',
+      status: result.status,
     });
   } catch (err) {
     next(err);
@@ -258,9 +258,8 @@ whatsappRouter.post('/send-statement', authenticateToken, requireRole('SUPER_ADM
     return res.json({
       success: result.success,
       message: result.success
-        ? `Statement dispatched to ${inv.first_name} (${inv.mobile}) [${result.mode}]`
-        : `Failed to dispatch: ${result.errorMessage}`,
-      result,
+        ? `Statement dispatched successfully to ${inv.first_name}`
+        : 'Failed to dispatch statement via WhatsApp',
     });
   } catch (err) {
     next(err);
@@ -408,9 +407,8 @@ whatsappRouter.post('/send-receipt', authenticateToken, requireRole('SUPER_ADMIN
     return res.json({
       success: result.success,
       message: result.success
-        ? `POS receipt dispatched to ${targetPhone} [${result.mode}]`
-        : `Failed to dispatch POS receipt: ${result.errorMessage}`,
-      result,
+        ? 'POS receipt dispatched via WhatsApp!'
+        : 'Failed to dispatch POS receipt via WhatsApp',
     });
   } catch (err) {
     next(err);
@@ -492,9 +490,8 @@ whatsappRouter.post('/send-employee-balance', authenticateToken, requireRole('SU
     return res.json({
       success: result.success,
       message: result.success
-        ? `Balance alert dispatched to ${emp.first_name} (${targetPhone}) [${result.mode}]`
-        : `Failed to dispatch: ${result.errorMessage}`,
-      result,
+        ? `Balance alert dispatched successfully to ${emp.first_name}`
+        : 'Failed to dispatch balance alert via WhatsApp',
     });
   } catch (err) {
     next(err);
@@ -546,9 +543,8 @@ whatsappRouter.post('/send-vendor-po', authenticateToken, requireRole('SUPER_ADM
     return res.json({
       success: result.success,
       message: result.success
-        ? `PO notice dispatched to ${po.vendor_name} (${targetPhone}) [${result.mode}]`
-        : `Failed to dispatch: ${result.errorMessage}`,
-      result,
+        ? `PO notice dispatched successfully to ${po.vendor_name}`
+        : 'Failed to dispatch PO notice via WhatsApp',
     });
   } catch (err) {
     next(err);
@@ -599,9 +595,8 @@ whatsappRouter.post('/send-vendor-payment', authenticateToken, requireRole('SUPE
     return res.json({
       success: result.success,
       message: result.success
-        ? `Payment advice dispatched to ${pay.vendor_name} (${targetPhone}) [${result.mode}]`
-        : `Failed to dispatch: ${result.errorMessage}`,
-      result,
+        ? `Payment advice dispatched successfully to ${pay.vendor_name}`
+        : 'Failed to dispatch payment advice via WhatsApp',
     });
   } catch (err) {
     next(err);
@@ -653,9 +648,8 @@ whatsappRouter.post('/send-payroll-advice', authenticateToken, requireRole('SUPE
     return res.json({
       success: result.success,
       message: result.success
-        ? `Payroll deduction notice dispatched to ${entry.first_name} (${targetPhone}) [${result.mode}]`
-        : `Failed to dispatch: ${result.errorMessage}`,
-      result,
+        ? `Payroll recovery notice dispatched to ${entry.first_name}`
+        : 'Failed to dispatch payroll recovery notice via WhatsApp',
     });
   } catch (err) {
     next(err);
