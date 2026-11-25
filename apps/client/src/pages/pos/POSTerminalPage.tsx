@@ -32,7 +32,6 @@ import {
   Clock,
   Check,
   Calendar,
-  Filter,
   LayoutGrid,
 } from 'lucide-react';
 
@@ -710,8 +709,8 @@ export const POSTerminalPage: React.FC = () => {
                 )}
               </form>
 
-              {/* 2. Product Name / Code Search */}
-              <div className="md:col-span-5 relative">
+              {/* 2. Product Name / Code Search (Expands across available width) */}
+              <div className="md:col-span-8 relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   ref={itemSearchRef}
@@ -727,7 +726,7 @@ export const POSTerminalPage: React.FC = () => {
                       }
                     }
                   }}
-                  className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-navy-800 placeholder:text-slate-400"
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-navy-800 placeholder:text-slate-400 font-medium"
                 />
                 {itemSearch && (
                   <button
@@ -738,21 +737,6 @@ export const POSTerminalPage: React.FC = () => {
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
-              </div>
-
-              {/* 3. Category Filter Dropdown */}
-              <div className="md:col-span-3 relative">
-                <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-slate-700 font-medium appearance-none cursor-pointer"
-                >
-                  <option value="ALL">Filter by category...</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
-                  ))}
-                </select>
               </div>
             </div>
 
@@ -805,7 +789,7 @@ export const POSTerminalPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Product Cards Grid with Fast-Scroll */}
+          {/* Product Cards Grid with Fast-Scroll & Full Commodity Name Readability */}
           <div className="flex-1 overflow-y-auto p-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5">
               {filteredProducts.map((p) => {
@@ -823,84 +807,70 @@ export const POSTerminalPage: React.FC = () => {
                     type="button"
                     disabled={!hasStock}
                     onClick={() => handleAddToCart(p)}
-                    className={`text-left p-2.5 rounded-xl border transition-all flex items-center space-x-3 group relative bg-white hover:border-primary/80 hover:shadow-md ${
+                    className={`text-left p-3 rounded-xl border transition-all flex flex-col justify-between group relative bg-white hover:border-primary/80 hover:shadow-md ${
                       cartItem ? 'border-primary ring-2 ring-primary/40 bg-blue-50/20' : 'border-slate-200'
                     } ${!hasStock ? 'opacity-55 cursor-not-allowed bg-slate-50/70' : 'cursor-pointer active:scale-[0.99]'}`}
                   >
-                    {/* Left: Product Pack Shot on Clean White Background */}
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-lg bg-white flex items-center justify-center p-1 relative border border-slate-100">
-                      {p.image_url ? (
-                        <img
-                          src={p.image_url}
-                          alt={p.name}
-                          loading="lazy"
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <Package className="w-8 h-8 text-slate-300" />
-                      )}
-                      <span className="absolute bottom-0.5 left-0.5 px-1 py-0.2 rounded bg-navy-900/80 text-white font-mono text-[8px] font-bold">
+                    {/* Top Row: 4-Digit Code Pill + Stock Status */}
+                    <div className="flex items-center justify-between gap-1 w-full mb-1.5">
+                      <span className="text-[10px] font-mono font-extrabold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded shrink-0">
                         {p.item_code}
                       </span>
+                      {!hasStock ? (
+                        <span className="text-[9px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded uppercase shrink-0">
+                          OUT OF STOCK
+                        </span>
+                      ) : isLow ? (
+                        <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded uppercase shrink-0">
+                          LOW ({stock})
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 font-medium shrink-0 flex items-center space-x-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                          <span>Stock: <strong className="text-slate-700 font-semibold">{stock}</strong></span>
+                        </span>
+                      )}
                     </div>
 
-                    {/* Right: Details */}
-                    <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
-                      {/* Top Row: Item Code + Name + Status Badge */}
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-1.5">
-                            <span className="text-[9px] font-mono font-extrabold text-primary bg-primary/10 border border-primary/20 px-1 py-0.2 rounded shrink-0">
-                              {p.item_code}
-                            </span>
-                            <div className="text-[11px] font-bold text-navy-900 uppercase tracking-tight line-clamp-1 leading-snug group-hover:text-primary transition-colors">
-                              {p.name}
-                            </div>
-                          </div>
+                    {/* Middle: Product Name (Full 2 Lines) + Optional Packshot Thumbnail */}
+                    <div className="flex items-start space-x-2 flex-1 min-w-0 my-0.5">
+                      {p.image_url ? (
+                        <div className="w-12 h-12 shrink-0 rounded-lg bg-white flex items-center justify-center p-0.5 border border-slate-100 overflow-hidden">
+                          <img
+                            src={p.image_url}
+                            alt={p.name}
+                            loading="lazy"
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
                         </div>
-                        {!hasStock ? (
-                          <span className="text-[9px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded uppercase shrink-0">
-                            OUT OF STOCK
-                          </span>
-                        ) : isLow ? (
-                          <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded uppercase shrink-0">
-                            LOW STOCK
-                          </span>
-                        ) : stock >= 10 ? (
-                          <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded uppercase shrink-0">
-                            POPULAR
-                          </span>
-                        ) : null}
+                      ) : null}
+                      <div className="flex-1 min-w-0">
+                        <div
+                          title={p.name}
+                          className="text-xs font-bold text-navy-900 uppercase tracking-tight line-clamp-2 leading-snug group-hover:text-primary transition-colors min-h-[2rem]"
+                        >
+                          {p.name}
+                        </div>
                       </div>
+                    </div>
 
-                      {/* Middle Row: Stock Indicator */}
-                      <div className="text-[10px] text-slate-500 flex items-center space-x-1.5 mt-0.5">
-                        <span
-                          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
-                            !hasStock ? 'bg-slate-400' : isLow ? 'bg-rose-500' : 'bg-emerald-500'
-                          }`}
-                        />
-                        <span>
-                          Stock: <strong className={!hasStock ? 'text-slate-400 font-normal' : isLow ? 'text-rose-600' : 'text-slate-700'}>{stock}</strong>
+                    {/* Bottom Row: Price + Cart Qty + Add Button */}
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 w-full">
+                      <div className="flex items-baseline space-x-1.5">
+                        <span className="font-mono font-black text-sm text-navy-900">
+                          ₹{parseFloat(p.selling_price || 0).toFixed(2)}
                         </span>
                         {cartItem && (
-                          <span className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded">
-                            ({cartItem.quantity})
+                          <span className="text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.2 rounded-full">
+                            x{cartItem.quantity}
                           </span>
                         )}
                       </div>
-
-                      {/* Bottom Row: Price + Plus Button */}
-                      <div className="flex items-center justify-between mt-1 pt-1 border-t border-slate-100">
-                        <div className="font-mono font-black text-sm text-navy-900">
-                          ₹{parseFloat(p.selling_price || 0).toFixed(2)}
-                        </div>
-                        <div className="w-6 h-6 rounded-lg bg-blue-50 text-primary group-hover:bg-primary group-hover:text-white flex items-center justify-center transition-colors shadow-2xs">
-                          <Plus className="w-3.5 h-3.5" />
-                        </div>
+                      <div className="w-6 h-6 rounded-lg bg-blue-50 text-primary group-hover:bg-primary group-hover:text-white flex items-center justify-center transition-colors shadow-2xs">
+                        <Plus className="w-3.5 h-3.5" />
                       </div>
                     </div>
                   </button>
