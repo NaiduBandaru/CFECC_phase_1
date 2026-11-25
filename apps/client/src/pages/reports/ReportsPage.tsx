@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
+import { Modal } from '../../components/ui/Modal.js';
 import {
   Download,
   CreditCard,
@@ -12,6 +13,9 @@ import {
   Receipt,
   Search,
   RefreshCw,
+  Eye,
+  SlidersHorizontal,
+  RotateCcw,
 } from 'lucide-react';
 import {
   PurchaseReportItem,
@@ -48,7 +52,53 @@ export const ReportsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [vendorsList, setVendorsList] = useState<any[]>([]);
 
-  const setDatePreset = (preset: 'ALL' | 'MARCH26' | 'MONTH' | 'TODAY') => {
+  // Invoice Details Modal
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [invoiceDetails, setInvoiceDetails] = useState<any | null>(null);
+  const [invoicePayments, setInvoicePayments] = useState<any[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Column Visibility for Inward Purchase Register
+  const [showColumnDropdown, setShowColumnDropdown] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    date: true,
+    vendorDetails: true,
+    taxableSubtotal: true,
+    gst: true,
+    totalValue: true,
+    paid: true,
+    balanceDue: true,
+    status: true,
+  });
+
+  const columnLabels: Record<string, string> = {
+    date: 'Invoice Date',
+    vendorDetails: 'Vendor Details',
+    taxableSubtotal: 'Taxable Subtotal (₹)',
+    gst: 'GST (₹)',
+    totalValue: 'Total Value (₹)',
+    paid: 'Paid (₹)',
+    balanceDue: 'Balance Due (₹)',
+    status: 'Payment Status',
+  };
+
+  const openInvoiceDetails = async (invoiceId: number) => {
+    setIsDetailsModalOpen(true);
+    setLoadingDetails(true);
+    try {
+      const res = await api.get(`/purchasing/invoices/${invoiceId}`);
+      if (res.data.success) {
+        setInvoiceDetails(res.data.data.invoice);
+        setInvoicePayments(res.data.data.payments);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const setDatePreset = (preset: 'ALL' | 'MARCH26' | 'MONTH' | 'LAST_MONTH' | 'TODAY') => {
     const today = new Date().toISOString().split('T')[0];
     if (preset === 'ALL') {
       setStartDate('');
@@ -61,6 +111,12 @@ export const ReportsPage: React.FC = () => {
       const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
       setStartDate(firstDay);
       setEndDate(today);
+    } else if (preset === 'LAST_MONTH') {
+      const d = new Date();
+      const firstDay = new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().split('T')[0];
+      const lastDay = new Date(d.getFullYear(), d.getMonth(), 0).toISOString().split('T')[0];
+      setStartDate(firstDay);
+      setEndDate(lastDay);
     } else if (preset === 'TODAY') {
       setStartDate(today);
       setEndDate(today);
@@ -399,7 +455,7 @@ export const ReportsPage: React.FC = () => {
       {activeReport === 'purchases' && (
         <div className="space-y-4">
           {/* Sub-Report Navigation Pills */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-borderLine pb-2">
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-borderLine pb-2">
             <button
               onClick={() => setPurchaseSubReport('register')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -408,7 +464,7 @@ export const ReportsPage: React.FC = () => {
                   : 'bg-surface text-textSecondary border border-borderLine hover:text-navy-800 hover:bg-slate-50'
               }`}
             >
-              1. Inward Purchase Register
+              Purchase Register
             </button>
             <button
               onClick={() => setPurchaseSubReport('vendor-summary')}
@@ -418,7 +474,7 @@ export const ReportsPage: React.FC = () => {
                   : 'bg-surface text-textSecondary border border-borderLine hover:text-navy-800 hover:bg-slate-50'
               }`}
             >
-              2. Vendor Payables Summary
+              Vendor Payables
             </button>
             <button
               onClick={() => setPurchaseSubReport('item-summary')}
@@ -428,7 +484,7 @@ export const ReportsPage: React.FC = () => {
                   : 'bg-surface text-textSecondary border border-borderLine hover:text-navy-800 hover:bg-slate-50'
               }`}
             >
-              3. Item Procurement & Cost Analysis
+              Item Spend & Cost
             </button>
             <button
               onClick={() => setPurchaseSubReport('grn-register')}
@@ -438,7 +494,7 @@ export const ReportsPage: React.FC = () => {
                   : 'bg-surface text-textSecondary border border-borderLine hover:text-navy-800 hover:bg-slate-50'
               }`}
             >
-              4. GRN Receiving Audit Log
+              GRN Inward Audit
             </button>
             <button
               onClick={() => setPurchaseSubReport('gst-itc')}
@@ -448,7 +504,7 @@ export const ReportsPage: React.FC = () => {
                   : 'bg-surface text-textSecondary border border-borderLine hover:text-navy-800 hover:bg-slate-50'
               }`}
             >
-              5. GST Input Tax Credit (ITC - GSTR-2B)
+              GST Input Tax Credit (ITC)
             </button>
             <button
               onClick={() => setPurchaseSubReport('gstr3b-slab')}
@@ -458,75 +514,94 @@ export const ReportsPage: React.FC = () => {
                   : 'bg-surface text-textSecondary border border-borderLine hover:text-navy-800 hover:bg-slate-50'
               }`}
             >
-              6. GSTR-3B Tax Return Summary (VAT.DBF)
+              GSTR-3B Tax Summary
             </button>
           </div>
 
           {/* Filtering Bar (Only for sub-reports 1-5, as GSTR-3B has its own monthly slab selector) */}
           {purchaseSubReport !== 'gstr3b-slab' && (
-          <div className="bg-surface p-3.5 rounded-cfecc border border-borderLine shadow-subtle flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <div className="flex items-center space-x-1.5">
-                <span className="text-textSecondary font-semibold">From:</span>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="px-2.5 py-1 bg-slate-50 border border-borderLine rounded-md font-mono"
-                />
+            <div className="bg-surface p-3.5 rounded-cfecc border border-borderLine shadow-subtle flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                {/* Search */}
+                {purchaseSubReport === 'register' && (
+                  <div className="relative w-full sm:w-52">
+                    <Search className="w-3.5 h-3.5 text-textSecondary absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search bill #, vendor..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && fetchActivePurchaseReport()}
+                      className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-borderLine rounded-lg focus:bg-white text-xs"
+                    />
+                  </div>
+                )}
+
+                {/* Date Quick Presets */}
+                <div className="flex items-center space-x-1 border border-borderLine rounded-lg p-0.5 bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={() => { setDatePreset('MARCH26'); }}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                      startDate === '2026-03-01' && endDate === '2026-03-31'
+                        ? 'bg-navy-800 text-white'
+                        : 'text-textSecondary hover:bg-slate-200'
+                    }`}
+                  >
+                    March 2026
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDatePreset('MONTH'); }}
+                    className="px-2.5 py-1 rounded text-[11px] font-semibold text-textSecondary hover:bg-slate-200 transition-colors"
+                  >
+                    This Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDatePreset('LAST_MONTH'); }}
+                    className="px-2.5 py-1 rounded text-[11px] font-semibold text-textSecondary hover:bg-slate-200 transition-colors"
+                  >
+                    Last Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDatePreset('ALL'); }}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                      !startDate && !endDate
+                        ? 'bg-navy-800 text-white'
+                        : 'text-textSecondary hover:bg-slate-200'
+                    }`}
+                  >
+                    All Dates
+                  </button>
+                </div>
+
+                {/* Custom Dates */}
+                <div className="flex items-center space-x-1 text-[11px]">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="px-2 py-1 bg-slate-50 border border-borderLine rounded-lg font-mono text-xs"
+                  />
+                  <span className="text-slate-400">to</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="px-2 py-1 bg-slate-50 border border-borderLine rounded-lg font-mono text-xs"
+                  />
+                </div>
               </div>
 
-              <div className="flex items-center space-x-1.5">
-                <span className="text-textSecondary font-semibold">To:</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="px-2.5 py-1 bg-slate-50 border border-borderLine rounded-md font-mono"
-                />
-              </div>
-
-              {/* Date Quick Presets */}
-              <div className="flex items-center space-x-1 border-r border-borderLine pr-2">
-                <button
-                  type="button"
-                  onClick={() => setDatePreset('MARCH26')}
-                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                    startDate === '2026-03-01' && endDate === '2026-03-31'
-                      ? 'bg-navy-800 text-white'
-                      : 'bg-slate-100 text-textSecondary hover:bg-slate-200'
-                  }`}
-                >
-                  March 2026
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDatePreset('MONTH')}
-                  className="px-2 py-1 rounded text-[11px] font-semibold bg-slate-100 text-textSecondary hover:bg-slate-200 transition-colors"
-                >
-                  This Month
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDatePreset('ALL')}
-                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                    !startDate && !endDate
-                      ? 'bg-navy-800 text-white'
-                      : 'bg-slate-100 text-textSecondary hover:bg-slate-200'
-                  }`}
-                >
-                  All Dates
-                </button>
-              </div>
-
-              {purchaseSubReport === 'register' && (
-                <>
-                  <div className="flex items-center space-x-1.5">
-                    <span className="text-textSecondary font-semibold">Vendor:</span>
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+                {purchaseSubReport === 'register' && (
+                  <>
                     <select
                       value={selectedVendorId}
                       onChange={(e) => setSelectedVendorId(e.target.value)}
-                      className="px-2.5 py-1 bg-slate-50 border border-borderLine rounded-md font-medium"
+                      className="px-2.5 py-1.5 bg-slate-50 border border-borderLine rounded-lg font-medium text-xs max-w-[160px] truncate"
                     >
                       <option value="ALL">All Vendors</option>
                       {vendorsList.map((v) => (
@@ -535,48 +610,106 @@ export const ReportsPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
-                  </div>
 
-                  <div className="flex items-center space-x-1.5">
-                    <span className="text-textSecondary font-semibold">Status:</span>
                     <select
                       value={selectedStatus}
                       onChange={(e) => setSelectedStatus(e.target.value)}
-                      className="px-2.5 py-1 bg-slate-50 border border-borderLine rounded-md font-medium"
+                      className="px-2.5 py-1.5 bg-slate-50 border border-borderLine rounded-lg font-medium text-xs"
                     >
                       <option value="ALL">All Statuses</option>
                       <option value="UNPAID">Unpaid</option>
                       <option value="PARTIALLY_PAID">Partially Paid</option>
                       <option value="PAID">Paid</option>
                     </select>
-                  </div>
-                </>
-              )}
 
-              <button
-                type="button"
-                onClick={fetchActivePurchaseReport}
-                className="flex items-center space-x-1 px-3 py-1 rounded-md bg-navy-800 text-white font-semibold hover:bg-navy-900 transition-colors"
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span>Apply Filter</span>
-              </button>
-            </div>
+                    {/* Columns Selector */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 text-xs bg-slate-50 hover:bg-slate-100 border border-borderLine rounded-lg text-slate-700 font-medium transition-colors"
+                        title="Show / Hide Table Columns"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-textSecondary" />
+                        <span>Columns</span>
+                      </button>
 
-            {purchaseSubReport === 'register' && (
-              <div className="relative w-full sm:w-60">
-                <Search className="w-3.5 h-3.5 text-textSecondary absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search invoice #, vendor..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && fetchActivePurchaseReport()}
-                  className="w-full pl-8 pr-3 py-1 bg-slate-50 border border-borderLine rounded-md focus:bg-white"
-                />
+                      {showColumnDropdown && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setShowColumnDropdown(false)}
+                          />
+                          <div className="absolute right-0 mt-1 w-56 bg-white border border-borderLine rounded-lg shadow-lg z-50 p-3 space-y-2 text-xs">
+                            <div className="font-bold text-navy-800 pb-1 border-b border-borderLine flex items-center justify-between">
+                              <span>Show / Hide Columns</span>
+                              <button
+                                onClick={() =>
+                                  setVisibleColumns({
+                                    date: true,
+                                    vendorDetails: true,
+                                    taxableSubtotal: true,
+                                    gst: true,
+                                    totalValue: true,
+                                    paid: true,
+                                    balanceDue: true,
+                                    status: true,
+                                  })
+                                }
+                                className="text-[10px] text-primary hover:underline font-normal"
+                              >
+                                Default
+                              </button>
+                            </div>
+                            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                              {Object.entries(columnLabels).map(([key, label]) => (
+                                <label key={key} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-50 p-1 rounded">
+                                  <input
+                                    type="checkbox"
+                                    checked={visibleColumns[key as keyof typeof visibleColumns]}
+                                    onChange={(e) =>
+                                      setVisibleColumns({
+                                        ...visibleColumns,
+                                        [key]: e.target.checked,
+                                      })
+                                    }
+                                    className="rounded text-primary focus:ring-primary w-3.5 h-3.5"
+                                  />
+                                  <span className="text-slate-700 text-xs">{label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={fetchActivePurchaseReport}
+                  className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-navy-800 text-white font-semibold hover:bg-navy-900 transition-colors shadow-2xs"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Apply Filter</span>
+                </button>
+
+                {(searchQuery || selectedVendorId !== 'ALL' || selectedStatus !== 'ALL') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedVendorId('ALL');
+                      setSelectedStatus('ALL');
+                    }}
+                    className="p-1.5 rounded-lg border border-borderLine hover:bg-slate-100 text-slate-600 transition-colors"
+                    title="Reset filters"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
-            )}
-          </div>
+            </div>
           )}
 
           {/* Sub-Report 1: Inward Purchase Invoices Register */}
@@ -625,28 +758,29 @@ export const ReportsPage: React.FC = () => {
                   <table className="w-full text-left text-xs border-collapse min-w-[950px]">
                     <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
                       <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                        <th className="py-3 px-4">Bill Ref / Inv #</th>
-                        <th className="py-3 px-4">Date</th>
-                        <th className="py-3 px-4">Vendor Details</th>
-                        <th className="py-3 px-4 text-right">Taxable Subtotal (₹)</th>
-                        <th className="py-3 px-4 text-right">GST (₹)</th>
-                        <th className="py-3 px-4 text-right font-bold text-navy-800">Total Value (₹)</th>
-                        <th className="py-3 px-4 text-right text-emerald-700">Paid (₹)</th>
-                        <th className="py-3 px-4 text-right font-bold text-amber-700">Balance Due (₹)</th>
-                        <th className="py-3 px-4 text-center">Status</th>
+                        <th className="py-3 px-4 min-w-[130px]">Bill Ref / Inv #</th>
+                        {visibleColumns.date && <th className="py-3 px-4 min-w-[100px]">Date</th>}
+                        {visibleColumns.vendorDetails && <th className="py-3 px-4 min-w-[180px]">Vendor Details</th>}
+                        {visibleColumns.taxableSubtotal && <th className="py-3 px-4 text-right min-w-[110px]">Taxable Subtotal (₹)</th>}
+                        {visibleColumns.gst && <th className="py-3 px-4 text-right min-w-[95px]">GST (₹)</th>}
+                        {visibleColumns.totalValue && <th className="py-3 px-4 text-right font-bold text-navy-800 min-w-[110px]">Total Value (₹)</th>}
+                        {visibleColumns.paid && <th className="py-3 px-4 text-right text-emerald-700 min-w-[105px]">Paid (₹)</th>}
+                        {visibleColumns.balanceDue && <th className="py-3 px-4 text-right font-bold text-amber-700 min-w-[105px]">Balance Due (₹)</th>}
+                        {visibleColumns.status && <th className="py-3 px-4 text-center min-w-[90px]">Status</th>}
+                        <th className="py-3 px-4 text-center min-w-[80px]">View</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-borderLine">
                       {loading ? (
                         <tr>
-                          <td colSpan={9} className="py-8 text-center text-textSecondary">
+                          <td colSpan={2 + Object.values(visibleColumns).filter(Boolean).length} className="py-8 text-center text-textSecondary">
                             <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
                             <div>Loading purchase register...</div>
                           </td>
                         </tr>
                       ) : purchaseRegisterData.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="py-8 text-center text-textSecondary">
+                          <td colSpan={2 + Object.values(visibleColumns).filter(Boolean).length} className="py-8 text-center text-textSecondary">
                             <FileSpreadsheet className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                             <div>No purchase invoices found matching the selected filters.</div>
                           </td>
@@ -654,34 +788,61 @@ export const ReportsPage: React.FC = () => {
                       ) : (
                         purchaseRegisterData.map((inv) => (
                           <tr key={inv.id} className="hover:bg-slate-50/70 transition-colors">
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-bold text-navy-800 font-mono">{inv.system_bill_number}</div>
-                              <div className="text-[11px] text-textSecondary">Vendor Inv: {inv.invoice_number}</div>
+                              <div className="text-[11px] text-textSecondary font-mono font-medium">Inv: {inv.invoice_number}</div>
                             </td>
-                            <td className="py-3 px-4 text-textSecondary whitespace-nowrap">
-                              {new Date(inv.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="font-bold text-navy-800">{inv.vendor_name}</div>
-                              <div className="text-[11px] text-textSecondary font-mono">{inv.vendor_code} &bull; GSTIN: {inv.vendor_gstin || 'Unregistered'}</div>
-                            </td>
-                            <td className="py-3 px-4 text-right tabular-nums text-textSecondary font-medium">
-                              {formatCurrency(inv.subtotal)}
-                            </td>
-                            <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
-                              {formatCurrency(inv.tax_amount)}
-                            </td>
-                            <td className="py-3 px-4 text-right tabular-nums font-bold text-navy-800">
-                              {formatCurrency(inv.total_amount)}
-                            </td>
-                            <td className="py-3 px-4 text-right tabular-nums font-semibold text-emerald-700">
-                              {formatCurrency(inv.paid_amount)}
-                            </td>
-                            <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700">
-                              {formatCurrency(inv.balance_due)}
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              <StatusBadge status={inv.status} />
+                            {visibleColumns.date && (
+                              <td className="py-3 px-4 text-textSecondary whitespace-nowrap font-medium">
+                                {new Date(inv.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </td>
+                            )}
+                            {visibleColumns.vendorDetails && (
+                              <td className="py-3 px-4">
+                                <div className="font-bold text-navy-800 leading-snug">{inv.vendor_name}</div>
+                                <div className="text-[11px] text-textSecondary font-mono mt-0.5">{inv.vendor_code} &bull; GSTIN: {inv.vendor_gstin || 'Unregistered'}</div>
+                              </td>
+                            )}
+                            {visibleColumns.taxableSubtotal && (
+                              <td className="py-3 px-4 text-right tabular-nums text-textSecondary font-medium">
+                                {formatCurrency(inv.subtotal)}
+                              </td>
+                            )}
+                            {visibleColumns.gst && (
+                              <td className="py-3 px-4 text-right tabular-nums text-textSecondary">
+                                {formatCurrency(inv.tax_amount)}
+                              </td>
+                            )}
+                            {visibleColumns.totalValue && (
+                              <td className="py-3 px-4 text-right tabular-nums font-bold text-navy-800">
+                                {formatCurrency(inv.total_amount)}
+                              </td>
+                            )}
+                            {visibleColumns.paid && (
+                              <td className="py-3 px-4 text-right tabular-nums font-semibold text-emerald-700">
+                                {formatCurrency(inv.paid_amount)}
+                              </td>
+                            )}
+                            {visibleColumns.balanceDue && (
+                              <td className="py-3 px-4 text-right tabular-nums font-bold text-amber-700">
+                                {formatCurrency(inv.balance_due)}
+                              </td>
+                            )}
+                            {visibleColumns.status && (
+                              <td className="py-3 px-4 text-center whitespace-nowrap">
+                                <StatusBadge status={inv.status} />
+                              </td>
+                            )}
+                            {/* Dedicated View Column */}
+                            <td className="py-3 px-4 text-center whitespace-nowrap">
+                              <button
+                                onClick={() => openInvoiceDetails(inv.id)}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 rounded-md border border-primary/20 transition-colors"
+                                title="View invoice line items & 3-way match"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>View</span>
+                              </button>
                             </td>
                           </tr>
                         ))
@@ -1315,6 +1476,95 @@ export const ReportsPage: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Invoice Details & 3-Way Match Modal */}
+      <Modal
+        isOpen={isDetailsModalOpen}
+        onClose={() => setIsDetailsModalOpen(false)}
+        title={`Invoice: ${invoiceDetails?.system_bill_number || ''}`}
+        subtitle="Supplier bill details, item lines, and disbursement records"
+        maxWidth="2xl"
+      >
+        {loadingDetails ? (
+          <div className="py-12 text-center text-textSecondary">
+            <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
+            <div>Loading invoice details...</div>
+          </div>
+        ) : invoiceDetails ? (
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-borderLine">
+              <div>
+                <span className="text-[10px] text-textSecondary uppercase font-bold block">Supplier Information</span>
+                <span className="font-bold text-navy-800 text-sm block mt-0.5">{invoiceDetails.vendor_name}</span>
+                <span className="text-textSecondary font-mono">{invoiceDetails.vendor_code} &bull; GSTIN: {invoiceDetails.vendor_gstin || 'N/A'}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-textSecondary uppercase font-bold block">Bill Reference</span>
+                <span className="block mt-0.5 font-medium">Vendor Inv: <strong>{invoiceDetails.invoice_number}</strong></span>
+                <span className="text-textSecondary block">Date: {invoiceDetails.invoice_date}</span>
+                <span className="font-mono text-emerald-700 block mt-1">
+                  {invoiceDetails.grn_number ? `Matched with ${invoiceDetails.grn_number}` : 'Direct Bill'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-white border border-borderLine rounded-lg space-y-2">
+              <h5 className="font-bold text-navy-800 uppercase text-[11px]">Financial Totals</h5>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-slate-50 p-2 rounded">
+                  <span className="text-[10px] text-textSecondary block">Subtotal</span>
+                  <span className="font-bold font-mono">{formatCurrency(invoiceDetails.subtotal)}</span>
+                </div>
+                <div className="bg-slate-50 p-2 rounded">
+                  <span className="text-[10px] text-textSecondary block">GST Output Tax</span>
+                  <span className="font-bold font-mono">{formatCurrency(invoiceDetails.tax_amount)}</span>
+                </div>
+                <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                  <span className="text-[10px] text-primary block font-bold">Total Bill Value</span>
+                  <span className="font-bold font-mono text-primary">{formatCurrency(invoiceDetails.total_amount)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Disbursements Table */}
+            <div>
+              <h5 className="font-bold text-navy-800 uppercase text-[11px] mb-2">Disbursement Records</h5>
+              <div className="border border-borderLine rounded-lg overflow-hidden">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-borderLine">
+                    <tr>
+                      <th className="p-2">Date</th>
+                      <th className="p-2">Method</th>
+                      <th className="p-2">Reference #</th>
+                      <th className="p-2 text-right">Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-borderLine">
+                    {invoicePayments.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-3 text-center text-textSecondary">
+                          No disbursements recorded yet for this invoice.
+                        </td>
+                      </tr>
+                    ) : (
+                      invoicePayments.map((p: any) => (
+                        <tr key={p.id}>
+                          <td className="p-2 font-mono">{p.payment_date}</td>
+                          <td className="p-2 font-semibold">{p.payment_mode}</td>
+                          <td className="p-2 font-mono text-textSecondary">{p.reference_number || '-'}</td>
+                          <td className="p-2 text-right font-bold text-emerald-700 tabular-nums">
+                            {formatCurrency(p.amount)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 };
