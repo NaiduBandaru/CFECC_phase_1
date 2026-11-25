@@ -3,6 +3,8 @@ import { api } from '../../lib/api.js';
 import { BillingPeriod, EmployeeStatement } from '../../types/index.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import { Modal } from '../../components/ui/Modal.js';
+import { STORE_INFO } from '../../config/store.js';
+import { formatISTDate } from '../../lib/date.js';
 import {
   CreditCard,
   Play,
@@ -672,8 +674,8 @@ export const BillingPage: React.FC = () => {
             <div className="p-4 border border-borderLine rounded-lg bg-white space-y-4 print:border-none print:p-0">
               {/* Header */}
               <div className="text-center pb-3 border-b border-borderLine">
-                <h3 className="font-bold text-navy-800 text-base tracking-wide uppercase">CFECC STORES</h3>
-                <p className="text-[11px] text-textSecondary">Visakhapatnam, Andhra Pradesh &bull; Employee Credit Ledger</p>
+                <h3 className="font-bold text-navy-800 text-sm tracking-wide uppercase">{STORE_INFO.name}</h3>
+                <p className="text-[11px] text-textSecondary">{STORE_INFO.regdAndLocation} &bull; Employee Credit Ledger</p>
                 <span className="inline-block mt-1 font-mono text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
                   {statementDetails.statement.period_name} ({statementDetails.statement.period_code})
                 </span>
@@ -784,7 +786,7 @@ export const BillingPage: React.FC = () => {
                           <tr key={sl.id} className="hover:bg-slate-50">
                             <td className="py-2 px-3 font-mono font-semibold text-primary">{sl.invoice_number}</td>
                             <td className="py-2 px-3 text-textSecondary">
-                              {new Date(sl.created_at).toLocaleDateString('en-IN')}
+                              {formatISTDate(sl.created_at)}
                             </td>
                             <td className="py-2 px-3 text-center font-mono">{sl.item_count || 1} line(s)</td>
                             <td className="py-2 px-3 text-right font-mono text-textSecondary">{formatCurrency(sl.subtotal)}</td>

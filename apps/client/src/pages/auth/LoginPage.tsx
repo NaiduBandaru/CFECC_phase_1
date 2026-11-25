@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
+import { STORE_INFO } from '../../config/store.js';
 import {
   Store,
   User,
@@ -99,12 +100,14 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <div>
-            <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider mb-1">
+            <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider mb-1.5">
               <Building2 className="w-3 h-3 text-primary" />
-              <span>Regd No. B-1460 &bull; Visakhapatnam</span>
+              <span>{STORE_INFO.regdAndLocation}</span>
             </div>
-            <h1 className="text-xl font-extrabold text-navy-950 tracking-tight">CFECC STORES</h1>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
+            <h1 className="text-base font-extrabold text-navy-950 tracking-tight leading-snug">
+              {STORE_INFO.name}
+            </h1>
+            <p className="text-xs text-slate-500 font-medium mt-1">
               Consumer Co-operative Society Internal Portal
             </p>
           </div>

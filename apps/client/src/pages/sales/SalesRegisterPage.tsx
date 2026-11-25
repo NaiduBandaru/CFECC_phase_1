@@ -4,6 +4,8 @@ import { api } from '../../lib/api.js';
 import { Sale } from '../../types/index.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import { Modal } from '../../components/ui/Modal.js';
+import { STORE_INFO } from '../../config/store.js';
+import { formatISTDateTime } from '../../lib/date.js';
 import {
   Receipt,
   Search,
@@ -207,7 +209,7 @@ export const SalesRegisterPage: React.FC = () => {
 
     const rows = sales.map((s: any) => [
       `"${s.invoice_number}"`,
-      `"${new Date(s.created_at).toLocaleString('en-IN')}"`,
+      `"${formatISTDateTime(s.created_at)}"`,
       `"${(s.first_name ? `${s.first_name} ${s.last_name}` : s.customer_name || 'Walk-in').replace(/"/g, '""')}"`,
       `"${s.employee_code || ''}"`,
       `"${s.department_name || ''}"`,
@@ -465,7 +467,7 @@ export const SalesRegisterPage: React.FC = () => {
                       <td className="py-3 px-4 font-mono font-bold text-navy-800">{sale.invoice_number}</td>
 
                       <td className="py-3 px-4 text-textSecondary">
-                        {new Date(sale.created_at).toLocaleDateString('en-IN', {
+                        {formatISTDateTime(sale.created_at, {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
@@ -579,7 +581,7 @@ export const SalesRegisterPage: React.FC = () => {
         isOpen={isInvoiceModalOpen}
         onClose={() => setIsInvoiceModalOpen(false)}
         title={selectedSale?.invoice_number || 'Tax Invoice & Receipt'}
-        subtitle="CFECC Stores Official Sales Receipt & Employee Credit Statement"
+        subtitle={`${STORE_INFO.name} (${STORE_INFO.regdNo})`}
         maxWidth="2xl"
       >
         {loadingInvoice ? (
@@ -607,9 +609,9 @@ export const SalesRegisterPage: React.FC = () => {
             <div className="p-4 border border-borderLine rounded-lg bg-white space-y-4 print:border-none print:p-0">
               {/* Receipt Header */}
               <div className="text-center pb-3 border-b border-borderLine">
-                <h3 className="font-bold text-navy-800 text-base tracking-wide uppercase">CFECC STORES</h3>
-                <p className="text-[11px] text-textSecondary">Visakhapatnam, Andhra Pradesh, India</p>
-                <p className="text-[10px] text-textSecondary font-mono mt-0.5">GSTIN: 37AAAAA0000A1Z5 &bull; Store Code: VSKP-01</p>
+                <h3 className="font-bold text-navy-800 text-sm tracking-wide uppercase">{STORE_INFO.name}</h3>
+                <p className="text-[11px] text-textSecondary font-medium">{STORE_INFO.regdAndLocation}</p>
+                <p className="text-[10px] text-textSecondary font-mono mt-0.5">GSTIN: {STORE_INFO.gstin} &bull; Store Code: {STORE_INFO.storeCode}</p>
                 <div className="mt-2 inline-block px-3 py-0.5 bg-slate-100 rounded-full font-bold text-[10px] uppercase text-navy-800">
                   Retail Sales Receipt / Tax Invoice
                 </div>
@@ -636,7 +638,7 @@ export const SalesRegisterPage: React.FC = () => {
                   <span className="text-[10px] text-textSecondary uppercase font-bold block">Invoice Information</span>
                   <span className="font-mono font-bold text-navy-800 block">{selectedSale.invoice_number}</span>
                   <span className="text-textSecondary block mt-0.5">
-                    {new Date(selectedSale.created_at).toLocaleString('en-IN')}
+                    {formatISTDateTime(selectedSale.created_at)}
                   </span>
                   <span className="text-[11px] text-textSecondary block">Payment: <strong className="text-navy-800">{selectedSale.payment_mode.replace('_', ' ')}</strong></span>
                   <span className="text-[10px] text-textSecondary block">Billed By: {selectedSale.billed_by_name || 'Store Cashier'}</span>
@@ -745,7 +747,7 @@ export const SalesRegisterPage: React.FC = () => {
                   </div>
                   {saleReturns.length > 0 && (
                     <div className="mt-1 text-[11px]">
-                      Reason: {saleReturns[0].reason} &bull; Processed on: {new Date(saleReturns[0].created_at).toLocaleString()}
+                      Reason: {saleReturns[0].reason} &bull; Processed on: {formatISTDateTime(saleReturns[0].created_at)}
                     </div>
                   )}
                 </div>

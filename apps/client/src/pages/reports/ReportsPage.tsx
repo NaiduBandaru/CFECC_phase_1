@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { formatISTDate } from '../../lib/date.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import { Modal } from '../../components/ui/Modal.js';
 import {
@@ -794,7 +795,7 @@ export const ReportsPage: React.FC = () => {
                             </td>
                             {visibleColumns.date && (
                               <td className="py-3 px-4 text-textSecondary whitespace-nowrap font-medium">
-                                {new Date(inv.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                {formatISTDate(inv.invoice_date, { day: 'numeric', month: 'short', year: 'numeric' })}
                               </td>
                             )}
                             {visibleColumns.vendorDetails && (
@@ -1106,7 +1107,7 @@ export const ReportsPage: React.FC = () => {
                             {grn.grn_number}
                           </td>
                           <td className="py-3 px-4 text-textSecondary whitespace-nowrap">
-                            {new Date(grn.receipt_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            {formatISTDate(grn.receipt_date, { day: 'numeric', month: 'short', year: 'numeric' })}
                           </td>
                           <td className="py-3 px-4">
                             <div className="font-bold text-navy-800">{grn.vendor_name}</div>
@@ -1237,7 +1238,7 @@ export const ReportsPage: React.FC = () => {
                           <td className="py-3 px-4">
                             <div className="font-mono text-navy-800 font-bold">{row.invoice_number}</div>
                             <div className="text-[11px] text-textSecondary">
-                              {new Date(row.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {formatISTDate(row.invoice_date, { day: 'numeric', month: 'short', year: 'numeric' })}
                             </div>
                           </td>
                           <td className="py-3 px-4 text-right tabular-nums font-medium text-textSecondary">

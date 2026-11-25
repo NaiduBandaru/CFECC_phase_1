@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
 import { Modal } from '../../components/ui/Modal.js';
+import { STORE_INFO } from '../../config/store.js';
+import { formatISTDate, formatISTDateTime } from '../../lib/date.js';
 import {
   Search,
   ShoppingCart,
@@ -597,14 +599,14 @@ export const POSTerminalPage: React.FC = () => {
               <Store className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-black tracking-wider uppercase flex items-center space-x-1.5">
-                <span>CFECC STORES</span>
+              <div className="text-xs font-black tracking-wider uppercase flex items-center space-x-1.5" title={STORE_INFO.name}>
+                <span>{STORE_INFO.shortName}</span>
                 <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-primary text-white">
                   TERMINAL {activeShift?.terminalId || 'POS-01'}
                 </span>
               </div>
-              <div className="text-[10px] text-slate-400 font-medium">
-                Community &bull; Cooperate &bull; Security &bull; Life
+              <div className="text-[10px] text-slate-400 font-medium truncate max-w-md">
+                {STORE_INFO.name} &bull; {STORE_INFO.regdAndLocation}
               </div>
             </div>
           </div>
@@ -614,7 +616,7 @@ export const POSTerminalPage: React.FC = () => {
         <div className="hidden md:flex items-center space-x-2">
           <div className="flex items-center space-x-1.5 text-xs text-slate-300 font-medium bg-navy-800/80 px-2.5 py-1 rounded-md border border-navy-700/60">
             <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+            <span>{formatISTDate(new Date())}</span>
           </div>
           <div className="flex items-center space-x-1.5 text-xs text-slate-300 font-mono bg-navy-800/80 px-2.5 py-1 rounded-md border border-navy-700/60">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -1436,14 +1438,13 @@ export const POSTerminalPage: React.FC = () => {
             {/* Hidden Printable Receipt for browser print dialog */}
             <div id="printable-receipt" className="hidden print:block font-mono text-[11px] leading-tight text-black p-4">
               <div className="text-center pb-2 border-b border-dashed border-black">
-                <h4 className="font-bold text-sm uppercase">CFECC STORES</h4>
-                <p className="text-[10px]">Employee Consumer Cooperative Society</p>
-                <p className="text-[10px]">Visakhapatnam, Andhra Pradesh</p>
-                <p className="text-[10px] font-bold">GSTIN: 37AAAAA0000A1Z5</p>
+                <h4 className="font-bold text-xs uppercase leading-snug">{STORE_INFO.name}</h4>
+                <p className="text-[10px] font-semibold">{STORE_INFO.regdAndLocation}</p>
+                <p className="text-[10px] font-bold">GSTIN: {STORE_INFO.gstin}</p>
               </div>
               <div className="py-2 text-[10px] space-y-0.5">
                 <div>Bill No: {completedSale.invoiceNumber}</div>
-                <div>Date: {new Date(completedSale.createdAt).toLocaleString('en-IN')}</div>
+                <div>Date: {formatISTDateTime(completedSale.createdAt)}</div>
                 <div>Customer: {completedSale.employeeName || completedSale.customerName}</div>
                 <div>Mode: {completedSale.paymentMode}</div>
               </div>
@@ -1704,9 +1705,8 @@ export const POSTerminalPage: React.FC = () => {
               }`}
             >
               <div className="text-center pb-2 border-b border-dashed border-slate-400">
-                <h4 className="font-bold text-sm tracking-wide text-black uppercase">CFECC STORES</h4>
-                <p className="text-[10px] text-black">Employee Consumer Cooperative Society</p>
-                <p className="text-[10px] text-black">Visakhapatnam, Andhra Pradesh</p>
+                <h4 className="font-bold text-xs tracking-wide text-black uppercase leading-snug">{STORE_INFO.name}</h4>
+                <p className="text-[10px] text-black font-semibold">{STORE_INFO.regdAndLocation}</p>
                 <p className="text-[11px] font-black text-black mt-1 uppercase tracking-wider">
                   *** EOD REGISTER Z-REPORT ***
                 </p>
@@ -1727,11 +1727,11 @@ export const POSTerminalPage: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span>Opened:</span>
-                  <span>{new Date(zReportData.shift.startTime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  <span>{formatISTDateTime(zReportData.shift.startTime, { dateStyle: 'short', timeStyle: 'short' })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Closed:</span>
-                  <span>{new Date(zReportData.shift.endTime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  <span>{formatISTDateTime(zReportData.shift.endTime, { dateStyle: 'short', timeStyle: 'short' })}</span>
                 </div>
               </div>
 
@@ -1811,7 +1811,7 @@ export const POSTerminalPage: React.FC = () => {
                   <div>Supervisor Signature</div>
                 </div>
                 <p className="text-center text-[8px] text-slate-500 font-sans">
-                  Printed on {new Date().toLocaleString('en-IN')}
+                  Printed on {formatISTDateTime(new Date())}
                 </p>
               </div>
             </div>

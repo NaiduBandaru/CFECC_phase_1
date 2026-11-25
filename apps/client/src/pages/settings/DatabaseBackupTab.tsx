@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
+import { formatISTDateTime } from '../../lib/date.js';
 import {
   Database,
   Download,
@@ -333,10 +334,7 @@ export const DatabaseBackupTab: React.FC = () => {
             </div>
             <p className="text-[11px] text-textSecondary mt-0.5">
               {stats?.lastBackupAt
-                ? new Date(stats.lastBackupAt).toLocaleString('en-IN', {
-                    dateStyle: 'medium',
-                    timeStyle: 'short',
-                  })
+                ? formatISTDateTime(stats.lastBackupAt)
                 : 'No manual backup taken yet'}
             </p>
           </div>
@@ -583,10 +581,7 @@ export const DatabaseBackupTab: React.FC = () => {
                       {item.created_by || 'System'}
                     </td>
                     <td className="px-4 py-2.5 text-textSecondary">
-                      {new Date(item.created_at).toLocaleString('en-IN', {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      })}
+                      {formatISTDateTime(item.created_at)}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <button

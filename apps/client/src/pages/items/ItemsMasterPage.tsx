@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
+import { formatISTDateTime } from '../../lib/date.js';
 import { Item, Category, Unit, ItemPriceHistory } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
 import { FloatingActionBar } from '../../components/ui/FloatingActionBar.js';
@@ -1168,7 +1169,7 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-navy-800">{h.reason || 'Price Revision'}</span>
                     <span className="text-[11px] text-textSecondary font-mono">
-                      {new Date(h.created_at).toLocaleString()}
+                      {formatISTDateTime(h.created_at)}
                     </span>
                   </div>
 

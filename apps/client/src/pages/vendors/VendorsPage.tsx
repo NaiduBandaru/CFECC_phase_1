@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { formatISTDate, formatISTDateTime } from '../../lib/date.js';
 import { Vendor, VendorSuppliedItem } from '../../types/index.js';
 import { Modal } from '../../components/ui/Modal.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
@@ -1615,7 +1616,7 @@ export const VendorsPage: React.FC = () => {
                         profileData.payments.map((pay) => (
                           <tr key={pay.id} className="hover:bg-slate-50">
                             <td className="py-2 px-3 font-mono font-bold text-emerald-700">{pay.payment_number}</td>
-                            <td className="py-2 px-3 text-textSecondary">{new Date(pay.payment_date).toLocaleDateString()}</td>
+                            <td className="py-2 px-3 text-textSecondary">{formatISTDate(pay.payment_date)}</td>
                             <td className="py-2 px-3 font-semibold text-navy-800">{pay.payment_mode}</td>
                             <td className="py-2 px-3 font-mono text-textSecondary">{pay.reference_number || '-'}</td>
                             <td className="py-2 px-3 font-mono text-textSecondary">{pay.system_bill_number || '-'}</td>
@@ -1644,7 +1645,7 @@ export const VendorsPage: React.FC = () => {
                           <div className="font-bold text-navy-800">{a.action} Action</div>
                           <div className="text-[10px] text-textSecondary">User: {a.user_name || 'System Admin'} &bull; IP: {a.ip_address || 'localhost'}</div>
                         </div>
-                        <span className="text-[10px] text-textSecondary font-mono">{new Date(a.created_at).toLocaleString()}</span>
+                        <span className="text-[10px] text-textSecondary font-mono">{formatISTDateTime(a.created_at)}</span>
                       </div>
                     ))
                   )}

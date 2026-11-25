@@ -25,8 +25,11 @@ export const config = {
   uploadDir: path.resolve(process.cwd(), 'uploads'),
   corsOrigins: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['http://localhost:5173', 'http://127.0.0.1:5173'],
   clientDetails: {
-    name: 'CFECC Stores',
-    location: 'Visakhapatnam, Andhra Pradesh, India',
+    shortName: 'CFECC STORES',
+    name: 'COROMANDEL FERTILISERS EMPLOYEES CONSUMERS CO-OP. STORES LIMITED.',
+    regdNo: 'REGD.NO.B.1906',
+    location: 'VISAKHAPATNAM-530011',
+    regdAndLocation: 'REGD.NO.B.1906, VISAKHAPATNAM-530011',
     gstin: '37AAAAA0000A1Z5',
   },
   whatsapp: {

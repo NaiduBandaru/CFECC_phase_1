@@ -4,6 +4,7 @@ import { api } from '../../lib/api.js';
 import { PurchaseOrder, GoodsReceipt, PurchaseInvoice, Vendor, Item } from '../../types/index.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import { Modal } from '../../components/ui/Modal.js';
+import { STORE_INFO } from '../../config/store.js';
 import {
   FileSpreadsheet,
   Plus,
@@ -2895,10 +2896,10 @@ export const PurchasingPage: React.FC = () => {
             {/* Printable Slip Container */}
             <div id="printable-grn-slip" className="p-5 border border-borderLine rounded-lg bg-white space-y-4 shadow-sm">
               <div className="text-center pb-3 border-b border-dashed border-slate-300">
-                <h3 className="font-black text-base tracking-wide text-navy-800 uppercase">
-                  CFECC EMPLOYEES CONSUMER COOPERATIVE SOCIETY LTD.
+                <h3 className="font-black text-sm tracking-wide text-navy-800 uppercase">
+                  {STORE_INFO.name}
                 </h3>
-                <p className="text-[11px] text-textSecondary">Visakhapatnam, Andhra Pradesh &bull; GSTIN: 37AAAAA0000A1Z5</p>
+                <p className="text-[11px] text-textSecondary">{STORE_INFO.regdAndLocation} &bull; GSTIN: {STORE_INFO.gstin}</p>
                 <div className="inline-block mt-2 px-3 py-1 bg-slate-100 border border-slate-300 rounded font-black text-xs text-navy-800 uppercase tracking-widest">
                   GOODS RECEIPT NOTE (GRN)
                 </div>

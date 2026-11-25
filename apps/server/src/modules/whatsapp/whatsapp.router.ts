@@ -386,7 +386,11 @@ whatsappRouter.post('/send-receipt', authenticateToken, requireRole('SUPER_ADMIN
     const customerName = sale.first_name ? `${sale.first_name} ${sale.last_name}` : sale.customer_name || 'Valued Customer';
     const billNumber = sale.invoice_number || sale.bill_number || `BILL-${sale.id}`;
     const totalAmount = sale.total_amount ?? sale.final_amount ?? 0;
-    const saleDate = new Date(sale.created_at || sale.sale_date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const saleDate = new Date(sale.created_at || sale.sale_date || Date.now()).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
 
     const result = await sendPosReceipt({
       phone: targetPhone,

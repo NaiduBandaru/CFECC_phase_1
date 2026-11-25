@@ -9,17 +9,17 @@ export const salesRouter = Router();
 // 1. Sales Register with Filtering, Sorting, and Summary Metrics
 salesRouter.get('/', authenticateToken, async (req: Request, res: Response, next) => {
   try {
-    const { 
-      startDate, 
-      endDate, 
-      paymentMode, 
+    const {
+      startDate,
+      endDate,
+      paymentMode,
       paymentStatus,
       saleType,
-      search = '', 
+      search = '',
       sortBy = 'created_at',
       sortOrder = 'DESC',
-      page = '1', 
-      limit = '50' 
+      page = '1',
+      limit = '50'
     } = req.query;
 
     const pageNum = parseInt(page as string, 10) || 1;
@@ -329,7 +329,11 @@ salesRouter.post('/:id/send-whatsapp', authenticateToken, async (req: Request, r
         unitPrice: r.unit_price,
         totalPrice: r.total_price,
       })),
-      date: new Date(sale.created_at).toLocaleString('en-IN'),
+      date: new Date(sale.created_at).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
       saleId: sale.id,
     });
 
@@ -345,8 +349,8 @@ salesRouter.post('/:id/send-whatsapp', authenticateToken, async (req: Request, r
     return res.json({
       success: true,
       message: result.mode === 'LIVE'
-        ? `Official invoice receipt dispatched to ${phone} via WhatsApp Meta Cloud API (Msg ID: ${result.messageId || 'SENT'}).`
-        : `Digital receipt logged for ${phone} via WhatsApp service.`,
+        ? `Invoice receipt dispatched to ${phone} .`
+        : `Digital receipt logged for ${phone} .`,
       recipient: phone,
       details: result,
     });

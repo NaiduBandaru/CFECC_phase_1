@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
+import { STORE_INFO } from '../../config/store.js';
 import {
   LayoutDashboard,
   Users,
@@ -126,17 +127,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             <Store className="w-5 h-5 text-white" />
           </div>
           {!collapsed && (
-            <div className="truncate">
+            <div className="truncate" title={STORE_INFO.name}>
               <div className="flex items-center space-x-1.5">
                 <span className="font-extrabold text-sm tracking-tight text-white leading-tight">
-                  CFECC STORES
+                  {STORE_INFO.shortName}
                 </span>
                 <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
                   ERP
                 </span>
               </div>
               <span className="text-[10px] text-slate-400 font-medium block tracking-wide truncate">
-                Visakhapatnam, AP
+                {STORE_INFO.regdNo} &bull; {STORE_INFO.location}
               </span>
             </div>
           )}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
+import { formatISTDateTime } from '../../lib/date.js';
 import { Modal } from '../../components/ui/Modal.js';
 import {
   Boxes,
@@ -271,7 +272,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   return (
                     <tr key={m.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3 px-4 text-textSecondary">
-                        {new Date(m.created_at).toLocaleString('en-IN')}
+                        {formatISTDateTime(m.created_at)}
                       </td>
                       <td className="py-3 px-4">
                         <div className="font-bold text-navy-800">{m.item_name}</div>

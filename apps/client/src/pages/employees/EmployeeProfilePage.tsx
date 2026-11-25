@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { formatISTDate, formatISTDateTime } from '../../lib/date.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import { Modal } from '../../components/ui/Modal.js';
 import {
@@ -934,7 +935,7 @@ export const EmployeeProfilePage: React.FC = () => {
                       (data.purchases || []).map((sale: any) => (
                         <tr key={sale.id} className="hover:bg-slate-50/70 transition-colors whitespace-nowrap">
                           <td className="py-2.5 px-4 font-mono font-bold text-navy-800">{sale.invoice_number}</td>
-                          <td className="py-2.5 px-4 text-textSecondary">{new Date(sale.created_at).toLocaleDateString('en-IN')}</td>
+                          <td className="py-2.5 px-4 text-textSecondary">{formatISTDate(sale.created_at)}</td>
                           <td className="py-2.5 px-4">{sale.item_count} items</td>
                           <td className="py-2.5 px-4">
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-navy-800">
@@ -983,7 +984,7 @@ export const EmployeeProfilePage: React.FC = () => {
                       (data.billing?.ledger || []).map((entry: any, idx: number) => (
                         <tr key={`${entry.id || 'led'}-${idx}`} className="hover:bg-slate-50/70 transition-colors whitespace-nowrap">
                           <td className="py-2.5 px-4 text-textSecondary font-sans">
-                            {new Date(entry.transaction_date).toLocaleDateString('en-IN')}
+                            {formatISTDate(entry.transaction_date)}
                           </td>
                           <td className="py-2.5 px-4 font-sans font-semibold text-navy-800">{entry.transaction_type}</td>
                           <td className="py-2.5 px-4 text-textSecondary">{entry.reference_id || '-'}</td>
@@ -1166,7 +1167,7 @@ export const EmployeeProfilePage: React.FC = () => {
                   <div key={act.id} className="p-3 rounded-lg border border-borderLine bg-slate-50 flex items-center justify-between text-xs">
                     <div>
                       <div className="font-bold text-navy-800">{act.action} by {act.user_name || 'System Administrator'}</div>
-                      <div className="text-[11px] text-textSecondary font-mono">{new Date(act.created_at).toLocaleString('en-IN')}</div>
+                      <div className="text-[11px] text-textSecondary font-mono">{formatISTDateTime(act.created_at)}</div>
                     </div>
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 font-mono">
                       {act.entity}

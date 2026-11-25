@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../lib/api.js';
 import { Modal } from '../../components/ui/Modal.js';
+import { STORE_INFO } from '../../config/store.js';
+import { formatISTDateTime } from '../../lib/date.js';
 import {
   ShieldCheck,
   MessageSquare,
@@ -326,15 +328,19 @@ export const SettingsPage: React.FC = () => {
             <div className="space-y-3 text-xs">
               <div>
                 <span className="text-textSecondary block">Client Entity</span>
-                <span className="font-bold text-navy-800">CFECC Stores</span>
+                <span className="font-bold text-navy-800">{STORE_INFO.name}</span>
+              </div>
+              <div>
+                <span className="text-textSecondary block">Registration Number</span>
+                <span className="font-mono font-semibold text-navy-800">{STORE_INFO.regdNo}</span>
               </div>
               <div>
                 <span className="text-textSecondary block">Facility Location</span>
-                <span className="font-semibold text-navy-800">Visakhapatnam, Andhra Pradesh, India</span>
+                <span className="font-semibold text-navy-800">{STORE_INFO.location}</span>
               </div>
               <div>
                 <span className="text-textSecondary block">GSTIN Registration</span>
-                <span className="font-mono font-semibold text-navy-800">37AAAAA0000A1Z5</span>
+                <span className="font-mono font-semibold text-navy-800">{STORE_INFO.gstin}</span>
               </div>
               <div>
                 <span className="text-textSecondary block">Billing Cycle Cutoff</span>
@@ -776,7 +782,7 @@ export const SettingsPage: React.FC = () => {
                         )}
                       </td>
                       <td className="py-2.5 px-4 text-textSecondary text-[11px] whitespace-nowrap">
-                        {new Date(log.sent_at || log.created_at).toLocaleString('en-IN', {
+                        {formatISTDateTime(log.sent_at || log.created_at, {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric',
@@ -990,7 +996,7 @@ export const SettingsPage: React.FC = () => {
               <div>
                 <span className="text-textSecondary block text-[11px]">Timestamp</span>
                 <span className="text-textSecondary">
-                  {new Date(selectedLogForModal.sent_at || selectedLogForModal.created_at).toLocaleString('en-IN')}
+                  {formatISTDateTime(selectedLogForModal.sent_at || selectedLogForModal.created_at)}
                 </span>
               </div>
             </div>

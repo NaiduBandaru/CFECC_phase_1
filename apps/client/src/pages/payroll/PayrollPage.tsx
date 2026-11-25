@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
 import { StatusBadge } from '../../components/ui/StatusBadge.js';
 import { Modal } from '../../components/ui/Modal.js';
+import { STORE_INFO } from '../../config/store.js';
+import { formatISTDate } from '../../lib/date.js';
 import {
   Banknote,
   Plus,
@@ -303,7 +305,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
     ];
     const rows = recoveryRecords.map((r) => [
       r.recovery_number,
-      new Date(r.recovered_at).toLocaleDateString('en-IN'),
+      formatISTDate(r.recovered_at),
       r.employee_code,
       `"${r.first_name} ${r.last_name}"`,
       r.department_name || '',
@@ -480,7 +482,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                     <div className="flex items-center space-x-1.5 pl-1">
                       <StatusBadge status={activePeriod.status} />
                       <span className="text-[11px] text-textSecondary font-medium hidden sm:inline">
-                        Payout: <strong className="text-navy-800">{new Date(activePeriod.payout_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</strong>
+                        Payout: <strong className="text-navy-800">{formatISTDate(activePeriod.payout_date, { day: 'numeric', month: 'short' })}</strong>
                       </span>
                     </div>
                   )}
@@ -885,7 +887,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
                           {rec.recovery_number}
                         </td>
                         <td className="py-3 px-4 text-textSecondary whitespace-nowrap">
-                          {new Date(rec.recovered_at).toLocaleDateString('en-IN', {
+                          {formatISTDate(rec.recovered_at, {
                             day: 'numeric',
                             month: 'short',
                             year: 'numeric',
@@ -1038,7 +1040,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
         isOpen={isPayslipModalOpen}
         onClose={() => setIsPayslipModalOpen(false)}
         title="Official Employee Salary Payslip"
-        subtitle="CFECC Employees Consumer Co-operative Society Ltd, Visakhapatnam"
+        subtitle={`${STORE_INFO.name} (${STORE_INFO.regdNo})`}
         maxWidth="4xl"
       >
         {selectedEntry && (
@@ -1046,11 +1048,11 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ initialTab = 'PAYROLL'
             {/* Payslip Header */}
             <div className="border-b-2 border-navy-800 pb-3 flex justify-between items-start">
               <div>
-                <h1 className="text-base font-bold text-navy-800 uppercase tracking-wide">
-                  CFECC EMPLOYEES CONSUMER CO-OPERATIVE SOCIETY LTD.
+                <h1 className="text-sm font-bold text-navy-800 uppercase tracking-wide">
+                  {STORE_INFO.name}
                 </h1>
                 <p className="text-[11px] text-textSecondary">
-                  Reg No: MSCS/CR/2026 &bull; D.No 14-38-12, Near Port Stadium, Visakhapatnam, AP - 530008
+                  {STORE_INFO.regdAndLocation}
                 </p>
                 <div className="text-[11px] font-bold text-primary mt-1">
                   SALARY & STORE CREDIT RECOVERY SLIP &mdash; {activePeriod?.month_year || 'MARCH 2026'}

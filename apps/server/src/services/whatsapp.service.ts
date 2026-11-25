@@ -178,7 +178,13 @@ export async function sendMetaCloudMessage(recipientPhone: string, messagePayloa
     } else if (messagePayload.body) {
       textToSend = messagePayload.body;
     } else {
-      textToSend = JSON.stringify(messagePayload);
+      // Baileys sends plain text directly; never stringify Meta template payloads as raw JSON
+      return {
+        success: false,
+        status: 'FAILED',
+        mode: 'LIVE',
+        errorMessage: 'Meta template payloads are not sent over Baileys WhatsApp Web gateway.',
+      };
     }
 
     const gatewayResult = await baileysGateway.sendMessage(cleanPhone, textToSend);
@@ -264,6 +270,55 @@ export async function sendMetaCloudMessage(recipientPhone: string, messagePayloa
   }
 }
 
+const IST_TIMEZONE = 'Asia/Kolkata';
+
+function formatISTDateTime(input: Date | string | number = new Date()): string {
+  return new Date(input).toLocaleString('en-IN', {
+    timeZone: IST_TIMEZONE,
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
+function formatISTDate(input: Date | string | number = new Date()): string {
+  return new Date(input).toLocaleDateString('en-IN', {
+    timeZone: IST_TIMEZONE,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+/**
+ * Dispatches a notification: sends rich text directly when Baileys is connected,
+ * or uses Meta Cloud template + rich text fallback when using Meta Cloud API.
+ */
+async function dispatchWhatsAppNotification(
+  phone: string,
+  textBody: string,
+  templatePayload: any
+): Promise<SendResult> {
+  const textPayload = {
+    type: 'text',
+    text: { preview_url: false, body: textBody },
+  };
+
+  if (baileysGateway.getStatus().status === 'CONNECTED') {
+    return sendMetaCloudMessage(phone, textPayload);
+  }
+
+  let result = await sendMetaCloudMessage(phone, templatePayload);
+
+  if (!result.success && result.mode === 'LIVE') {
+    const textResult = await sendMetaCloudMessage(phone, textPayload);
+    if (textResult.success) result = textResult;
+  } else if (result.success && result.mode === 'LIVE') {
+    sendMetaCloudMessage(phone, textPayload).catch(() => {});
+  }
+
+  return result;
+}
+
 /**
  * 1. Dispatches an Itemized POS Sale Receipt to Customer / Employee
  */
@@ -282,7 +337,7 @@ export async function sendPosReceipt(params: {
   date?: string;
   saleId?: number;
 }): Promise<SendResult> {
-  const dateStr = params.date || new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  const dateStr = params.date || formatISTDateTime();
   const formattedAmount = parseFloat((params.totalAmount ?? 0).toString()).toFixed(2);
   const subtotalFormatted = parseFloat((params.subtotal ?? params.totalAmount ?? 0).toString()).toFixed(2);
   const taxFormatted = parseFloat((params.taxAmount ?? 0).toString()).toFixed(2);
@@ -303,11 +358,11 @@ export async function sendPosReceipt(params: {
     : '';
 
   const richReceiptText =
-`Dear ${custName}, thank you for shopping at CFECC Stores! Your Bill #${billNum} for Rs. ${formattedAmount} (${count} items) has been recorded to your Store Credit Account.${balanceNote}
+`Dear ${custName}, thank you for shopping at *${config.clientDetails.shortName}*! Your Bill #${billNum} for Rs. ${formattedAmount} (${count} items) has been recorded.${balanceNote}
 
-🧾 *CFECC STORES & EMPLOYEE COOPERATIVE*
-📍 Visakhapatnam, Andhra Pradesh
-GSTIN: 37AAAAA0000A1Z5
+🧾 *${config.clientDetails.name}*
+📍 ${config.clientDetails.regdAndLocation}
+GSTIN: ${config.clientDetails.gstin}
 ━━━━━━━━━━━━━━━━━━━━━
 *TAX INVOICE / CASH MEMO*
 ━━━━━━━━━━━━━━━━━━━━━
@@ -327,10 +382,10 @@ ${itemsFormatted || `• Store Merchandise Items (x${count}) - ₹${formattedAmo
 • Outstanding Balance: ₹${parseFloat((params.currentOutstanding ?? 0).toString()).toFixed(2)}
 • Available Credit Limit: ₹${parseFloat((params.availableCredit ?? 0).toString()).toFixed(2)}
 ━━━━━━━━━━━━━━━━━━━━━` : ''}
-Thank you for shopping at CFECC Stores!
-_Visakhapatnam • CFECC Stores Management Platform_`;
+Thank you for shopping with us!
+_${config.clientDetails.shortName} • ${config.clientDetails.regdAndLocation}_`;
 
-  // Strategy 1: Send the approved Meta Template FIRST (guaranteed delivery outside 24-hr window)
+  // Strategy 1: Send via Baileys (text) or Meta Template + rich text
   const templateOrderRef = `${billNum} (Rs ${formattedAmount} | ${params.paymentMode})`;
   const templatePayload = {
     type: 'template',
@@ -350,26 +405,7 @@ _Visakhapatnam • CFECC Stores Management Platform_`;
     },
   };
 
-  let result = await sendMetaCloudMessage(params.phone, templatePayload);
-
-  // Strategy 2: If template failed, try sending as direct text
-  if (!result.success && result.mode === 'LIVE') {
-    const textPayload = {
-      type: 'text',
-      text: { preview_url: false, body: richReceiptText },
-    };
-    const textResult = await sendMetaCloudMessage(params.phone, textPayload);
-    if (textResult.success) {
-      result = textResult;
-    }
-  } else if (result.success && result.mode === 'LIVE') {
-    // If template was delivered, also send the full itemized text receipt
-    const textPayload = {
-      type: 'text',
-      text: { preview_url: false, body: richReceiptText },
-    };
-    sendMetaCloudMessage(params.phone, textPayload).catch(() => {});
-  }
+  const result = await dispatchWhatsAppNotification(params.phone, richReceiptText, templatePayload);
 
   // Record in whatsapp_logs
   await executeRawSql(`
@@ -410,7 +446,9 @@ export async function sendMonthlyStatement(params: {
   const closing = parseFloat((params.closingOutstanding ?? 0).toString()).toFixed(2);
 
   const textBody =
-`🏛️ *CFECC STORES - MONTHLY RECOVERY STATEMENT*
+`🏛️ *${config.clientDetails.name}*
+📍 ${config.clientDetails.regdAndLocation}
+*MONTHLY RECOVERY STATEMENT*
 ━━━━━━━━━━━━━━━━━━━━
 *Period:* ${params.periodName}
 *Employee:* ${params.employeeName} (${params.employeeCode})
@@ -423,10 +461,9 @@ export async function sendMonthlyStatement(params: {
 *CLOSING OUTSTANDING BALANCE:* ₹${closing}
 ━━━━━━━━━━━━━━━━━━━━
 This statement will be reflected in your monthly salary recovery.
-_CFECC Stores Management System - Visakhapatnam_`;
+_${config.clientDetails.shortName} • ${config.clientDetails.regdAndLocation}_`;
 
-  // Strategy 1: Send approved Meta Template first for guaranteed 24/7 delivery
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateStr = formatISTDate();
   const templateOrderRef = `Stmt: ${params.periodName} (Deduction: Rs ${closing})`;
   const templatePayload = {
     type: 'template',
@@ -446,20 +483,7 @@ _CFECC Stores Management System - Visakhapatnam_`;
     },
   };
 
-  let result = await sendMetaCloudMessage(params.phone, templatePayload);
-
-  // Strategy 2: If template delivered or fallback to rich text
-  const textPayload = {
-    type: 'text',
-    text: { preview_url: false, body: textBody },
-  };
-
-  if (!result.success && result.mode === 'LIVE') {
-    const textResult = await sendMetaCloudMessage(params.phone, textPayload);
-    if (textResult.success) result = textResult;
-  } else if (result.success && result.mode === 'LIVE') {
-    sendMetaCloudMessage(params.phone, textPayload).catch(() => {});
-  }
+  const result = await dispatchWhatsAppNotification(params.phone, textBody, templatePayload);
 
   // Record in whatsapp_logs
   await executeRawSql(`
@@ -492,9 +516,20 @@ _CFECC Stores Management System - Visakhapatnam_`;
  * 3. Dispatches a Test Message to verify Meta API connection
  */
 export async function sendTestMessage(targetPhone: string, testNote?: string): Promise<SendResult> {
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateStr = formatISTDate();
 
-  // 1. Try sending the Meta verified order confirmation template first
+  const textBody =
+`🚀 *${config.clientDetails.name}*
+📍 ${config.clientDetails.regdAndLocation}
+*WHATSAPP GATEWAY TEST PING*
+━━━━━━━━━━━━━━━━━━━━
+*System:* ${config.clientDetails.shortName} Management Platform
+*Timestamp:* ${formatISTDateTime()}
+*Status:* ✅ Connected & Operating
+━━━━━━━━━━━━━━━━━━━━
+${testNote || 'Your WhatsApp connection has been successfully verified!'}
+_${config.clientDetails.shortName} • ${config.clientDetails.regdAndLocation}_`;
+
   const templatePayload = {
     type: 'template',
     template: {
@@ -513,44 +548,27 @@ export async function sendTestMessage(targetPhone: string, testNote?: string): P
     },
   };
 
-  let result = await sendMetaCloudMessage(targetPhone, templatePayload);
-
-  // 2. If that template failed, try hello_world template
-  if (!result.success && result.mode === 'LIVE') {
-    const helloPayload = {
-      type: 'template',
-      template: {
-        name: 'hello_world',
-        language: { code: 'en_US' },
-      },
-    };
-    const helloResult = await sendMetaCloudMessage(targetPhone, helloPayload);
-    if (helloResult.success) {
-      result = helloResult;
-    }
-  }
-
-  // 3. If templates failed, fallback to text
-  if (!result.success && result.mode === 'LIVE') {
-    const textBody =
-`🚀 *CFECC STORES - WHATSAPP API TEST PING*
-━━━━━━━━━━━━━━━━━━━━
-*System:* CFECC Stores Management Platform
-*Timestamp:* ${new Date().toLocaleString('en-IN')}
-*Gateway:* Meta WhatsApp Cloud API (Official)
-*Status:* ✅ Connected & Operating
-━━━━━━━━━━━━━━━━━━━━
-${testNote || 'Your Meta WhatsApp Cloud API connection has been successfully verified!'}
-_Visakhapatnam, Andhra Pradesh_`;
-
-    const textPayload = {
+  let result: SendResult;
+  if (baileysGateway.getStatus().status === 'CONNECTED') {
+    result = await sendMetaCloudMessage(targetPhone, {
       type: 'text',
       text: { preview_url: false, body: textBody },
-    };
-
-    const textResult = await sendMetaCloudMessage(targetPhone, textPayload);
-    if (textResult.success) {
-      result = textResult;
+    });
+  } else {
+    result = await sendMetaCloudMessage(targetPhone, templatePayload);
+    if (!result.success && result.mode === 'LIVE') {
+      const helloResult = await sendMetaCloudMessage(targetPhone, {
+        type: 'template',
+        template: { name: 'hello_world', language: { code: 'en_US' } },
+      });
+      if (helloResult.success) result = helloResult;
+    }
+    if (!result.success && result.mode === 'LIVE') {
+      const textResult = await sendMetaCloudMessage(targetPhone, {
+        type: 'text',
+        text: { preview_url: false, body: textBody },
+      });
+      if (textResult.success) result = textResult;
     }
   }
 
@@ -586,10 +604,12 @@ export async function sendEmployeeBalanceAlert(params: {
   const outstanding = parseFloat((params.currentOutstanding ?? 0).toString()).toFixed(2);
   const limit = parseFloat((params.creditLimit ?? 0).toString()).toFixed(2);
   const available = parseFloat((params.availableCredit ?? 0).toString()).toFixed(2);
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateStr = formatISTDate();
 
   const textBody =
-`💳 *CFECC STORES - MEMBER CREDIT BALANCE*
+`💳 *${config.clientDetails.name}*
+📍 ${config.clientDetails.regdAndLocation}
+*MEMBER CREDIT BALANCE*
 ━━━━━━━━━━━━━━━━━━━━
 *Member:* ${params.employeeName} (${params.employeeCode})
 *As on:* ${dateStr}
@@ -598,7 +618,7 @@ export async function sendEmployeeBalanceAlert(params: {
 • *Current Outstanding Balance:* ₹${outstanding}
 • *Available Credit for Purchases:* ₹${available}
 ━━━━━━━━━━━━━━━━━━━━
-_CFECC Employees Consumer Cooperative Society Ltd._`;
+_${config.clientDetails.shortName} • ${config.clientDetails.regdAndLocation}_`;
 
   const templatePayload = {
     type: 'template',
@@ -618,19 +638,7 @@ _CFECC Employees Consumer Cooperative Society Ltd._`;
     },
   };
 
-  let result = await sendMetaCloudMessage(params.phone, templatePayload);
-
-  const textPayload = {
-    type: 'text',
-    text: { preview_url: false, body: textBody },
-  };
-
-  if (!result.success && result.mode === 'LIVE') {
-    const textResult = await sendMetaCloudMessage(params.phone, textPayload);
-    if (textResult.success) result = textResult;
-  } else if (result.success && result.mode === 'LIVE') {
-    sendMetaCloudMessage(params.phone, textPayload).catch(() => {});
-  }
+  const result = await dispatchWhatsAppNotification(params.phone, textBody, templatePayload);
 
   await executeRawSql(`
     INSERT INTO whatsapp_logs (
@@ -662,10 +670,12 @@ export async function sendVendorPurchaseOrder(params: {
   poId: number;
 }): Promise<SendResult> {
   const formattedAmount = parseFloat((params.totalAmount ?? 0).toString()).toFixed(2);
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateStr = formatISTDate();
 
   const textBody =
-`📦 *CFECC STORES - PURCHASE ORDER DISPATCH*
+`📦 *${config.clientDetails.name}*
+📍 ${config.clientDetails.regdAndLocation}
+*PURCHASE ORDER DISPATCH*
 ━━━━━━━━━━━━━━━━━━━━
 *Supplier:* ${params.vendorName}
 *PO Number:* ${params.poNumber}
@@ -674,7 +684,7 @@ export async function sendVendorPurchaseOrder(params: {
 *Total PO Value:* ₹${formattedAmount}
 ━━━━━━━━━━━━━━━━━━━━
 Please arrange dispatch according to the agreed terms.
-_CFECC Purchasing Division - Visakhapatnam_`;
+_${config.clientDetails.shortName} Purchasing Division • ${config.clientDetails.regdAndLocation}_`;
 
   const templatePayload = {
     type: 'template',
@@ -694,19 +704,7 @@ _CFECC Purchasing Division - Visakhapatnam_`;
     },
   };
 
-  let result = await sendMetaCloudMessage(params.phone, templatePayload);
-
-  const textPayload = {
-    type: 'text',
-    text: { preview_url: false, body: textBody },
-  };
-
-  if (!result.success && result.mode === 'LIVE') {
-    const textResult = await sendMetaCloudMessage(params.phone, textPayload);
-    if (textResult.success) result = textResult;
-  } else if (result.success && result.mode === 'LIVE') {
-    sendMetaCloudMessage(params.phone, textPayload).catch(() => {});
-  }
+  const result = await dispatchWhatsAppNotification(params.phone, textBody, templatePayload);
 
   await executeRawSql(`
     INSERT INTO whatsapp_logs (
@@ -738,10 +736,12 @@ export async function sendVendorPaymentAdvice(params: {
   paymentId: number;
 }): Promise<SendResult> {
   const formattedAmount = parseFloat((params.amount ?? 0).toString()).toFixed(2);
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateStr = formatISTDate();
 
   const textBody =
-`💰 *CFECC STORES - VENDOR PAYMENT ADVICE*
+`💰 *${config.clientDetails.name}*
+📍 ${config.clientDetails.regdAndLocation}
+*VENDOR PAYMENT ADVICE*
 ━━━━━━━━━━━━━━━━━━━━
 *Payee:* ${params.vendorName}
 *Voucher No:* ${params.paymentNumber}
@@ -750,7 +750,7 @@ export async function sendVendorPaymentAdvice(params: {
 ${params.referenceNumber ? `*Ref / UTR:* ${params.referenceNumber}` : ''}
 ━━━━━━━━━━━━━━━━━━━━
 Payment has been credited towards your outstanding invoices.
-_CFECC Accounts Department - Visakhapatnam_`;
+_${config.clientDetails.shortName} Accounts Department • ${config.clientDetails.regdAndLocation}_`;
 
   const templatePayload = {
     type: 'template',
@@ -770,19 +770,7 @@ _CFECC Accounts Department - Visakhapatnam_`;
     },
   };
 
-  let result = await sendMetaCloudMessage(params.phone, templatePayload);
-
-  const textPayload = {
-    type: 'text',
-    text: { preview_url: false, body: textBody },
-  };
-
-  if (!result.success && result.mode === 'LIVE') {
-    const textResult = await sendMetaCloudMessage(params.phone, textPayload);
-    if (textResult.success) result = textResult;
-  } else if (result.success && result.mode === 'LIVE') {
-    sendMetaCloudMessage(params.phone, textPayload).catch(() => {});
-  }
+  const result = await dispatchWhatsAppNotification(params.phone, textBody, templatePayload);
 
   await executeRawSql(`
     INSERT INTO whatsapp_logs (
@@ -815,10 +803,12 @@ export async function sendPayrollRecoveryAdvice(params: {
 }): Promise<SendResult> {
   const deduction = parseFloat((params.deductionAmount ?? 0).toString()).toFixed(2);
   const net = parseFloat((params.netSalary ?? 0).toString()).toFixed(2);
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateStr = formatISTDate();
 
   const textBody =
-`📄 *CFECC STORES - PAYROLL STORE DEDUCTION ADVICE*
+`📄 *${config.clientDetails.name}*
+📍 ${config.clientDetails.regdAndLocation}
+*PAYROLL STORE DEDUCTION ADVICE*
 ━━━━━━━━━━━━━━━━━━━━
 *Employee:* ${params.employeeName} (${params.employeeCode})
 *Month:* ${params.periodName}
@@ -827,7 +817,7 @@ export async function sendPayrollRecoveryAdvice(params: {
 • *Net Disbursed Salary:* ₹${net}
 ━━━━━━━━━━━━━━━━━━━━
 This recovery clears your cooperative credit balance for this cycle.
-_CFECC Payroll & Stores Division_`;
+_${config.clientDetails.shortName} Payroll & Stores Division • ${config.clientDetails.regdAndLocation}_`;
 
   const templatePayload = {
     type: 'template',
@@ -847,19 +837,7 @@ _CFECC Payroll & Stores Division_`;
     },
   };
 
-  let result = await sendMetaCloudMessage(params.phone, templatePayload);
-
-  const textPayload = {
-    type: 'text',
-    text: { preview_url: false, body: textBody },
-  };
-
-  if (!result.success && result.mode === 'LIVE') {
-    const textResult = await sendMetaCloudMessage(params.phone, textPayload);
-    if (textResult.success) result = textResult;
-  } else if (result.success && result.mode === 'LIVE') {
-    sendMetaCloudMessage(params.phone, textPayload).catch(() => {});
-  }
+  const result = await dispatchWhatsAppNotification(params.phone, textBody, templatePayload);
 
   await executeRawSql(`
     INSERT INTO whatsapp_logs (

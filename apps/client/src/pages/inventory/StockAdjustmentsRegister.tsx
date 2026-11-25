@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
+import { formatISTDate } from '../../lib/date.js';
 import { Modal } from '../../components/ui/Modal.js';
 import {
   FileText,
@@ -200,7 +201,7 @@ export const StockAdjustmentsRegister: React.FC = () => {
                 {liveAdjustments.map((adj) => (
                   <tr key={adj.id} className="hover:bg-slate-50/60 transition">
                     <td className="px-4 py-2.5 text-textSecondary whitespace-nowrap">
-                      {new Date(adj.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {formatISTDate(adj.date)}
                     </td>
                     <td className="px-4 py-2.5 font-medium text-navy-800">
                       <span className="font-mono text-primary mr-1.5">[{adj.item_code}]</span>
