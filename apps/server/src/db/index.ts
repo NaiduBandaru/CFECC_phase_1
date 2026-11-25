@@ -145,10 +145,10 @@ export function getDb() {
   return dbInstance;
 }
 
-export async function executeRawSql(sql: string) {
+export async function executeRawSql(sql: string, params?: any[]) {
   if (pgPoolInstance) {
     try {
-      return await pgPoolInstance.query(sql);
+      return await pgPoolInstance.query(sql, params);
     } catch (err: any) {
       const isTransientConnectionIssue =
         err?.message?.includes('Connection terminated') ||
@@ -162,7 +162,7 @@ export async function executeRawSql(sql: string) {
       if (isTransientConnectionIssue) {
         console.warn(`[Database] Transient PostgreSQL connection reset (${err?.message || err}). Retrying query with fresh connection...`);
         await new Promise((resolve) => setTimeout(resolve, 300));
-        return await pgPoolInstance.query(sql);
+        return await pgPoolInstance.query(sql, params);
       }
       throw err;
     }
@@ -172,7 +172,7 @@ export async function executeRawSql(sql: string) {
       await pgliteInstance.exec(sql);
       return { rows: [] };
     }
-    return await pgliteInstance.query(sql);
+    return await pgliteInstance.query(sql, params);
   }
   throw new Error('No active database client to execute SQL');
 }
