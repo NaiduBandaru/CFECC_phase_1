@@ -13,6 +13,7 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 const formatDate = (dateStr?: string | null) => {
@@ -50,6 +51,32 @@ export const PurchaseInvoicesPage: React.FC = () => {
   const [vendorFilter, setVendorFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
+
+  // Column Visibility
+  const [showColumnDropdown, setShowColumnDropdown] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    vendorGstin: false,
+    grnRef: true,
+    dueDate: false,
+    taxableSubtotal: false,
+    cgst: false,
+    sgst: false,
+    igst: false,
+    totalGst: false,
+    paidAmount: true,
+  });
+
+  const columnLabels: Record<string, string> = {
+    vendorGstin: 'Vendor GSTIN',
+    grnRef: 'GRN Reference',
+    dueDate: 'Separate Due Date',
+    taxableSubtotal: 'Taxable Subtotal',
+    cgst: 'CGST (₹)',
+    sgst: 'SGST (₹)',
+    igst: 'IGST (₹)',
+    totalGst: 'Total GST (₹)',
+    paidAmount: 'Paid Amount',
+  };
 
   // Register Invoice Modal
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -487,62 +514,134 @@ export const PurchaseInvoicesPage: React.FC = () => {
               <option key={v.id} value={v.id}>{v.name}</option>
             ))}
           </select>
+
+          {/* Columns Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+              className="flex items-center space-x-1.5 px-3 py-2 text-xs bg-slate-50 hover:bg-slate-100 border border-borderLine rounded-lg text-slate-700 font-medium transition-colors"
+              title="Show / Hide Table Columns"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-textSecondary" />
+              <span>Columns</span>
+            </button>
+
+            {showColumnDropdown && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowColumnDropdown(false)}
+                />
+                <div className="absolute right-0 mt-1 w-56 bg-white border border-borderLine rounded-lg shadow-lg z-50 p-3 space-y-2 text-xs">
+                  <div className="font-bold text-navy-800 pb-1 border-b border-borderLine flex items-center justify-between">
+                    <span>Show / Hide Columns</span>
+                    <button
+                      onClick={() =>
+                        setVisibleColumns({
+                          vendorGstin: false,
+                          grnRef: true,
+                          dueDate: false,
+                          taxableSubtotal: false,
+                          cgst: false,
+                          sgst: false,
+                          igst: false,
+                          totalGst: false,
+                          paidAmount: true,
+                        })
+                      }
+                      className="text-[10px] text-primary hover:underline font-normal"
+                    >
+                      Default
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                    {Object.entries(columnLabels).map(([key, label]) => (
+                      <label key={key} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-50 p-1 rounded">
+                        <input
+                          type="checkbox"
+                          checked={visibleColumns[key as keyof typeof visibleColumns]}
+                          onChange={(e) =>
+                            setVisibleColumns({
+                              ...visibleColumns,
+                              [key]: e.target.checked,
+                            })
+                          }
+                          className="rounded text-primary focus:ring-primary w-3.5 h-3.5"
+                        />
+                        <span className="text-slate-700 text-xs">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {(search || statusFilter !== 'ALL' || vendorFilter !== 'ALL') && (
+            <button
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('ALL');
+                setVendorFilter('ALL');
+              }}
+              className="px-2.5 py-1.5 text-xs text-textSecondary hover:text-navy-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors font-medium"
+              title="Reset Filters"
+            >
+              Reset
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Purchase Invoices Register Table with Standard Format and Horizontal Scroller */}
+      {/* Purchase Invoices Register Table */}
       <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col space-y-2 p-4">
         {/* Horizontal Scroll Guide & GST Banner */}
         <div className="flex items-center justify-between text-[11px] text-textSecondary bg-slate-50/80 px-3.5 py-2 rounded-lg border border-borderLine">
           <div className="flex items-center space-x-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
             <span>
               Detailed Accounts Payable Register with <strong>CGST + SGST (Intra-State AP - 37)</strong> & <strong>IGST (Inter-State)</strong> breakdown
             </span>
           </div>
-          <div className="text-slate-500 hidden sm:flex items-center space-x-1 text-[11px] font-medium">
-            <span>Scroll horizontally &harr; to view all tax & payment columns comfortably</span>
+          <div className="text-slate-500 hidden sm:flex items-center space-x-1 text-[11px]">
+            <span>Click <strong>View</strong> to inspect complete 3-way match, items & payment history</span>
           </div>
         </div>
 
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px] border border-borderLine rounded-lg scrollbar-thin">
-          <table className="w-full text-left text-xs border-collapse min-w-[1700px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[1050px]">
             <thead className="sticky top-0 z-20 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
               <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                <th className="py-3 px-3.5 sticky left-0 z-30 bg-slate-100 min-w-[130px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] border-r border-borderLine">
-                  System Bill #
-                </th>
-                <th className="py-3 px-3 min-w-[120px]">Vendor Bill #</th>
-                <th className="py-3 px-3 min-w-[200px]">Supplier / Agency</th>
-                <th className="py-3 px-3 min-w-[150px]">Vendor GSTIN</th>
-                <th className="py-3 px-3 min-w-[120px]">GRN Ref</th>
-                <th className="py-3 px-3 min-w-[105px]">Invoice Date</th>
-                <th className="py-3 px-3 min-w-[105px]">Due Date</th>
-                <th className="py-3 px-3 text-right min-w-[120px]">Taxable Subtotal</th>
-                <th className="py-3 px-3 text-right min-w-[95px] text-blue-700 bg-blue-50/50">CGST (₹)</th>
-                <th className="py-3 px-3 text-right min-w-[95px] text-indigo-700 bg-indigo-50/50">SGST (₹)</th>
-                <th className="py-3 px-3 text-right min-w-[95px] text-purple-700 bg-purple-50/50">IGST (₹)</th>
-                <th className="py-3 px-3 text-right min-w-[105px] text-navy-800 bg-slate-200/50">Total GST</th>
-                <th className="py-3 px-3 text-right min-w-[125px]">Total Invoiced</th>
-                <th className="py-3 px-3 text-right min-w-[115px] text-emerald-700">Paid Amount</th>
-                <th className="py-3 px-3 text-right min-w-[115px]">Balance Due</th>
-                <th className="py-3 px-3 text-center min-w-[100px]">Status</th>
-                <th className="py-3 px-3.5 text-center sticky right-0 z-30 bg-slate-100 min-w-[125px] shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.08)] border-l border-borderLine">
-                  Actions
-                </th>
+                <th className="py-3 px-3.5 min-w-[130px]">Bill #</th>
+                <th className="py-3 px-3 min-w-[180px]">Supplier / Agency</th>
+                {visibleColumns.vendorGstin && <th className="py-3 px-3 min-w-[140px]">Vendor GSTIN</th>}
+                {visibleColumns.grnRef && <th className="py-3 px-3 min-w-[110px]">GRN Ref</th>}
+                <th className="py-3 px-3 min-w-[110px]">Invoice Date</th>
+                {visibleColumns.dueDate && <th className="py-3 px-3 min-w-[105px]">Due Date</th>}
+                {visibleColumns.taxableSubtotal && <th className="py-3 px-3 text-right min-w-[110px]">Taxable Subtotal</th>}
+                {visibleColumns.cgst && <th className="py-3 px-3 text-right min-w-[95px] text-blue-700 bg-blue-50/50">CGST (₹)</th>}
+                {visibleColumns.sgst && <th className="py-3 px-3 text-right min-w-[95px] text-indigo-700 bg-indigo-50/50">SGST (₹)</th>}
+                {visibleColumns.igst && <th className="py-3 px-3 text-right min-w-[95px] text-purple-700 bg-purple-50/50">IGST (₹)</th>}
+                {visibleColumns.totalGst && <th className="py-3 px-3 text-right min-w-[100px] text-navy-800 bg-slate-200/50">Total GST</th>}
+                <th className="py-3 px-3 text-right min-w-[115px]">Total Invoiced</th>
+                {visibleColumns.paidAmount && <th className="py-3 px-3 text-right min-w-[105px] text-emerald-700">Paid Amount</th>}
+                <th className="py-3 px-3 text-right min-w-[105px]">Balance Due</th>
+                <th className="py-3 px-3 text-center min-w-[95px]">Status</th>
+                <th className="py-3 px-3 text-center min-w-[80px]">View</th>
+                <th className="py-3 px-3.5 text-center min-w-[90px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLine">
               {loading ? (
                 <tr>
-                  <td colSpan={17} className="py-8 text-center text-textSecondary">
+                  <td colSpan={7 + Object.values(visibleColumns).filter(Boolean).length} className="py-8 text-center text-textSecondary">
                     <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
                     <div>Loading purchase invoices...</div>
                   </td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={17} className="py-8 text-center text-textSecondary">
+                  <td colSpan={7 + Object.values(visibleColumns).filter(Boolean).length} className="py-8 text-center text-textSecondary">
                     <Receipt className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                     <div>No purchase invoices found matching filter criteria.</div>
                   </td>
@@ -552,113 +651,129 @@ export const PurchaseInvoicesPage: React.FC = () => {
                   const t = getInvoiceTax(inv);
                   return (
                     <tr key={inv.id} className="hover:bg-slate-50/70 transition-colors">
-                      {/* Sticky System Bill # */}
-                      <td className="py-3 px-3.5 font-mono font-bold text-navy-800 sticky left-0 z-10 bg-white/95 backdrop-blur-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] border-r border-borderLine">
-                        {inv.system_bill_number}
-                      </td>
-
-                      {/* Vendor Bill # */}
-                      <td className="py-3 px-3 font-mono text-textSecondary font-semibold">
-                        {inv.invoice_number}
+                      {/* Bill # */}
+                      <td className="py-3 px-3.5 whitespace-nowrap">
+                        <div className="font-mono font-bold text-navy-800">{inv.system_bill_number}</div>
+                        <div className="text-[11px] font-mono text-textSecondary font-semibold">Bill: {inv.invoice_number}</div>
                       </td>
 
                       {/* Supplier / Agency */}
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-navy-800">{inv.vendor_name}</div>
-                        <div className="text-[11px] text-textSecondary font-mono">Code: {inv.vendor_code}</div>
+                      <td className="py-3 px-3 min-w-[180px]">
+                        <div className="font-bold text-navy-800 leading-snug">{inv.vendor_name}</div>
+                        <div className="text-[11px] text-textSecondary font-mono mt-0.5">Code: {inv.vendor_code}</div>
                       </td>
 
                       {/* Vendor GSTIN */}
-                      <td className="py-3 px-3 font-mono text-textSecondary text-[11px]">
-                        {inv.vendor_gstin || '37AAAAA0000A1Z5'}
-                      </td>
+                      {visibleColumns.vendorGstin && (
+                        <td className="py-3 px-3 font-mono text-textSecondary text-[11px]">
+                          {inv.vendor_gstin || '37AAAAA0000A1Z5'}
+                        </td>
+                      )}
 
                       {/* GRN Ref */}
-                      <td className="py-3 px-3 font-mono text-textSecondary">
-                        {inv.grn_number ? (
-                          <span className="text-emerald-700 font-semibold">{inv.grn_number}</span>
-                        ) : (
-                          <span className="text-slate-400">Direct Bill</span>
-                        )}
-                      </td>
+                      {visibleColumns.grnRef && (
+                        <td className="py-3 px-3 font-mono text-textSecondary whitespace-nowrap">
+                          {inv.grn_number ? (
+                            <span className="text-emerald-700 font-semibold">{inv.grn_number}</span>
+                          ) : (
+                            <span className="text-slate-400">Direct Bill</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* Invoice Date */}
-                      <td className="py-3 px-3 text-textSecondary whitespace-nowrap font-medium">
-                        {formatDate(inv.invoice_date)}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <div className="font-medium text-slate-800">{formatDate(inv.invoice_date)}</div>
+                        <div className="text-[10px] mt-0.5">
+                          {inv.status === 'PAID' ? (
+                            <span className="text-emerald-600 font-semibold">Settled</span>
+                          ) : inv.is_overdue ? (
+                            <span className="text-rose-600 font-bold uppercase">
+                              Due: {formatDate(inv.effective_due_date || inv.due_date)} {inv.overdue_days ? `(${Math.round(inv.overdue_days)}d)` : ''}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">Due: {formatDate(inv.effective_due_date || inv.due_date)}</span>
+                          )}
+                        </div>
                       </td>
 
-                      {/* Due Date & Aging */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className={inv.is_overdue ? 'text-rose-600 font-bold' : 'text-slate-700 font-medium'}>
-                          {formatDate(inv.effective_due_date || inv.due_date || (inv.invoice_date ? new Date(new Date(inv.invoice_date).getTime() + 30*86400000).toISOString() : null))}
-                        </span>
-                        {inv.status === 'PAID' ? (
-                          <span className="block text-[9px] font-semibold text-emerald-600">Settled</span>
-                        ) : inv.is_overdue ? (
-                          <span className="block text-[9px] font-bold text-rose-600 uppercase">
-                            Overdue {inv.overdue_days ? `(${Math.round(inv.overdue_days)}d)` : ''}
+                      {/* Separate Due Date */}
+                      {visibleColumns.dueDate && (
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span className={inv.is_overdue ? 'text-rose-600 font-bold' : 'text-slate-700 font-medium'}>
+                            {formatDate(inv.effective_due_date || inv.due_date)}
                           </span>
-                        ) : (
-                          <span className="block text-[9px] text-slate-400">Net 30d</span>
-                        )}
-                      </td>
+                        </td>
+                      )}
 
                       {/* Taxable Subtotal */}
-                      <td className="py-3 px-3 text-right font-medium text-slate-800 tabular-nums">
-                        {formatCurrency(t.sub)}
-                      </td>
+                      {visibleColumns.taxableSubtotal && (
+                        <td className="py-3 px-3 text-right font-medium text-slate-800 tabular-nums">
+                          {formatCurrency(t.sub)}
+                        </td>
+                      )}
 
                       {/* CGST */}
-                      <td className="py-3 px-3 text-right tabular-nums bg-blue-50/30">
-                        {t.cgst > 0 ? (
-                          <span className="font-bold text-blue-800">{formatCurrency(t.cgst)}</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
+                      {visibleColumns.cgst && (
+                        <td className="py-3 px-3 text-right tabular-nums bg-blue-50/30">
+                          {t.cgst > 0 ? (
+                            <span className="font-bold text-blue-800">{formatCurrency(t.cgst)}</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* SGST */}
-                      <td className="py-3 px-3 text-right tabular-nums bg-indigo-50/30">
-                        {t.sgst > 0 ? (
-                          <span className="font-bold text-indigo-800">{formatCurrency(t.sgst)}</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
+                      {visibleColumns.sgst && (
+                        <td className="py-3 px-3 text-right tabular-nums bg-indigo-50/30">
+                          {t.sgst > 0 ? (
+                            <span className="font-bold text-indigo-800">{formatCurrency(t.sgst)}</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* IGST */}
-                      <td className="py-3 px-3 text-right tabular-nums bg-purple-50/30">
-                        {t.igst > 0 ? (
-                          <span className="font-bold text-purple-800">{formatCurrency(t.igst)}</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
+                      {visibleColumns.igst && (
+                        <td className="py-3 px-3 text-right tabular-nums bg-purple-50/30">
+                          {t.igst > 0 ? (
+                            <span className="font-bold text-purple-800">{formatCurrency(t.igst)}</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* Total GST */}
-                      <td className="py-3 px-3 text-right tabular-nums font-bold text-navy-800 bg-slate-100/50">
-                        {t.tax > 0 ? formatCurrency(t.tax) : '-'}
-                      </td>
+                      {visibleColumns.totalGst && (
+                        <td className="py-3 px-3 text-right tabular-nums font-bold text-navy-800 bg-slate-100/50">
+                          {t.tax > 0 ? formatCurrency(t.tax) : '-'}
+                        </td>
+                      )}
 
                       {/* Total Invoiced Amount */}
-                      <td className="py-3 px-3 text-right font-bold text-navy-800 tabular-nums">
+                      <td className="py-3 px-3 text-right font-bold text-navy-800 tabular-nums whitespace-nowrap">
                         {formatCurrency(t.total)}
                       </td>
 
                       {/* Paid Amount */}
-                      <td className="py-3 px-3 text-right font-medium text-emerald-700 tabular-nums">
-                        {formatCurrency(t.paid)}
-                      </td>
+                      {visibleColumns.paidAmount && (
+                        <td className="py-3 px-3 text-right font-medium text-emerald-700 tabular-nums whitespace-nowrap">
+                          {formatCurrency(t.paid)}
+                        </td>
+                      )}
 
                       {/* Balance Due */}
-                      <td className="py-3 px-3 text-right font-bold tabular-nums">
+                      <td className="py-3 px-3 text-right font-bold tabular-nums whitespace-nowrap">
                         <span className={t.balance > 0 ? 'text-rose-600' : 'text-emerald-700'}>
                           {formatCurrency(t.balance)}
                         </span>
                       </td>
 
                       {/* Status */}
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
                         <span
                           className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             inv.status === 'PAID'
@@ -672,27 +787,31 @@ export const PurchaseInvoicesPage: React.FC = () => {
                         </span>
                       </td>
 
-                      {/* Sticky Actions */}
-                      <td className="py-3 px-3.5 text-center sticky right-0 z-10 bg-white/95 backdrop-blur-xs shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.06)] border-l border-borderLine">
-                        <div className="flex items-center justify-center space-x-1.5">
-                          <button
-                            title="View Invoice & Match Details"
-                            onClick={() => openInvoiceDetails(inv.id)}
-                            className="p-1 hover:bg-slate-100 rounded text-textSecondary hover:text-navy-800 transition-colors"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
+                      {/* Dedicated View Column */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <button
+                          onClick={() => openInvoiceDetails(inv.id)}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 rounded-md border border-primary/20 transition-colors"
+                          title="View 3-way match & complete invoice details"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View</span>
+                        </button>
+                      </td>
 
-                          {inv.status !== 'PAID' && (
-                            <button
-                              onClick={() => openPaymentModal(inv)}
-                              className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-primary text-white text-[11px] font-semibold hover:bg-primary-hover shadow-subtle"
-                            >
-                              <CreditCard className="w-3 h-3" />
-                              <span>Pay</span>
-                            </button>
-                          )}
-                        </div>
+                      {/* Actions */}
+                      <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                        {inv.status !== 'PAID' ? (
+                          <button
+                            onClick={() => openPaymentModal(inv)}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-primary text-white text-[11px] font-semibold hover:bg-primary-hover shadow-subtle transition-colors"
+                          >
+                            <CreditCard className="w-3 h-3" />
+                            <span>Pay</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-emerald-600">Settled</span>
+                        )}
                       </td>
                     </tr>
                   );
