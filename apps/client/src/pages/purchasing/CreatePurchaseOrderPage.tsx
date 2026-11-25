@@ -100,6 +100,7 @@ export const CreatePurchaseOrderPage: React.FC = () => {
   const [newSgstRate, setNewSgstRate] = useState<number>(0);
   const [newIgstRate, setNewIgstRate] = useState<number>(0);
   const [newExpiryDate, setNewExpiryDate] = useState('');
+  const [showExtraFields, setShowExtraFields] = useState(false);
 
   // Selected item object reference for live feedback
   const selectedItemObj = useMemo(() => {
@@ -865,24 +866,6 @@ export const CreatePurchaseOrderPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-
-                {/* Popular Suppliers Quick Select Chips */}
-                <div className="flex items-center flex-wrap gap-1.5 text-xs pt-0.5">
-                  <span className="text-[10px] text-slate-400 font-semibold shrink-0">Quick Pick:</span>
-                  {topSuppliers.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedVendorId(s.id.toString());
-                        setVendorSearchQuery('');
-                      }}
-                      className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-blue-50 hover:text-primary text-[11px] font-medium text-slate-700 transition-colors"
-                    >
-                      {s.name} ({s.vendor_code})
-                    </button>
-                  ))}
-                </div>
               </div>
             ) : (
               /* Sleek, Clean Active Supplier Card */
@@ -1068,39 +1051,6 @@ export const CreatePurchaseOrderPage: React.FC = () => {
           </span>
         </div>
 
-        {/* Category Pills Filter */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-2.5 mb-3.5 no-scrollbar">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-1 flex items-center space-x-1">
-            <Tag className="w-3.5 h-3.5 text-slate-400" />
-            <span>Category:</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => setPoItemCategoryFilter('ALL')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition-all ${
-              poItemCategoryFilter === 'ALL'
-                ? 'bg-navy-800 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            All Commodities
-          </button>
-          {itemCategories.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setPoItemCategoryFilter(c)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition-all ${
-                poItemCategoryFilter === c
-                  ? 'bg-primary text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
         {/* Selected Item Notification Banner if an item is active */}
         {selectedItemObj && (
           <div className="mb-3.5 p-2.5 px-3.5 rounded-xl bg-blue-50/80 border border-blue-200 flex items-center justify-between text-xs animate-in fade-in duration-200 shadow-2xs">
@@ -1132,10 +1082,10 @@ export const CreatePurchaseOrderPage: React.FC = () => {
           </div>
         )}
 
-        {/* Row 1: Item Search, Qty, Prices, Expiry */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-end mb-3.5">
+        {/* Row 1: Core Procurement Fields (Item Search, Qty, Rate) */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end mb-3.5">
           {/* Item Search Bar */}
-          <div className="md:col-span-4 relative" ref={poItemSearchContainerRef}>
+          <div className="md:col-span-6 relative" ref={poItemSearchContainerRef}>
             <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1">
               Store Item Search (Code / Name / Barcode) <span className="text-rose-500">*</span>
             </label>
@@ -1144,7 +1094,7 @@ export const CreatePurchaseOrderPage: React.FC = () => {
               <input
                 ref={poItemInputRef}
                 type="text"
-                placeholder="Search item name or 4-digit code..."
+                placeholder="Search item name or 4-digit code (e.g. 1001)..."
                 value={poItemSearch}
                 onChange={(e) => {
                   setPoItemSearch(e.target.value);
@@ -1195,19 +1145,13 @@ export const CreatePurchaseOrderPage: React.FC = () => {
                         <div className="text-[10px] text-textSecondary flex items-center space-x-2">
                           <span className="font-mono bg-slate-100 px-1 rounded font-bold text-slate-700">{itm.item_code}</span>
                           {itm.category_name && <span>• {itm.category_name}</span>}
-                          <span>• Pur: ₹{itm.purchase_price || 0}</span>
-                          <span>• MRP: ₹{(itm as any).mrp || itm.selling_price || 0}</span>
+                          <span>• Cost: ₹{itm.purchase_price || 0}</span>
                         </div>
                       </div>
                       <div className="text-right">
                         <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-100 rounded text-slate-600 font-bold block">
                           GST: {itm.tax_rate || 0}%
                         </span>
-                        {(itm as any).cgst_rate > 0 && (
-                          <span className="text-[9px] text-slate-400">
-                            C:{(itm as any).cgst_rate}% S:{(itm as any).sgst_rate}%
-                          </span>
-                        )}
                       </div>
                     </div>
                   ))
@@ -1217,7 +1161,7 @@ export const CreatePurchaseOrderPage: React.FC = () => {
           </div>
 
           {/* Ordered Qty */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-3">
             <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1">
               Ordered Qty <span className="text-rose-500">*</span>
             </label>
@@ -1247,7 +1191,7 @@ export const CreatePurchaseOrderPage: React.FC = () => {
           </div>
 
           {/* Purchase Rate (₹) */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-3">
             <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1">
               Purchase Rate (₹) <span className="text-rose-500">*</span>
             </label>
@@ -1263,284 +1207,129 @@ export const CreatePurchaseOrderPage: React.FC = () => {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    poCgstInputRef.current?.focus();
-                    poCgstInputRef.current?.select();
+                    handleAddLineToPo();
                   }
                 }}
                 className="w-full pl-7 pr-3 py-2.5 rounded-lg border border-borderLine text-xs font-bold text-navy-800 text-right bg-white focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
               />
             </div>
           </div>
-
-          {/* Sale Price (₹) */}
-          <div className="md:col-span-1 sm:col-span-1">
-            <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1 truncate" title="Sale Price (₹)">
-              Sale (₹)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={newSalePrice}
-              onChange={(e) => setNewSalePrice(parseFloat(e.target.value) || 0)}
-              className="w-full px-2 py-2.5 rounded-lg border border-borderLine text-xs font-medium text-right bg-white focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
-            />
-          </div>
-
-          {/* MRP (₹) */}
-          <div className="md:col-span-1 sm:col-span-1">
-            <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1 truncate" title="MRP (₹)">
-              MRP (₹)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={newMrp}
-              onChange={(e) => setNewMrp(parseFloat(e.target.value) || 0)}
-              className="w-full px-2 py-2.5 rounded-lg border border-borderLine text-xs font-medium text-right bg-white focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
-            />
-          </div>
-
-          {/* Expiry Date */}
-          <div className="md:col-span-2 sm:col-span-2">
-            <label className="block text-[11px] font-bold text-navy-800 uppercase tracking-wider mb-1">
-              Expiry Date
-            </label>
-            <input
-              type="date"
-              value={newExpiryDate}
-              onChange={(e) => setNewExpiryDate(e.target.value)}
-              className="w-full px-2 py-2.5 rounded-lg border border-borderLine text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
-            />
-          </div>
         </div>
 
-        {/* Row 2: SEPARATE GST TAX RATES & ADD TO ORDER ACTION */}
-        <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/90 shadow-2xs">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            {/* Left: GST Manual Inputs and Presets */}
-            <div className="space-y-2.5 flex-1 min-w-0">
-              {/* Manual Input Fields & Computed Total */}
-              <div className="flex items-center flex-wrap gap-3">
-                <div className="flex items-center space-x-1.5 shrink-0">
-                  <Percent className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-xs font-bold text-navy-800 uppercase tracking-wider">
-                    Separate GST Rates:
-                  </span>
-                </div>
+        {/* Optional Extra Fields Toggle (Sale, MRP, Expiry) */}
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={() => setShowExtraFields(!showExtraFields)}
+            className="text-[11px] text-primary hover:underline font-semibold inline-flex items-center space-x-1"
+          >
+            <span>{showExtraFields ? '− Hide Retail & Expiry Fields' : '+ Optional: Specify Selling Price, MRP & Expiry Date'}</span>
+          </button>
 
-                {/* CGST Input Box */}
-                <div className="flex items-center bg-white rounded-lg border border-blue-300 shadow-2xs overflow-hidden focus-within:ring-2 focus-within:ring-blue-400">
-                  <span className="px-2 py-1 bg-blue-50 text-[10px] font-bold text-blue-800 border-r border-blue-200 uppercase">
-                    CGST
-                  </span>
-                  <input
-                    ref={poCgstInputRef}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={newCgstRate}
-                    onChange={(e) => setNewCgstRate(parseFloat(e.target.value) || 0)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        poSgstInputRef.current?.focus();
-                        poSgstInputRef.current?.select();
-                      }
-                    }}
-                    className="w-12 px-1 py-1 text-center text-xs font-bold text-blue-800 focus:outline-none"
-                  />
-                  <span className="pr-2 text-[10px] text-slate-400 font-semibold">%</span>
-                </div>
-
-                {/* SGST Input Box */}
-                <div className="flex items-center bg-white rounded-lg border border-blue-300 shadow-2xs overflow-hidden focus-within:ring-2 focus-within:ring-blue-400">
-                  <span className="px-2 py-1 bg-blue-50 text-[10px] font-bold text-blue-800 border-r border-blue-200 uppercase">
-                    SGST
-                  </span>
-                  <input
-                    ref={poSgstInputRef}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={newSgstRate}
-                    onChange={(e) => setNewSgstRate(parseFloat(e.target.value) || 0)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        poIgstInputRef.current?.focus();
-                        poIgstInputRef.current?.select();
-                      }
-                    }}
-                    className="w-12 px-1 py-1 text-center text-xs font-bold text-blue-800 focus:outline-none"
-                  />
-                  <span className="pr-2 text-[10px] text-slate-400 font-semibold">%</span>
-                </div>
-
-                {/* IGST Input Box */}
-                <div className="flex items-center bg-white rounded-lg border border-indigo-300 shadow-2xs overflow-hidden focus-within:ring-2 focus-within:ring-indigo-400">
-                  <span className="px-2 py-1 bg-indigo-50 text-[10px] font-bold text-indigo-800 border-r border-indigo-200 uppercase">
-                    IGST
-                  </span>
-                  <input
-                    ref={poIgstInputRef}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={newIgstRate}
-                    onChange={(e) => setNewIgstRate(parseFloat(e.target.value) || 0)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddLineToPo();
-                      }
-                    }}
-                    className="w-12 px-1 py-1 text-center text-xs font-bold text-indigo-800 focus:outline-none"
-                  />
-                  <span className="pr-2 text-[10px] text-slate-400 font-semibold">%</span>
-                </div>
-
-                {/* Total GST Badge & Computed Tax Amount */}
-                <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-200/90 text-xs font-semibold text-slate-700">
-                  <span className="text-[10px] uppercase text-slate-500 font-bold">Total:</span>
-                  <span className="font-mono font-bold text-navy-800">
-                    {(newCgstRate + newSgstRate + newIgstRate).toFixed(1)}%
-                  </span>
-                  {newQty > 0 && newPrice > 0 && (newCgstRate + newSgstRate + newIgstRate) > 0 && (
-                    <span className="text-[10px] font-mono text-emerald-700 font-bold ml-1">
-                      (₹{((newQty * newPrice * (newCgstRate + newSgstRate + newIgstRate)) / 100).toFixed(2)})
-                    </span>
-                  )}
-                </div>
+          {showExtraFields && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 mt-2 rounded-lg bg-slate-50 border border-slate-200 animate-in fade-in duration-150">
+              <div>
+                <label className="block text-[10px] font-bold text-textSecondary uppercase tracking-wider mb-1">
+                  Employee Sale Price (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newSalePrice}
+                  onChange={(e) => setNewSalePrice(parseFloat(e.target.value) || 0)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-borderLine text-xs font-medium text-right bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                />
               </div>
 
-              {/* Quick Preset Buttons (Grouped & Never Overlapping) */}
-              <div className="flex items-center flex-wrap gap-1.5 text-[11px] pt-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Presets:</span>
-
-                {/* Intra-State GST Presets */}
-                <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => { setNewCgstRate(0); setNewSgstRate(0); setNewIgstRate(0); }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                      newCgstRate === 0 && newSgstRate === 0 && newIgstRate === 0
-                        ? 'bg-slate-800 text-white shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    0% Nil
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setNewCgstRate(2.5); setNewSgstRate(2.5); setNewIgstRate(0); }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                      newCgstRate === 2.5 && newSgstRate === 2.5 && newIgstRate === 0
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'text-blue-700 hover:bg-blue-50'
-                    }`}
-                  >
-                    5% (2.5+2.5)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setNewCgstRate(6); setNewSgstRate(6); setNewIgstRate(0); }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                      newCgstRate === 6 && newSgstRate === 6 && newIgstRate === 0
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'text-blue-700 hover:bg-blue-50'
-                    }`}
-                  >
-                    12% (6+6)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setNewCgstRate(9); setNewSgstRate(9); setNewIgstRate(0); }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                      newCgstRate === 9 && newSgstRate === 9 && newIgstRate === 0
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'text-blue-700 hover:bg-blue-50'
-                    }`}
-                  >
-                    18% (9+9)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setNewCgstRate(14); setNewSgstRate(14); setNewIgstRate(0); }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                      newCgstRate === 14 && newSgstRate === 14 && newIgstRate === 0
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'text-blue-700 hover:bg-blue-50'
-                    }`}
-                  >
-                    28% (14+14)
-                  </button>
-                </div>
-
-                {/* Inter-State IGST Presets */}
-                <div className="inline-flex items-center rounded-lg border border-indigo-200 bg-white p-0.5 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => { setNewCgstRate(0); setNewSgstRate(0); setNewIgstRate(5); }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                      newIgstRate === 5 && newCgstRate === 0 && newSgstRate === 0
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : 'text-indigo-700 hover:bg-indigo-50'
-                    }`}
-                  >
-                    IGST 5%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setNewCgstRate(0); setNewSgstRate(0); setNewIgstRate(12); }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                      newIgstRate === 12 && newCgstRate === 0 && newSgstRate === 0
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : 'text-indigo-700 hover:bg-indigo-50'
-                    }`}
-                  >
-                    IGST 12%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setNewCgstRate(0); setNewSgstRate(0); setNewIgstRate(18); }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                      newIgstRate === 18 && newCgstRate === 0 && newSgstRate === 0
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : 'text-indigo-700 hover:bg-indigo-50'
-                    }`}
-                  >
-                    IGST 18%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setNewCgstRate(0); setNewSgstRate(0); setNewIgstRate(28); }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                      newIgstRate === 28 && newCgstRate === 0 && newSgstRate === 0
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : 'text-indigo-700 hover:bg-indigo-50'
-                    }`}
-                  >
-                    IGST 28%
-                  </button>
-                </div>
+              <div>
+                <label className="block text-[10px] font-bold text-textSecondary uppercase tracking-wider mb-1">
+                  MRP (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newMrp}
+                  onChange={(e) => setNewMrp(parseFloat(e.target.value) || 0)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-borderLine text-xs font-medium text-right bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                />
               </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-textSecondary uppercase tracking-wider mb-1">
+                  Batch Expiry Date
+                </label>
+                <input
+                  type="date"
+                  value={newExpiryDate}
+                  onChange={(e) => setNewExpiryDate(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-borderLine text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Row 2: Clean GST Tax Selection & Add Item Button */}
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Left: GST Slab Selector & Computed Tax Badge */}
+            <div className="flex items-center flex-wrap gap-2.5">
+              <span className="text-xs font-bold text-navy-800 uppercase tracking-wider">
+                GST Tax Rate:
+              </span>
+              <select
+                value={
+                  newIgstRate > 0
+                    ? `IGST_${newIgstRate}`
+                    : `${newCgstRate + newSgstRate}`
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.startsWith('IGST_')) {
+                    const rate = parseFloat(val.replace('IGST_', '')) || 0;
+                    setNewCgstRate(0);
+                    setNewSgstRate(0);
+                    setNewIgstRate(rate);
+                  } else {
+                    const rate = parseFloat(val) || 0;
+                    setNewCgstRate(rate / 2);
+                    setNewSgstRate(rate / 2);
+                    setNewIgstRate(0);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg border border-borderLine bg-white text-xs font-bold text-navy-800 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs"
+              >
+                <option value="0">0% (Nil / Exempt)</option>
+                <option value="5">5% (CGST 2.5% + SGST 2.5%)</option>
+                <option value="12">12% (CGST 6% + SGST 6%)</option>
+                <option value="18">18% (CGST 9% + SGST 9%)</option>
+                <option value="28">28% (CGST 14% + SGST 14%)</option>
+                <option value="IGST_5">5% IGST (Inter-State)</option>
+                <option value="IGST_12">12% IGST (Inter-State)</option>
+                <option value="IGST_18">18% IGST (Inter-State)</option>
+                <option value="IGST_28">28% IGST (Inter-State)</option>
+              </select>
+
+              {newQty > 0 && newPrice > 0 && (newCgstRate + newSgstRate + newIgstRate) > 0 && (
+                <span className="text-xs font-mono text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
+                  Tax: ₹{((newQty * newPrice * (newCgstRate + newSgstRate + newIgstRate)) / 100).toFixed(2)}
+                </span>
+              )}
             </div>
 
             {/* Right: Add Line Button */}
-            <div className="flex items-center shrink-0">
-              <button
-                type="button"
-                onClick={handleAddLineToPo}
-                disabled={!newItemId || newQty <= 0}
-                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-primary/20 flex items-center justify-center space-x-2 shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Item to Order</span>
-                <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-mono">↵ Enter</kbd>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleAddLineToPo}
+              disabled={!newItemId || newQty <= 0}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-primary/20 flex items-center justify-center space-x-2 shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Item to Order</span>
+              <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-mono">↵ Enter</kbd>
+            </button>
           </div>
         </div>
       </div>
