@@ -206,11 +206,7 @@ export function App() {
             />
             <Route
               path="recovery-records"
-              element={
-                <RoleRoute allowedRoles={['SUPER_ADMIN', 'ACCOUNTS_OFFICER', 'HR_PAYROLL']}>
-                  <PayrollPage initialTab="RECOVERY" />
-                </RoleRoute>
-              }
+              element={<Navigate to="/employees" replace />}
             />
             <Route
               path="reports"

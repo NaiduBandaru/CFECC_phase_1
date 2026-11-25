@@ -86,10 +86,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       ],
     },
     {
-      group: 'MEMBERS & RECOVERY',
+      group: 'MEMBERS & ACCOUNTS',
       items: [
         { name: 'Members Directory', path: '/employees', icon: Users, roles: ['SUPER_ADMIN', 'HR_PAYROLL', 'ACCOUNTS_OFFICER'] },
-        { name: 'Recovery Archives', path: '/recovery-records', icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'ACCOUNTS_OFFICER', 'HR_PAYROLL'] },
       ],
     },
     {
