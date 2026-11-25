@@ -51,7 +51,7 @@ export const SettingsPage: React.FC = () => {
   const [savingConfig, setSavingConfig] = useState(false);
 
   // Test Message Modal / State
-  const [testPhone, setTestPhone] = useState('+15551439313');
+  const [testPhone, setTestPhone] = useState('');
   const [testNote, setTestNote] = useState('CFECC Official Gateway Verification Ping');
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; errorCode?: number } | null>(null);
@@ -565,34 +565,15 @@ export const SettingsPage: React.FC = () => {
 
         <form onSubmit={handleSendTestMessage} className="mt-4 grid grid-cols-1 md:grid-cols-12 gap-3 text-xs items-end">
           <div className="md:col-span-4">
-            <div className="flex items-center justify-between mb-1">
-              <label className="block font-semibold text-textSecondary uppercase">
-                Recipient Mobile Number *
-              </label>
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setTestPhone(waConfig?.testPhoneNumber || '+15551439313')}
-                  className="text-[10px] text-primary hover:underline font-semibold"
-                >
-                  Test Sandbox
-                </button>
-                <span className="text-slate-300">|</span>
-                <button
-                  type="button"
-                  onClick={() => setTestPhone('9985172319')}
-                  className="text-[10px] text-primary hover:underline font-semibold"
-                >
-                  Admin Mobile
-                </button>
-              </div>
-            </div>
+            <label className="block font-semibold text-textSecondary uppercase mb-1">
+              Recipient Mobile Number *
+            </label>
             <div className="relative">
               <Phone className="w-4 h-4 absolute left-3 top-2.5 text-textSecondary" />
               <input
                 type="text"
                 required
-                placeholder="e.g. 9848022338 or +15551439313"
+                placeholder="e.g. 9848022338 or +919848022338"
                 value={testPhone}
                 onChange={(e) => setTestPhone(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 border border-borderLine rounded-lg bg-slate-50 focus:bg-white focus:outline-none font-mono"
