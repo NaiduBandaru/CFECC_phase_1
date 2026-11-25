@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { executeRawSql } from '../../db/index.js';
 import { authenticateToken, requireRole } from '../../middleware/auth.js';
+import { baileysGateway } from '../../services/baileys.service.js';
 import {
   getWhatsAppCredentials,
   updateWhatsAppCredentials,
@@ -14,6 +15,35 @@ import {
 } from '../../services/whatsapp.service.js';
 
 export const whatsappRouter = Router();
+
+// ==========================================
+// 0. Self-Hosted Gateway QR & Session Control
+// ==========================================
+
+/**
+ * Get Live WhatsApp Gateway Status & QR Code
+ */
+whatsappRouter.get('/gateway/status', authenticateToken, async (_req: Request, res: Response) => {
+  const status = baileysGateway.getStatus();
+  return res.json({ success: true, data: status });
+});
+
+/**
+ * Start or Request New Gateway Pairing QR Code
+ */
+whatsappRouter.post('/gateway/connect', authenticateToken, requireRole('SUPER_ADMIN'), async (_req: Request, res: Response) => {
+  await baileysGateway.initialize();
+  const status = baileysGateway.getStatus();
+  return res.json({ success: true, message: 'Gateway initialization triggered', data: status });
+});
+
+/**
+ * Disconnect / Logout Gateway Session
+ */
+whatsappRouter.post('/gateway/logout', authenticateToken, requireRole('SUPER_ADMIN'), async (_req: Request, res: Response) => {
+  await baileysGateway.logout();
+  return res.json({ success: true, message: 'Gateway logged out successfully' });
+});
 
 // ==========================================
 // 1. Meta Webhook Endpoints (Public for Meta)

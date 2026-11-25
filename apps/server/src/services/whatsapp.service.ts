@@ -1,5 +1,6 @@
 import { config } from '../config/index.js';
 import { executeRawSql } from '../db/index.js';
+import { baileysGateway } from './baileys.service.js';
 
 export interface WhatsAppCredentials {
   apiUrl: string;
@@ -166,6 +167,30 @@ export async function sendMetaCloudMessage(recipientPhone: string, messagePayloa
       mode: 'SIMULATED',
       errorMessage: `Invalid mobile number: "${recipientPhone}". Phone must have at least 10 digits.`,
     };
+  }
+
+  // 1. Try Baileys Gateway First if connected!
+  const gatewayStatus = baileysGateway.getStatus();
+  if (gatewayStatus.status === 'CONNECTED') {
+    let textToSend = '';
+    if (messagePayload.type === 'text' && messagePayload.text?.body) {
+      textToSend = messagePayload.text.body;
+    } else if (messagePayload.body) {
+      textToSend = messagePayload.body;
+    } else {
+      textToSend = JSON.stringify(messagePayload);
+    }
+
+    const gatewayResult = await baileysGateway.sendMessage(cleanPhone, textToSend);
+    if (gatewayResult.success) {
+      return {
+        success: true,
+        messageId: gatewayResult.messageId,
+        status: 'SENT',
+        mode: 'LIVE',
+        details: { provider: 'baileys_gateway', phone: gatewayStatus.phone },
+      };
+    }
   }
 
   const creds = await getWhatsAppCredentials();

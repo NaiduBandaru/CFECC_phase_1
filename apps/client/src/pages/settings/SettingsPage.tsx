@@ -22,6 +22,9 @@ import {
   X,
   Database,
   HardDriveDownload,
+  QrCode,
+  LogOut,
+  Smartphone,
 } from 'lucide-react';
 import { DatabaseBackupTab } from './DatabaseBackupTab.js';
 
@@ -54,6 +57,57 @@ export const SettingsPage: React.FC = () => {
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; errorCode?: number } | null>(null);
 
   const [copiedWebhook, setCopiedWebhook] = useState(false);
+
+  // Self-Hosted Gateway State
+  const [gatewayStatus, setGatewayStatus] = useState<{
+    status: 'DISCONNECTED' | 'SCAN_QR' | 'CONNECTING' | 'CONNECTED';
+    qrCode: string | null;
+    phone: string | null;
+  }>({ status: 'DISCONNECTED', qrCode: null, phone: null });
+  const [loadingGateway, setLoadingGateway] = useState(false);
+
+  useEffect(() => {
+    fetchWaLogs();
+    fetchWaConfig();
+    fetchGatewayStatus();
+  }, []);
+
+  const fetchGatewayStatus = async () => {
+    try {
+      const res = await api.get('/whatsapp/gateway/status');
+      if (res.data.success) {
+        setGatewayStatus(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleConnectGateway = async () => {
+    try {
+      setLoadingGateway(true);
+      const res = await api.post('/whatsapp/gateway/connect');
+      if (res.data.success) {
+        setGatewayStatus(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingGateway(false);
+    }
+  };
+
+  const handleLogoutGateway = async () => {
+    try {
+      setLoadingGateway(true);
+      await api.post('/whatsapp/gateway/logout');
+      fetchGatewayStatus();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingGateway(false);
+    }
+  };
 
   useEffect(() => {
     fetchWaLogs();
@@ -340,6 +394,101 @@ export const SettingsPage: React.FC = () => {
       {/* 3. WhatsApp Gateway & Logs Tab */}
       {activeTab === 'WHATSAPP' && (
         <div className="space-y-6">
+          {/* Option 1: Self-Hosted Direct WhatsApp QR Gateway */}
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 rounded-cfecc border border-emerald-200 shadow-subtle">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-emerald-200/60">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 rounded-xl bg-emerald-600 text-white shadow-sm">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-navy-800">CFECC WhatsApp Web Gateway (No Meta Verification)</h3>
+                  <p className="text-xs text-textSecondary mt-0.5">
+                    Scan with any store WhatsApp number to enable automated dispatch of receipts, statements & recovery advice.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1.5 ${
+                    gatewayStatus.status === 'CONNECTED'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : gatewayStatus.status === 'SCAN_QR'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                      : 'bg-slate-100 text-slate-700 border border-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      gatewayStatus.status === 'CONNECTED'
+                        ? 'bg-emerald-500'
+                        : gatewayStatus.status === 'SCAN_QR'
+                        ? 'bg-amber-500'
+                        : 'bg-slate-400'
+                    }`}
+                  ></span>
+                  <span>
+                    {gatewayStatus.status === 'CONNECTED'
+                      ? `CONNECTED (+${gatewayStatus.phone})`
+                      : gatewayStatus.status === 'SCAN_QR'
+                      ? 'READY TO SCAN'
+                      : gatewayStatus.status === 'CONNECTING'
+                      ? 'INITIALIZING...'
+                      : 'DISCONNECTED'}
+                  </span>
+                </span>
+
+                {gatewayStatus.status === 'CONNECTED' ? (
+                  <button
+                    onClick={handleLogoutGateway}
+                    disabled={loadingGateway}
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold hover:bg-rose-100 transition"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Unlink Phone</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleConnectGateway}
+                    disabled={loadingGateway}
+                    className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition shadow-sm"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>{loadingGateway ? 'Starting...' : 'Link Store WhatsApp (Scan QR)'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* QR Code Display when ready */}
+            {gatewayStatus.status === 'SCAN_QR' && gatewayStatus.qrCode && (
+              <div className="mt-5 p-5 bg-white rounded-xl border border-emerald-200 flex flex-col md:flex-row items-center justify-center gap-6 shadow-sm">
+                <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-inner">
+                  <img src={gatewayStatus.qrCode} alt="WhatsApp Pairing QR Code" className="w-52 h-52" />
+                </div>
+                <div className="space-y-2 text-xs text-navy-800 max-w-md">
+                  <div className="font-bold text-sm text-emerald-800 flex items-center space-x-1.5">
+                    <span>How to connect in 10 seconds:</span>
+                  </div>
+                  <ol className="list-decimal pl-4 space-y-1.5 text-textSecondary">
+                    <li>Open <strong>WhatsApp</strong> on your store phone.</li>
+                    <li>Tap <strong>Settings</strong> or <strong>Three dots (⋮)</strong> ➔ <strong>Linked Devices</strong>.</li>
+                    <li>Tap <strong>Link a Device</strong> and point your camera at this QR code.</li>
+                    <li>Once scanned, the gateway automatically connects and stays online 24/7!</li>
+                  </ol>
+                  <button
+                    onClick={fetchGatewayStatus}
+                    className="mt-2 text-primary font-bold hover:underline flex items-center space-x-1"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Refresh Status</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* WhatsApp Integration Summary Card */}
             <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle space-y-4 lg:col-span-3">

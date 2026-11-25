@@ -3,6 +3,7 @@ import { config } from './config/index.js';
 import { initDatabase, executeRawSql } from './db/index.js';
 import { seedDatabase } from './db/seed.js';
 import { initBackupScheduler } from './modules/backup/backup.service.js';
+import { baileysGateway } from './services/baileys.service.js';
 
 export const app = createApp();
 
@@ -27,6 +28,11 @@ async function bootstrapServer() {
 
     // Initialize automated daily backup daemon
     initBackupScheduler();
+
+    // Auto-connect WhatsApp Gateway if an existing session exists
+    baileysGateway.initialize().catch((err) => {
+      console.warn('[WhatsApp Gateway] Auto-start notice:', err?.message || err);
+    });
 
     // Start listening on configured port
     app.listen(config.port, () => {
