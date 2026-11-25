@@ -20,6 +20,12 @@ import {
   FolderPlus,
   CheckCircle,
   Printer,
+  Eye,
+  Info,
+  Layers,
+  Tag,
+  DollarSign,
+  Calendar,
 } from 'lucide-react';
 
 interface ItemsMasterPageProps {
@@ -65,19 +71,19 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBulkOperating, setIsBulkOperating] = useState<boolean>(false);
 
-  // Column Visibility
+  // Column Visibility - streamlined defaults so table is uncluttered and clean
   const [showColumnDropdown, setShowColumnDropdown] = useState<boolean>(false);
   const [visibleColumns, setVisibleColumns] = useState({
-    hsn: true,
-    batch1: true,
-    batch2: true,
+    hsn: false,
+    batch1: false,
+    batch2: false,
     purchasePrice: true,
     sellingPrice: true,
     stockLevel: true,
-    stockValue: true,
-    cgst: true,
-    sgst: true,
-    igst: true,
+    stockValue: false,
+    cgst: false,
+    sgst: false,
+    igst: false,
     status: true,
   });
 
@@ -96,6 +102,7 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
   };
 
   // Modals
+  const [viewingItem, setViewingItem] = useState<Item | null>(null);
   const [isAddEditModalOpen, setIsAddEditModalOpen] = useState<boolean>(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [itemForm, setItemForm] = useState({
@@ -742,6 +749,7 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
                 {visibleColumns.sgst && <th className="py-3 px-2 text-center">SGST %</th>}
                 {visibleColumns.igst && <th className="py-3 px-2 text-center font-bold text-blue-900 bg-blue-50/70">IGST %</th>}
                 {visibleColumns.status && <th className="py-3 px-3 text-center">Status</th>}
+                <th className="py-3 px-3 text-center font-bold text-navy-800">Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLine">
@@ -915,6 +923,18 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
                           </span>
                         </td>
                       )}
+
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setViewingItem(item)}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-primary border border-blue-200 text-xs font-bold transition-colors shadow-2xs"
+                          title="View complete product details, batches, GST & pricing"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View</span>
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -941,6 +961,186 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
           </div>
         </div>
       </div>
+
+      {/* Comprehensive Product Details View Modal */}
+      {viewingItem && (
+        <Modal
+          isOpen={Boolean(viewingItem)}
+          onClose={() => setViewingItem(null)}
+          title={`Product Specifications: ${viewingItem.name}`}
+          subtitle={`Item Code: ${viewingItem.item_code} • ${viewingItem.category_name || 'General Commodity'}`}
+          maxWidth="2xl"
+        >
+          <div className="space-y-5 text-xs text-navy-800">
+            {/* Header Highlights */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <div>
+                <span className="text-[11px] text-textSecondary uppercase block font-semibold">Item Code</span>
+                <span className="font-mono font-bold text-sm text-primary">{viewingItem.item_code}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-textSecondary uppercase block font-semibold">Active Selling Rate</span>
+                <span className="font-mono font-bold text-sm text-navy-900">
+                  ₹{parseFloat(String(viewingItem.selling_price || viewingItem.batch1_rate || 0)).toFixed(2)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-textSecondary uppercase block font-semibold">Total Stock Balance</span>
+                <span className="font-mono font-bold text-sm text-emerald-700">
+                  {(parseFloat(String(viewingItem.batch1_qty || 0)) + parseFloat(String(viewingItem.batch2_qty || 0))).toFixed(1)}{' '}
+                  <span className="text-xs font-normal text-textSecondary">{viewingItem.unit_code || 'Units'}</span>
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-textSecondary uppercase block font-semibold">Status</span>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold mt-0.5 ${
+                    viewingItem.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {viewingItem.is_active ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </div>
+
+            {/* Batch Inventory Breakdown */}
+            <div className="space-y-2">
+              <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                <Layers className="w-3.5 h-3.5 text-primary" />
+                <span>Batch Inventory & FIFO Stocking</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Batch 1 */}
+                <div className="p-3 bg-white rounded-lg border border-borderLine space-y-2 shadow-2xs">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                    <span className="font-bold text-navy-900">Batch 1 (Primary / Active)</span>
+                    <span className="px-1.5 py-0.5 bg-blue-50 text-primary rounded font-mono text-[10px] font-bold">
+                      FIFO 1
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <span className="text-textSecondary block">Selling Rate:</span>
+                      <span className="font-mono font-bold text-navy-800">
+                        ₹{parseFloat(String(viewingItem.batch1_rate || viewingItem.selling_price || 0)).toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-textSecondary block">Purchase Rate:</span>
+                      <span className="font-mono font-bold text-slate-700">
+                        ₹{parseFloat(String(viewingItem.purchase_rate1 || viewingItem.purchase_price || 0)).toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-textSecondary block">Quantity in Stock:</span>
+                      <span className="font-mono font-bold text-emerald-700">
+                        {parseFloat(String(viewingItem.batch1_qty || 0)).toFixed(1)} {viewingItem.unit_code}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-textSecondary block">Expiry Date:</span>
+                      <span className="font-mono text-slate-600">
+                        {viewingItem.batch1_expiry ? String(viewingItem.batch1_expiry).split('T')[0] : 'None'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Batch 2 */}
+                <div className="p-3 bg-white rounded-lg border border-borderLine space-y-2 shadow-2xs">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                    <span className="font-bold text-navy-900">Batch 2 (Secondary / Inward)</span>
+                    <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 rounded font-mono text-[10px] font-bold">
+                      FIFO 2
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <span className="text-textSecondary block">Selling Rate:</span>
+                      <span className="font-mono font-bold text-navy-800">
+                        ₹{parseFloat(String(viewingItem.batch2_rate || 0)).toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-textSecondary block">Purchase Rate:</span>
+                      <span className="font-mono font-bold text-slate-700">
+                        ₹{parseFloat(String(viewingItem.purchase_rate2 || 0)).toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-textSecondary block">Quantity in Stock:</span>
+                      <span className="font-mono font-bold text-amber-700">
+                        {parseFloat(String(viewingItem.batch2_qty || 0)).toFixed(1)} {viewingItem.unit_code}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-textSecondary block">Expiry Date:</span>
+                      <span className="font-mono text-slate-600">
+                        {viewingItem.batch2_expiry ? String(viewingItem.batch2_expiry).split('T')[0] : 'None'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* GST & Tax Structure */}
+            <div className="space-y-2">
+              <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                <Tag className="w-3.5 h-3.5 text-emerald-600" />
+                <span>GST Tax Classification & Compliance</span>
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 rounded-lg border border-borderLine shadow-2xs">
+                <div>
+                  <span className="text-textSecondary block text-[11px]">HSN / Tariff Code:</span>
+                  <span className="font-mono font-bold text-slate-800">{viewingItem.hsn_code || 'Unspecified'}</span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block text-[11px]">CGST Rate:</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {parseFloat(String(viewingItem.cgst_rate || 0)).toFixed(2)}%
+                  </span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block text-[11px]">SGST Rate:</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {parseFloat(String(viewingItem.sgst_rate || 0)).toFixed(2)}%
+                  </span>
+                </div>
+                <div>
+                  <span className="text-textSecondary block text-[11px]">IGST Rate:</span>
+                  <span className="font-mono font-bold text-blue-900 bg-blue-50 px-1 rounded">
+                    {parseFloat(String(viewingItem.igst_rate || 0)).toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-borderLine">
+              <button
+                type="button"
+                onClick={() => {
+                  const it = viewingItem;
+                  setViewingItem(null);
+                  openPriceHistory(it);
+                }}
+                className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-surface border border-borderLine text-textSecondary hover:bg-slate-100 font-semibold text-xs"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>View Price History</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingItem(null)}
+                className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white font-bold text-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Price History Modal */}
       <Modal
