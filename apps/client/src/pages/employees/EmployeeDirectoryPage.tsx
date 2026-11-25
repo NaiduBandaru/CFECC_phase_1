@@ -13,6 +13,7 @@ import {
   Download,
   Upload,
   ChevronRight,
+  Eye,
   CheckCircle,
   XCircle,
   ArrowUpDown,
@@ -90,19 +91,19 @@ export const EmployeeDirectoryPage: React.FC = () => {
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Column Visibility State for CFECC Cooperative Fields
+  // Column Visibility State for CFECC Cooperative Fields (Default clean table)
   const [columnVisibility, setColumnVisibility] = useState({
-    csNo: true,
-    hrNo: true,
+    csNo: false,
+    hrNo: false,
     category: true,
-    shareCapital: true,
-    monthlyThrift: true,
+    shareCapital: false,
+    monthlyThrift: false,
     monthBills: true,
-    domesticAdvance: true,
+    domesticAdvance: false,
     creditLimit: true,
-    outstanding: true,
+    outstanding: false,
     available: true,
-    creditStatus: true,
+    creditStatus: false,
     status: true,
   });
   const [showColMenu, setShowColMenu] = useState(false);
@@ -501,34 +502,6 @@ export const EmployeeDirectoryPage: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2.5">
-          {/* Column Visibility Menu */}
-          <div className="relative">
-            <button
-              onClick={() => setShowColMenu(!showColMenu)}
-              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-surface border border-borderLine text-xs font-semibold text-textPrimary hover:bg-slate-50 transition-colors shadow-subtle"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-textSecondary" />
-              <span>Columns</span>
-            </button>
-
-            {showColMenu && (
-              <div className="absolute right-0 mt-1 w-56 bg-surface rounded-lg shadow-elevated border border-borderLine p-2 z-30 space-y-1.5 text-xs">
-                <div className="text-[10px] font-bold uppercase text-slate-500 px-2 py-0.5">Visible Columns</div>
-                {Object.keys(columnVisibility).map((colKey) => (
-                  <label key={colKey} className="flex items-center space-x-2 px-2 py-1 rounded hover:bg-slate-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={(columnVisibility as any)[colKey]}
-                      onChange={(e) => setColumnVisibility({ ...columnVisibility, [colKey]: e.target.checked })}
-                      className="w-3.5 h-3.5 text-primary rounded"
-                    />
-                    <span className="font-medium text-slate-700">{columnLabels[colKey] || colKey}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Import CSV */}
           <button
             onClick={() => setIsImportModalOpen(true)}
@@ -694,81 +667,136 @@ export const EmployeeDirectoryPage: React.FC = () => {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-          {/* Search Box */}
+      <div className="bg-surface p-4 rounded-cfecc border border-borderLine shadow-subtle flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="relative w-full md:w-80">
+          <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search Name, CS #, HR #, Code..."
+            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none font-medium"
+          >
+            <option value="ALL">All Categories ({summary?.totalMembers ?? 692})</option>
+            <option value="WORKER">Workers ({summary?.workersCount ?? 299})</option>
+            <option value="STAFF">Staff ({summary?.staffCount ?? 378})</option>
+            <option value="SPECIAL">Special Accounts ({summary?.specialCount ?? 15})</option>
+          </select>
+
+          <select
+            value={balanceFilter}
+            onChange={(e) => setBalanceFilter(e.target.value)}
+            className="px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none"
+          >
+            <option value="ALL">All Balances</option>
+            <option value="WITH_DUES">With Dues (&gt; ₹0)</option>
+            <option value="ZERO_BALANCE">Settled (₹0)</option>
+            <option value="MAXED_OUT">Credit Maxed</option>
+          </select>
+
+          <select
+            value={creditEligibility}
+            onChange={(e) => setCreditEligibility(e.target.value)}
+            className="px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none"
+          >
+            <option value="ALL">All Credit Statuses</option>
+            <option value="ELIGIBLE">Credit Eligible</option>
+            <option value="INELIGIBLE">Credit Blocked</option>
+          </select>
+
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none"
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="ON_LEAVE">On Leave</option>
+            <option value="SUSPENDED">Suspended</option>
+          </select>
+
+          {/* Columns Visibility Toggle */}
           <div className="relative">
-            <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search Name, CS #, HR #, Code..."
-              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
-            />
+            <button
+              onClick={() => setShowColMenu(!showColMenu)}
+              className="flex items-center space-x-1.5 px-3 py-2 text-xs bg-slate-50 hover:bg-slate-100 border border-borderLine rounded-lg text-slate-700 font-medium transition-colors"
+              title="Show / Hide Table Columns"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-textSecondary" />
+              <span>Columns</span>
+            </button>
+
+            {showColMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowColMenu(false)}
+                />
+                <div className="absolute right-0 mt-1 w-56 bg-white border border-borderLine rounded-lg shadow-lg z-50 p-3 space-y-2 text-xs">
+                  <div className="font-bold text-navy-800 pb-1 border-b border-borderLine flex items-center justify-between">
+                    <span>Show / Hide Columns</span>
+                    <button
+                      onClick={() =>
+                        setColumnVisibility({
+                          csNo: false,
+                          hrNo: false,
+                          category: true,
+                          shareCapital: false,
+                          monthlyThrift: false,
+                          monthBills: true,
+                          domesticAdvance: false,
+                          creditLimit: true,
+                          outstanding: false,
+                          available: true,
+                          creditStatus: false,
+                          status: true,
+                        })
+                      }
+                      className="text-[10px] text-primary hover:underline font-normal"
+                    >
+                      Default
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                    {Object.entries(columnLabels).map(([colKey, label]) => (
+                      <label key={colKey} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-50 p-1 rounded">
+                        <input
+                          type="checkbox"
+                          checked={(columnVisibility as any)[colKey]}
+                          onChange={(e) =>
+                            setColumnVisibility({
+                              ...columnVisibility,
+                              [colKey]: e.target.checked,
+                            })
+                          }
+                          className="rounded text-primary focus:ring-primary w-3.5 h-3.5"
+                        />
+                        <span className="text-slate-700 text-xs">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Category Filter */}
-          <div>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium"
-            >
-              <option value="ALL">All Categories ({summary?.totalMembers ?? 692})</option>
-              <option value="WORKER">Workers / Plant Operations ({summary?.workersCount ?? 299})</option>
-              <option value="STAFF">Staff / Management ({summary?.staffCount ?? 378})</option>
-              <option value="SPECIAL">Special Institutional Accounts ({summary?.specialCount ?? 15})</option>
-            </select>
-          </div>
-
-          {/* Balance / Dues Filter */}
-          <div>
-            <select
-              value={balanceFilter}
-              onChange={(e) => setBalanceFilter(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="ALL">All Member Balances</option>
-              <option value="WITH_DUES">With Store Dues (&gt; ₹0)</option>
-              <option value="ZERO_BALANCE">Zero Balance / Settled</option>
-              <option value="MAXED_OUT">Credit Limit Exceeded / Maxed</option>
-            </select>
-          </div>
-
-          {/* Credit Status Filter */}
-          <div>
-            <select
-              value={creditEligibility}
-              onChange={(e) => setCreditEligibility(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="ALL">All Credit Statuses</option>
-              <option value="ELIGIBLE">Store Credit Enabled</option>
-              <option value="INELIGIBLE">Store Credit Blocked</option>
-            </select>
-          </div>
-
-          {/* Status & Reset Button */}
-          <div className="flex items-center space-x-2">
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="ACTIVE">Active</option>
-              <option value="ON_LEAVE">On Leave</option>
-              <option value="SUSPENDED">Suspended</option>
-            </select>
+          {(search || category !== 'ALL' || balanceFilter !== 'ALL' || creditEligibility !== 'ALL' || status !== 'ALL') && (
             <button
               onClick={handleResetFilters}
-              className="p-2 rounded-lg border border-borderLine hover:bg-slate-100 text-slate-600 transition-colors flex-shrink-0"
-              title="Reset all filters"
+              className="px-2.5 py-1.5 text-xs text-textSecondary hover:text-navy-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors font-medium"
+              title="Reset Filters"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              Reset
             </button>
-          </div>
+          )}
         </div>
       </div>
 
@@ -813,10 +841,23 @@ export const EmployeeDirectoryPage: React.FC = () => {
         </button>
       </FloatingActionBar>
 
-      {/* Employee Data Table with Strict Single-Line Rows (No Line Breaks) */}
+      {/* Cooperative Info Notice Banner */}
+      <div className="flex items-center justify-between text-[11px] text-textSecondary bg-slate-50/80 px-3.5 py-2 rounded-lg border border-borderLine">
+        <div className="flex items-center space-x-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span>
+            Cooperative Member Directory with live store balances, thrift savings & credit limits
+          </span>
+        </div>
+        <div className="text-slate-500 hidden sm:flex items-center space-x-1 text-[11px]">
+          <span>Click <strong>View</strong> on any member to inspect complete passbook & monthly statements</span>
+        </div>
+      </div>
+
+      {/* Employee Data Table */}
       <div className="bg-surface rounded-xl border border-borderLine shadow-subtle overflow-hidden flex flex-col">
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[360px] scrollbar-thin">
-          <table className="w-full text-left border-collapse text-xs min-w-[1550px]">
+          <table className="w-full text-left border-collapse text-xs min-w-[1000px]">
             <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-borderLine shadow-2xs">
               <tr className="text-[11px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">
                 <th className="py-2.5 px-3 text-center w-8 whitespace-nowrap">
@@ -829,7 +870,7 @@ export const EmployeeDirectoryPage: React.FC = () => {
                 </th>
                 <th
                   onClick={() => handleSort('e.employee_code')}
-                  className="py-2.5 px-3 cursor-pointer hover:text-navy-800 whitespace-nowrap"
+                  className="py-2.5 px-3 cursor-pointer hover:text-navy-800 whitespace-nowrap min-w-[200px]"
                 >
                   <div className="flex items-center space-x-1 whitespace-nowrap">
                     <span>Member / Account</span>
@@ -948,20 +989,21 @@ export const EmployeeDirectoryPage: React.FC = () => {
                 )}
                 {columnVisibility.creditStatus && <th className="py-2.5 px-3 text-center whitespace-nowrap">Credit Status</th>}
                 {columnVisibility.status && <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>}
-                <th className="py-2.5 px-3 text-center whitespace-nowrap">Actions</th>
+                <th className="py-2.5 px-3 text-center whitespace-nowrap min-w-[75px]">View</th>
+                <th className="py-2.5 px-3 text-center whitespace-nowrap min-w-[75px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLine">
               {loading ? (
                 <tr>
-                  <td colSpan={14} className="py-12 text-center text-textSecondary whitespace-nowrap">
+                  <td colSpan={4 + Object.values(columnVisibility).filter(Boolean).length} className="py-12 text-center text-textSecondary whitespace-nowrap">
                     <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
                     <div>Loading cooperative member directory...</div>
                   </td>
                 </tr>
               ) : employees.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="py-12 text-center text-textSecondary whitespace-nowrap">
+                  <td colSpan={4 + Object.values(columnVisibility).filter(Boolean).length} className="py-12 text-center text-textSecondary whitespace-nowrap">
                     <Users className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                     <div>No cooperative member records matching criteria.</div>
                   </td>
@@ -995,10 +1037,10 @@ export const EmployeeDirectoryPage: React.FC = () => {
                         />
                       </td>
 
-                      {/* Member Profile, Name & Code on a Single Line */}
+                      {/* Member Profile, Name & Combined Identifiers */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <div className="flex items-center space-x-2 whitespace-nowrap">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] uppercase flex-shrink-0 text-white ${
+                        <div className="flex items-center space-x-2.5 whitespace-nowrap">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] uppercase flex-shrink-0 text-white ${
                             emp.category === 'STAFF'
                               ? 'bg-purple-700'
                               : emp.category === 'SPECIAL'
@@ -1007,12 +1049,16 @@ export const EmployeeDirectoryPage: React.FC = () => {
                           }`}>
                             {emp.first_name ? emp.first_name.charAt(0) : 'M'}
                           </div>
-                          <span className="font-bold text-navy-800 hover:text-primary transition-colors whitespace-nowrap">
-                            {emp.first_name} {emp.last_name !== '.' ? emp.last_name : ''}
-                          </span>
-                          <span className="text-[11px] font-mono text-slate-400 font-medium whitespace-nowrap">
-                            ({emp.employee_code})
-                          </span>
+                          <div>
+                            <div className="font-bold text-navy-800 hover:text-primary transition-colors whitespace-nowrap leading-tight">
+                              {emp.first_name} {emp.last_name !== '.' ? emp.last_name : ''}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-400 font-medium whitespace-nowrap mt-0.5">
+                              Code: {emp.employee_code}
+                              {emp.cs_no ? ` · CS #${emp.cs_no}` : ''}
+                              {emp.hr_no ? ` · HR #${emp.hr_no}` : ''}
+                            </div>
+                          </div>
                         </div>
                       </td>
 
@@ -1144,6 +1190,18 @@ export const EmployeeDirectoryPage: React.FC = () => {
                         </td>
                       )}
 
+                      {/* Dedicated View Column */}
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => navigate(`/employees/${emp.id}`)}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 rounded-md border border-primary/20 transition-colors"
+                          title="View complete 360° member passbook & statements"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View</span>
+                        </button>
+                      </td>
+
                       {/* Actions */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center space-x-1 whitespace-nowrap">
@@ -1154,13 +1212,6 @@ export const EmployeeDirectoryPage: React.FC = () => {
                             title={`Send WhatsApp Credit Balance to ${emp.mobile || emp.first_name}`}
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => navigate(`/employees/${emp.id}`)}
-                            className="p-1 rounded-md text-textSecondary hover:text-primary hover:bg-blue-50 transition-colors"
-                            title="View Member Passbook & Profile"
-                          >
-                            <ChevronRight className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
