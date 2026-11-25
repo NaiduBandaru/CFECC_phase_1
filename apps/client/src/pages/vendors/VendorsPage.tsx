@@ -23,6 +23,8 @@ import {
   Package,
   RotateCcw,
   SlidersHorizontal,
+  Filter,
+  Check,
 } from 'lucide-react';
 
 export const VendorsPage: React.FC = () => {
@@ -41,6 +43,29 @@ export const VendorsPage: React.FC = () => {
   const [creditTermsFilter, setCreditTermsFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ACTIVE');
   const [categorySummaries, setCategorySummaries] = useState<{ category: string; count: number }[]>([]);
+
+  // Column Visibility & Popover Filters
+  const [showColumnDropdown, setShowColumnDropdown] = useState<boolean>(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState<boolean>(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    contact: true,
+    location: false,
+    gstin: false,
+    creditTerms: false,
+    orders: true,
+    outstanding: true,
+    status: true,
+  });
+
+  const columnLabels: Record<string, string> = {
+    contact: 'Contact Info',
+    location: 'City & Location',
+    gstin: 'GSTIN & Banking',
+    creditTerms: 'Credit Terms',
+    orders: 'Orders & Bills',
+    outstanding: 'Outstanding (₹)',
+    status: 'Active Status',
+  };
 
   // Add / Edit Modal
   const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false);
@@ -151,6 +176,13 @@ export const VendorsPage: React.FC = () => {
     orderFilter !== 'ALL',
     creditTermsFilter !== 'ALL',
     statusFilter !== 'ACTIVE',
+  ].filter(Boolean).length;
+
+  const secondaryFilterCount = [
+    gstFilter !== 'ALL',
+    outstandingFilter !== 'ALL',
+    orderFilter !== 'ALL',
+    creditTermsFilter !== 'ALL',
   ].filter(Boolean).length;
 
   const handleResetFilters = () => {
@@ -465,16 +497,16 @@ export const VendorsPage: React.FC = () => {
         })}
       </div>
 
-      {/* Multi-Dimensional Filter Toolbar */}
-      <div className="bg-surface p-3.5 rounded-cfecc border border-borderLine shadow-subtle flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+      {/* Multi-Dimensional Clean Filter Toolbar */}
+      <div className="bg-surface p-3 rounded-cfecc border border-borderLine shadow-subtle flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Search Input */}
-        <div className="relative flex-1 min-w-[240px] max-w-md">
+        <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search vendor name, code, contact person, GSTIN, phone, category..."
+            placeholder="Search vendor name, code, contact person, GSTIN, phone..."
             className="w-full pl-9 pr-7 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white transition-colors"
           />
           {search && (
@@ -488,78 +520,174 @@ export const VendorsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Filters Group */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Category Dropdown */}
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+        {/* Action & Filter Controls */}
+        <div className="flex items-center space-x-2">
+          {/* Status Quick Toggle */}
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')}
+            className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+              statusFilter === 'ACTIVE'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : 'bg-surface text-textSecondary border-borderLine hover:bg-slate-50'
+            }`}
           >
-            <option value="ALL">All Categories</option>
-            {categoryOptions.map((c) => (
-              <option key={c.name} value={c.name}>
-                {c.name} {c.count > 0 ? `(${c.count})` : ''}
-              </option>
-            ))}
-          </select>
+            <span>{statusFilter === 'ACTIVE' ? 'Active Only' : 'All Statuses'}</span>
+          </button>
 
-          {/* GST Status Filter */}
-          <select
-            value={gstFilter}
-            onChange={(e) => setGstFilter(e.target.value)}
-            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
-          >
-            <option value="ALL">All GST Statuses</option>
-            <option value="REGISTERED">GST Registered</option>
-            <option value="UNREGISTERED">Unregistered / Non-GST</option>
-          </select>
+          {/* More Filters Popover */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowFilterDropdown(!showFilterDropdown);
+                setShowColumnDropdown(false);
+              }}
+              className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                secondaryFilterCount > 0
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'bg-surface text-textSecondary border-borderLine hover:bg-slate-50'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>Filters</span>
+              {secondaryFilterCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-primary text-white text-[10px] flex items-center justify-center font-bold">
+                  {secondaryFilterCount}
+                </span>
+              )}
+            </button>
 
-          {/* Credit Terms Filter */}
-          <select
-            value={creditTermsFilter}
-            onChange={(e) => setCreditTermsFilter(e.target.value)}
-            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
-          >
-            <option value="ALL">All Credit Terms</option>
-            <option value="0">Immediate / 0 Days</option>
-            <option value="15">15 Days Credit</option>
-            <option value="30">30 Days Standard</option>
-            <option value="45+">45+ Days Window</option>
-          </select>
+            {showFilterDropdown && (
+              <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-card border border-borderLine p-3.5 z-30 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-borderLine">
+                  <span className="font-bold text-navy-800 text-xs">Filter Suppliers</span>
+                  {secondaryFilterCount > 0 && (
+                    <button
+                      onClick={() => {
+                        setGstFilter('ALL');
+                        setOutstandingFilter('ALL');
+                        setOrderFilter('ALL');
+                        setCreditTermsFilter('ALL');
+                      }}
+                      className="text-[11px] text-rose-600 hover:underline font-semibold"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
 
-          {/* Outstanding Payables Filter */}
-          <select
-            value={outstandingFilter}
-            onChange={(e) => setOutstandingFilter(e.target.value)}
-            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
-          >
-            <option value="ALL">All Payables</option>
-            <option value="HAS_OUTSTANDING">Has Balance (&gt; ₹0)</option>
-            <option value="ZERO_BALANCE">Nil Balance (₹0.00)</option>
-          </select>
+                <div>
+                  <label className="text-[10px] font-bold text-textSecondary uppercase block mb-1">GST Registration</label>
+                  <select
+                    value={gstFilter}
+                    onChange={(e) => setGstFilter(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+                  >
+                    <option value="ALL">All GST Statuses</option>
+                    <option value="REGISTERED">GST Registered</option>
+                    <option value="UNREGISTERED">Unregistered / Non-GST</option>
+                  </select>
+                </div>
 
-          {/* Order Activity Filter */}
-          <select
-            value={orderFilter}
-            onChange={(e) => setOrderFilter(e.target.value)}
-            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
-          >
-            <option value="ALL">All PO Activity</option>
-            <option value="HAS_ORDERS">Active (With POs)</option>
-            <option value="NO_ORDERS">No Purchase Orders</option>
-          </select>
+                <div>
+                  <label className="text-[10px] font-bold text-textSecondary uppercase block mb-1">Credit Terms</label>
+                  <select
+                    value={creditTermsFilter}
+                    onChange={(e) => setCreditTermsFilter(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+                  >
+                    <option value="ALL">All Credit Terms</option>
+                    <option value="0">Immediate / 0 Days</option>
+                    <option value="15">15 Days Credit</option>
+                    <option value="30">30 Days Standard</option>
+                    <option value="45+">45+ Days Window</option>
+                  </select>
+                </div>
 
-          {/* Active Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-2.5 py-2 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
-          >
-            <option value="ACTIVE">Active Only</option>
-            <option value="INACTIVE">Inactive Only</option>
-            <option value="ALL">All Statuses</option>
-          </select>
+                <div>
+                  <label className="text-[10px] font-bold text-textSecondary uppercase block mb-1">Outstanding Payables</label>
+                  <select
+                    value={outstandingFilter}
+                    onChange={(e) => setOutstandingFilter(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+                  >
+                    <option value="ALL">All Payables</option>
+                    <option value="HAS_OUTSTANDING">Has Balance (&gt; ₹0)</option>
+                    <option value="ZERO_BALANCE">Nil Balance (₹0.00)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-textSecondary uppercase block mb-1">PO Activity</label>
+                  <select
+                    value={orderFilter}
+                    onChange={(e) => setOrderFilter(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-borderLine rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-slate-700 cursor-pointer"
+                  >
+                    <option value="ALL">All PO Activity</option>
+                    <option value="HAS_ORDERS">Active (With POs)</option>
+                    <option value="NO_ORDERS">No Purchase Orders</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Column Visibility Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowColumnDropdown(!showColumnDropdown);
+                setShowFilterDropdown(false);
+              }}
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-surface border border-borderLine text-textSecondary text-xs font-semibold hover:bg-slate-50 transition-colors"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Columns</span>
+            </button>
+
+            {showColumnDropdown && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-card border border-borderLine p-3 z-30 space-y-2">
+                <div className="font-bold text-navy-800 text-xs pb-1.5 border-b border-borderLine flex items-center justify-between">
+                  <span>Toggle Columns</span>
+                  <button
+                    onClick={() =>
+                      setVisibleColumns({
+                        contact: true,
+                        location: true,
+                        gstin: true,
+                        creditTerms: true,
+                        orders: true,
+                        outstanding: true,
+                        status: true,
+                      })
+                    }
+                    className="text-[10px] text-primary hover:underline font-semibold"
+                  >
+                    Show All
+                  </button>
+                </div>
+                {Object.entries(columnLabels).map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex items-center space-x-2 text-xs text-navy-800 cursor-pointer hover:bg-slate-50 p-1 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleColumns[key as keyof typeof visibleColumns]}
+                      onChange={(e) =>
+                        setVisibleColumns({
+                          ...visibleColumns,
+                          [key]: e.target.checked,
+                        })
+                      }
+                      className="rounded border-borderLine text-primary focus:ring-primary w-3.5 h-3.5"
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Reset Filters Button */}
           {hasActiveFilters && (
@@ -569,7 +697,7 @@ export const VendorsPage: React.FC = () => {
               title="Reset all filters to defaults"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset ({activeFilterCount})</span>
+              <span>Reset</span>
             </button>
           )}
         </div>
@@ -594,37 +722,40 @@ export const VendorsPage: React.FC = () => {
                     )}
                   </div>
                 </th>
-                <th className="py-3 px-4">Contact Info</th>
-                <th className="py-3 px-4">Location</th>
-                <th className="py-3 px-4">GSTIN & Banking</th>
-                <th className="py-3 px-4 text-center">Credit Terms</th>
-                <th className="py-3 px-4 text-center">Orders & Bills</th>
-                <th
-                  onClick={() => handleSort('current_outstanding')}
-                  className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
-                >
-                  <div className="flex items-center justify-end space-x-1">
-                    <span>Outstanding (₹)</span>
-                    {sortBy === 'current_outstanding' && (
-                      sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
-                    )}
-                  </div>
-                </th>
-                <th className="py-3 px-4 text-center">Status</th>
+                {visibleColumns.contact && <th className="py-3 px-4">Contact Info</th>}
+                {visibleColumns.location && <th className="py-3 px-4">Location</th>}
+                {visibleColumns.gstin && <th className="py-3 px-4">GSTIN & Banking</th>}
+                {visibleColumns.creditTerms && <th className="py-3 px-4 text-center">Credit Terms</th>}
+                {visibleColumns.orders && <th className="py-3 px-4 text-center">Orders & Bills</th>}
+                {visibleColumns.outstanding && (
+                  <th
+                    onClick={() => handleSort('current_outstanding')}
+                    className="py-3 px-4 text-right cursor-pointer hover:text-navy-800"
+                  >
+                    <div className="flex items-center justify-end space-x-1">
+                      <span>Outstanding (₹)</span>
+                      {sortBy === 'current_outstanding' && (
+                        sortOrder === 'ASC' ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />
+                      )}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.status && <th className="py-3 px-4 text-center">Status</th>}
+                <th className="py-3 px-4 text-center">View Profile</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLine">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-textSecondary">
+                  <td colSpan={3 + Object.values(visibleColumns).filter(Boolean).length} className="py-8 text-center text-textSecondary">
                     <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
                     <div>Loading vendors...</div>
                   </td>
                 </tr>
               ) : vendors.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-textSecondary">
+                  <td colSpan={3 + Object.values(visibleColumns).filter(Boolean).length} className="py-8 text-center text-textSecondary">
                     <Truck className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                     <div className="font-semibold text-slate-700">No vendor records found matching filter criteria.</div>
                     {hasActiveFilters && (
@@ -644,13 +775,10 @@ export const VendorsPage: React.FC = () => {
                     <td className="py-3 px-4">
                       <div
                         onClick={() => openVendorProfile(v.id)}
-                        className="font-bold text-navy-800 hover:text-primary cursor-pointer transition-colors flex items-center space-x-1.5 group"
-                        title="Click to view full products and data sold by this vendor"
+                        className="font-bold text-navy-800 hover:text-primary cursor-pointer transition-colors"
+                        title="Click to view full 360° vendor profile"
                       >
-                        <span className="group-hover:underline">{v.name}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-primary font-semibold border border-blue-200">
-                          View Products
-                        </span>
+                        <span className="hover:underline">{v.name}</span>
                       </div>
                       <div className="flex items-center space-x-2 mt-1">
                         <span className="text-[11px] text-textSecondary font-mono">{v.vendor_code}</span>
@@ -660,74 +788,93 @@ export const VendorsPage: React.FC = () => {
                       </div>
                     </td>
 
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-textPrimary flex items-center">
-                        <Phone className="w-3 h-3 text-textSecondary mr-1" />
-                        <span>{v.phone}</span>
-                      </div>
-                      <div className="text-[11px] text-textSecondary">{v.contact_person || 'Accounts Dept'}</div>
-                    </td>
-
-                    <td className="py-3 px-4">
-                      <div className="text-textPrimary">{v.city || 'Visakhapatnam'}</div>
-                      <div className="text-[11px] text-textSecondary">{v.state || 'Andhra Pradesh'}</div>
-                    </td>
-
-                    <td className="py-3 px-4 font-mono text-textSecondary">
-                      <div>{v.gstin || 'Unregistered'}</div>
-                      {v.bank_name && (
-                        <div className="text-[10px] text-slate-500 font-sans flex items-center mt-0.5">
-                          <Landmark className="w-3 h-3 mr-1 text-slate-400" />
-                          <span>{v.bank_name}</span>
+                    {visibleColumns.contact && (
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-textPrimary flex items-center">
+                          <Phone className="w-3 h-3 text-textSecondary mr-1" />
+                          <span>{v.phone}</span>
                         </div>
-                      )}
-                    </td>
+                        <div className="text-[11px] text-textSecondary">{v.contact_person || 'Accounts Dept'}</div>
+                      </td>
+                    )}
 
+                    {visibleColumns.location && (
+                      <td className="py-3 px-4">
+                        <div className="text-textPrimary">{v.city || 'Visakhapatnam'}</div>
+                        <div className="text-[11px] text-textSecondary">{v.state || 'Andhra Pradesh'}</div>
+                      </td>
+                    )}
+
+                    {visibleColumns.gstin && (
+                      <td className="py-3 px-4 font-mono text-textSecondary">
+                        <div>{v.gstin || 'Unregistered'}</div>
+                        {v.bank_name && (
+                          <div className="text-[10px] text-slate-500 font-sans flex items-center mt-0.5">
+                            <Landmark className="w-3 h-3 mr-1 text-slate-400" />
+                            <span>{v.bank_name}</span>
+                          </div>
+                        )}
+                      </td>
+                    )}
+
+                    {visibleColumns.creditTerms && (
+                      <td className="py-3 px-4 text-center">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 font-semibold text-textSecondary">
+                          {v.payment_terms_days} Days
+                        </span>
+                      </td>
+                    )}
+
+                    {visibleColumns.orders && (
+                      <td className="py-3 px-4 text-center font-medium">
+                        <span className="text-navy-800">{v.po_count || 0} POs</span>
+                        <span className="text-textSecondary mx-1">&bull;</span>
+                        <span className="text-textSecondary">{v.invoice_count || 0} Bills</span>
+                      </td>
+                    )}
+
+                    {visibleColumns.outstanding && (
+                      <td className="py-3 px-4 text-right font-bold text-navy-800 tabular-nums">
+                        <span className={parseFloat(v.current_outstanding.toString()) > 0 ? 'text-rose-600' : 'text-emerald-700'}>
+                          ₹{parseFloat(v.current_outstanding.toString()).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                    )}
+
+                    {visibleColumns.status && (
+                      <td className="py-3 px-4 text-center">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            v.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {v.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                    )}
+
+                    {/* Dedicated View Column */}
                     <td className="py-3 px-4 text-center">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 font-semibold text-textSecondary">
-                        {v.payment_terms_days} Days
-                      </span>
-                    </td>
-
-                    <td className="py-3 px-4 text-center font-medium">
-                      <span className="text-navy-800">{v.po_count || 0} POs</span>
-                      <span className="text-textSecondary mx-1">&bull;</span>
-                      <span className="text-textSecondary">{v.invoice_count || 0} Bills</span>
-                    </td>
-
-                    <td className="py-3 px-4 text-right font-bold text-navy-800 tabular-nums">
-                      <span className={parseFloat(v.current_outstanding.toString()) > 0 ? 'text-rose-600' : 'text-emerald-700'}>
-                        ₹{parseFloat(v.current_outstanding.toString()).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </span>
-                    </td>
-
-                    <td className="py-3 px-4 text-center">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          v.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                        }`}
+                      <button
+                        type="button"
+                        onClick={() => openVendorProfile(v.id)}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-primary border border-blue-200 text-xs font-semibold transition-colors shadow-2xs group"
+                        title="View complete 360° profile, products sold, bank details, and orders"
                       >
-                        {v.is_active ? 'Active' : 'Inactive'}
-                      </span>
+                        <Eye className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                        <span>View Details</span>
+                      </button>
                     </td>
 
                     <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center space-x-1.5">
-                        <button
-                          title="View 360° Profile & History"
-                          onClick={() => openVendorProfile(v.id)}
-                          className="p-1 hover:bg-slate-100 rounded text-textSecondary hover:text-navy-800 transition-colors"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          title="Edit Vendor Details"
-                          onClick={() => openEditModal(v)}
-                          className="p-1 hover:bg-slate-100 rounded text-textSecondary hover:text-primary transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      <button
+                        title="Edit Vendor Details"
+                        onClick={() => openEditModal(v)}
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 rounded text-textSecondary hover:text-primary hover:bg-slate-100 transition-colors text-xs font-medium"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
                     </td>
                   </tr>
                 ))

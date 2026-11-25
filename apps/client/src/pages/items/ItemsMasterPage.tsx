@@ -994,9 +994,8 @@ export const ItemsMasterPage: React.FC<ItemsMasterPageProps> = ({ hideHeader = f
               <div>
                 <span className="text-[11px] text-textSecondary uppercase block font-semibold">Status</span>
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold mt-0.5 ${
-                    viewingItem.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
-                  }`}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold mt-0.5 ${viewingItem.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+                    }`}
                 >
                   {viewingItem.is_active ? 'Active' : 'Inactive'}
                 </span>
