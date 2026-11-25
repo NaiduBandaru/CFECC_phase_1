@@ -261,11 +261,11 @@ export const SettingsPage: React.FC = () => {
 
         {activeTab === 'WHATSAPP' && (
           <button
-            onClick={() => setIsConfigModalOpen(true)}
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors shadow-subtle self-start sm:self-auto"
+            onClick={fetchGatewayStatus}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-subtle self-start sm:self-auto"
           >
-            <Settings className="w-3.5 h-3.5" />
-            <span>Configure WhatsApp API</span>
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Refresh Gateway Status</span>
           </button>
         )}
       </div>
@@ -489,77 +489,12 @@ export const SettingsPage: React.FC = () => {
             )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* WhatsApp Integration Summary Card */}
-            <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle space-y-4 lg:col-span-3">
-              <div className="flex items-center justify-between pb-2 border-b border-borderLine">
-                <div className="flex items-center space-x-2">
-                  <MessageSquare className="w-4 h-4 text-emerald-600" />
-                  <h3 className="text-sm font-bold text-navy-800 uppercase">Meta WhatsApp Gateway</h3>
-                </div>
-                <span
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    waConfig?.isConfigured
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}
-                >
-                  {waConfig?.isConfigured ? 'LIVE META CLOUD' : 'SIMULATED MODE'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                <div>
-                  <span className="text-textSecondary block">Gateway Protocol</span>
-                  <span className="font-semibold text-navy-800">Meta Graph API {waConfig?.apiVersion || 'v21.0'}</span>
-                </div>
-                <div>
-                  <span className="text-textSecondary block">Phone Number ID</span>
-                  <span className="font-mono text-textPrimary">
-                    {waConfig?.phoneNumberId || 'Not configured (using fallback sandbox)'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-textSecondary block">Access Token Status</span>
-                  <span className="font-mono text-textPrimary">
-                    {waConfig?.hasAccessToken ? (
-                      <span className="text-emerald-700 font-semibold">Active ({waConfig?.maskedAccessToken})</span>
-                    ) : (
-                      <span className="text-amber-700 font-medium">No token set (Click Configure to add)</span>
-                    )}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-textSecondary block">Approved Templates</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {(waConfig?.approvedTemplates || ['cfecc_monthly_statement', 'cfecc_pos_receipt']).map((t: string) => (
-                      <span key={t} className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-textSecondary">
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-      {/* Meta API Test & Diagnostic Console */}
+      {/* Test Message Console */}
       <div className="bg-surface p-5 rounded-cfecc border border-borderLine shadow-subtle">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-borderLine">
           <div>
-            <h3 className="text-sm font-bold text-navy-800">Live WhatsApp Cloud API Test Console</h3>
-            <p className="text-xs text-textSecondary">Send a live test ping to any recipient mobile number to verify Meta Cloud API connectivity</p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <a
-              href="https://developers.facebook.com/apps"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center space-x-1 text-xs text-primary hover:underline font-semibold"
-            >
-              <span>Meta Developer Portal</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
+            <h3 className="text-sm font-bold text-navy-800">WhatsApp Test Console</h3>
+            <p className="text-xs text-textSecondary">Send a live test ping to any recipient mobile number to verify WhatsApp connectivity</p>
           </div>
         </div>
 
